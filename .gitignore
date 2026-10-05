@@ -1,0 +1,31 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+
+# Local environment
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# Android build outputs
+*.apk
+*.aab
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing
+*.jks
+*.keystore
+
+# OS
+.DS_Store
+
+# Personal agent settings
+CLAUDE.md
+AGENTS.md
+CLAUDE.local.md
+.claude/settings.local.json
