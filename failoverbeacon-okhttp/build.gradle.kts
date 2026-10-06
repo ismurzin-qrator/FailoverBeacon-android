@@ -1,5 +1,5 @@
 plugins {
-    id("failoverbeacon.android-library")
+    id("failoverbeacon.public-api")
 }
 
 android {

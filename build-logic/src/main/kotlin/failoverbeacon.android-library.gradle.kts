@@ -27,6 +27,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
+
+    lint {
+        warningsAsErrors = true
+        // Gradle, AGP and stdlib versions are pinned on purpose for Kotlin compatibility.
+        disable += setOf("AndroidGradlePluginVersion", "GradleDependency")
+    }
 }
 
 kotlin {
@@ -36,6 +42,7 @@ kotlin {
         languageVersion = KotlinVersion.KOTLIN_2_1
         apiVersion = KotlinVersion.KOTLIN_2_1
         jvmTarget = JvmTarget.JVM_1_8
+        allWarningsAsErrors = true
     }
 }
 
