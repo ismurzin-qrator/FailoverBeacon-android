@@ -46,7 +46,8 @@ public class FailoverBeaconConfig private constructor(
         /**
          * Sets hosts whose requests are never reported, for example
          * `listOf("analytics.example")`. Names match exactly and ignore case; subdomains don't
-         * match. By default, no hosts are blocked.
+         * match. Pass host names without a port: `"analytics.example:443"` never matches.
+         * By default, no hosts are blocked.
          *
          * @throws IllegalArgumentException if a host is blank or is a URL instead of a host name.
          */
