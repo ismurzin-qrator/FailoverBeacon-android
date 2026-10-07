@@ -100,8 +100,8 @@ public class FailoverBeaconConfig private constructor(
         }
 
         private companion object {
-            private const val DEFAULT_FAILURE_SAMPLE_RATE = 1.0 // 100% of failed requests
-            private const val DEFAULT_SUCCESS_SAMPLE_RATE = 0.1 // 10% of successful requests
+            private const val DEFAULT_FAILURE_SAMPLE_RATE = 1.0
+            private const val DEFAULT_SUCCESS_SAMPLE_RATE = 0.1
 
             private fun checkBeaconUrl(url: String) {
                 val uri = try {

@@ -3,8 +3,7 @@ package net.qrator.failoverbeacon
 import java.util.concurrent.TimeUnit
 
 /**
- * Additional options for the telemetry pipeline configuration.
- * It is recommended to use the default values.
+ * Fine-tuning options for [FailoverBeaconConfig]. The defaults suit most apps.
  *
  * Instances are immutable; create them with [Builder] and pass them to
  * [FailoverBeaconConfig.Builder.options].

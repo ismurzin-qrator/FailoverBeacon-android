@@ -1,0 +1,104 @@
+package net.qrator.failoverbeacon
+
+import android.content.Context
+import net.qrator.failoverbeacon.core.SdkInstance
+import net.qrator.failoverbeacon.core.SdkRegistry
+import net.qrator.failoverbeacon.core.TrackingConsent
+import net.qrator.failoverbeacon.core.logging.LogOutput
+import net.qrator.failoverbeacon.core.logging.info
+import net.qrator.failoverbeacon.core.logging.warn
+import net.qrator.failoverbeacon.internal.AndroidMainProcessDetector
+import net.qrator.failoverbeacon.internal.LogcatLogger
+
+/**
+ * Entry point of the FailoverBeacon SDK. Until [initialize], the SDK captures nothing. All
+ * methods are thread-safe.
+ */
+public object FailoverBeacon {
+    init {
+        SdkRegistry.logger.output = LogcatLogger
+    }
+
+    /**
+     * Starts the SDK. Call it from `Application.onCreate`; it does no disk or network I/O on the
+     * calling thread. [consent] is [Consent.GRANTED] by default; apps with a consent banner pass
+     * [Consent.PENDING] until the user decides.
+     *
+     * Works only in the app's main process. A repeated call is ignored.
+     */
+    @JvmStatic
+    @JvmOverloads
+    public fun initialize(
+        context: Context,
+        config: FailoverBeaconConfig,
+        consent: Consent = Consent.GRANTED
+    ) {
+        if (SdkRegistry.instance != null) {
+            SdkRegistry.logger.warn { "Already initialized. Ignored" }
+            return
+        }
+        val appContext = context.applicationContext ?: context
+        val processDetector = AndroidMainProcessDetector(appContext, SdkRegistry.logger)
+        if (!processDetector.isMainProcess()) {
+            SdkRegistry.logger.warn { "Not the main process. SDK is inactive" }
+            return
+        }
+        val sdkInstance = SdkInstance(appContext, toTrackingConsent(consent))
+        if (!SdkRegistry.install(sdkInstance)) {
+            SdkRegistry.logger.warn { "Already initialized. Ignored" }
+            return
+        }
+        SdkRegistry.logger.info { "SDK initialized" }
+    }
+
+    /**
+     * Changes the user's [consent]. The SDK does not persist it. Ignored while the SDK is not
+     * running.
+     */
+    @JvmStatic
+    public fun setConsent(consent: Consent) {
+        val instance = SdkRegistry.instance
+        if (instance == null) {
+            SdkRegistry.logger.warn { "SDK is not running. setConsent ignored" }
+            return
+        }
+        instance.consent = toTrackingConsent(consent)
+    }
+
+    /** Deletes stored events without changing consent. Ignored while the SDK is not running. */
+    @JvmStatic
+    public fun clearAllData() {
+        if (SdkRegistry.instance == null) {
+            SdkRegistry.logger.warn { "SDK is not running. clearAllData ignored" }
+            return
+        }
+        // Nothing is stored yet.
+    }
+
+    /**
+     * Sets the minimum priority of SDK log messages, one of the [android.util.Log] constants from
+     * [android.util.Log.VERBOSE] to [android.util.Log.ASSERT]. The default value is
+     * [android.util.Log.WARN]. Works before [initialize].
+     *
+     * @throws IllegalArgumentException if [level] is not one of these constants.
+     */
+    @JvmStatic
+    public fun setLogLevel(level: Int) {
+        SdkRegistry.logger.minLevel = level
+    }
+
+    /**
+     * Sends SDK log messages to [logger] instead of Logcat; null disables logging. Exceptions
+     * thrown by [logger] are ignored. Works before [initialize].
+     */
+    @JvmStatic
+    public fun setLogger(logger: FailoverBeaconLogger?) {
+        SdkRegistry.logger.output = logger?.let { LogOutput(it::log) }
+    }
+
+    private fun toTrackingConsent(consent: Consent): TrackingConsent = when (consent) {
+        Consent.GRANTED -> TrackingConsent.GRANTED
+        Consent.PENDING -> TrackingConsent.PENDING
+        Consent.NOT_GRANTED -> TrackingConsent.NOT_GRANTED
+    }
+}
