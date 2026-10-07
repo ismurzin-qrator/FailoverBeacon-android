@@ -47,6 +47,11 @@ kotlin {
     }
 }
 
+tasks.withType<JavaCompile>().configureEach {
+    // Java 8 bytecode is pinned on purpose; "options" only reports that 8 is obsolete on JDK 21.
+    options.compilerArgs.addAll(listOf("-Xlint:all,-options", "-Werror"))
+}
+
 spotless {
     val ktlintVersion = libs.findVersion("ktlint").get().requiredVersion
     val ktlintStyle = mapOf("ktlint_code_style" to "android_studio")
@@ -63,4 +68,7 @@ spotless {
 
 dependencies {
     implementation(libs.findLibrary("kotlin-stdlib").get())
+
+    testImplementation(libs.findLibrary("junit").get())
+    testImplementation(libs.findLibrary("kotlin-test-junit").get())
 }
