@@ -1,5 +1,6 @@
 plugins {
     id("failoverbeacon.public-api")
+    id("failoverbeacon.okhttp-compatibility")
 }
 
 android {
@@ -10,4 +11,6 @@ dependencies {
     api(project(":failoverbeacon"))
     implementation(project(":failoverbeacon-core"))
     compileOnly(libs.squareup.okhttp)
+
+    testImplementation(libs.squareup.mockwebserver)
 }
