@@ -3,6 +3,7 @@ import ru.vyarus.gradle.plugin.animalsniffer.signature.BuildSignatureTask
 
 plugins {
     id("ru.vyarus.animalsniffer")
+    id("failoverbeacon.okhttp-test-matrix")
 }
 
 val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")

@@ -5,16 +5,20 @@ junit = "4.13.2"
 kotlin = "2.3.21"
 kotlin-stdlib = "2.1.21"
 ktlint = "1.8.0"
-okhttp = "5.5.0"
+okhttp-latest = "5.5.0"
 okhttp-minimum = "3.14.9"
+okhttp-4 = "4.12.0"
+okhttp-5-2 = "5.2.3"
+okhttp-5-3 = "5.3.2"
+okhttp-5-5 = "5.5.0"
 robolectric = "4.17"
 spotless = "8.10.3"
 
 [libraries]
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin-stdlib" }
-squareup-okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+squareup-okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp-latest" }
 squareup-okhttp-minimum = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp-minimum" }
-squareup-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "okhttp" }
+squareup-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "okhttp-latest" }
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin-stdlib" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }

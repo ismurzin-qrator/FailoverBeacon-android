@@ -47,7 +47,7 @@ class WithFailoverBeaconTest {
 
     @Test
     fun `app listener receives the same events on a connection failure`() {
-        server.start()
+        server.start(0)
         server.shutdown()
         val withoutSdk = RecordingEventListener()
         val withSdk = RecordingEventListener()
