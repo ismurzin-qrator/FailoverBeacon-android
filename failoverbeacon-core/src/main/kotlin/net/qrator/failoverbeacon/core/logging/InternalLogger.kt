@@ -27,6 +27,10 @@ class InternalLogger {
 
     fun isLoggable(level: Int): Boolean = output != null && level >= minLevel
 
+    internal fun forgetLoggedOnce() {
+        loggedOnce.clear()
+    }
+
     fun log(level: Int, message: String, throwable: Throwable? = null, onlyOnce: Boolean = false) {
         val output = output ?: return
         if (level < minLevel) return

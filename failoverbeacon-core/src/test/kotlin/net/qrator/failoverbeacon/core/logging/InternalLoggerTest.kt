@@ -151,6 +151,15 @@ class InternalLoggerTest {
     }
 
     @Test
+    fun `logs an onlyOnce message again once forgotten`() {
+        logger.error(onlyOnce = true) { "failed" }
+        logger.forgetLoggedOnce()
+        logger.error(onlyOnce = true) { "failed" }
+
+        assertEquals(listOf("failed", "failed"), messages.map { it.message })
+    }
+
+    @Test
     fun `logs an onlyOnce message once across threads`() {
         val logged = CopyOnWriteArrayList<String>()
         val logger = InternalLogger().apply {

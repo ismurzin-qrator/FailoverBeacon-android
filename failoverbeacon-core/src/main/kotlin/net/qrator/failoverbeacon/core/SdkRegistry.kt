@@ -20,9 +20,10 @@ object SdkRegistry {
         return true
     }
 
-    /** Forgets the running SDK. */
+    /** Forgets the running SDK*/
     @Synchronized
     fun clear() {
         instance = null
+        logger.forgetLoggedOnce()
     }
 }
