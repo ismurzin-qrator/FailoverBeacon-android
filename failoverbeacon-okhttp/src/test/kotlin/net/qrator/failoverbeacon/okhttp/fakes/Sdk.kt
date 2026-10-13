@@ -5,14 +5,18 @@ import net.qrator.failoverbeacon.core.SdkInstance
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.call.ExchangeBus
+import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
 
-fun installSdk() {
+/** Installs an SDK whose exchanges go to [subscribers]; without one, calls are not recorded. */
+fun installSdk(vararg subscribers: ExchangeSubscriber) {
+    val bus = ExchangeBus(SdkRegistry.logger)
+    subscribers.forEach(bus::subscribe)
     SdkRegistry.install(
         SdkInstance(
             appContext = ContextWrapper(null),
             consent = TrackingConsent.GRANTED,
-            clock = { 0 },
-            exchangeBus = ExchangeBus(SdkRegistry.logger)
+            clock = { System.nanoTime() },
+            exchangeBus = bus
         )
     )
 }

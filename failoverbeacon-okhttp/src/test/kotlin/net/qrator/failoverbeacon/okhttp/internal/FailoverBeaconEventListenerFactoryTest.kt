@@ -19,6 +19,7 @@ class FailoverBeaconEventListenerFactoryTest {
 
     @AfterTest
     fun tearDown() {
+        CallRecordingEventListener.incompatible = false
         SdkRegistry.clear()
     }
 
@@ -32,8 +33,29 @@ class FailoverBeaconEventListenerFactoryTest {
     }
 
     @Test
-    fun `adds the SDK listener while the SDK is running`() {
+    fun `returns the app listener while nothing subscribes to exchanges`() {
         installSdk()
+        val appListener = RecordingEventListener()
+
+        val listener = FailoverBeaconEventListenerFactory { appListener }.create(call)
+
+        assertSame(appListener, listener)
+    }
+
+    @Test
+    fun `returns the app listener once the OkHttp version is incompatible`() {
+        installSdk({})
+        CallRecordingEventListener.incompatible = true
+        val appListener = RecordingEventListener()
+
+        val listener = FailoverBeaconEventListenerFactory { appListener }.create(call)
+
+        assertSame(appListener, listener)
+    }
+
+    @Test
+    fun `adds the SDK listener while the SDK is running`() {
+        installSdk({})
         val appListener = RecordingEventListener()
 
         val listener = FailoverBeaconEventListenerFactory { appListener }.create(call)
@@ -45,16 +67,16 @@ class FailoverBeaconEventListenerFactoryTest {
 
     @Test
     fun `returns only the SDK listener when the app has none`() {
-        installSdk()
+        installSdk({})
 
         val listener = FailoverBeaconEventListenerFactory { EventListener.NONE }.create(call)
 
-        assertIs<FailureIsolatingEventListener>(listener)
+        assertIs<CallRecordingEventListener>(listener)
     }
 
     @Test
     fun `app listener exceptions propagate`() {
-        installSdk()
+        installSdk({})
         val failure = IllegalStateException("app bug")
         val factory =
             FailoverBeaconEventListenerFactory { RecordingEventListener(failure = failure) }

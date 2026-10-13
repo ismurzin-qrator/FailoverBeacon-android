@@ -23,7 +23,7 @@ class WithFailoverBeaconTest {
 
     @BeforeTest
     fun setUp() {
-        installSdk()
+        installSdk({})
     }
 
     @AfterTest
