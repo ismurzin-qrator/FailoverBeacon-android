@@ -13,4 +13,5 @@ dependencies {
     compileOnly(libs.squareup.okhttp)
 
     testImplementation(libs.squareup.mockwebserver)
+    testImplementation(libs.squareup.okhttp.tls)
 }
