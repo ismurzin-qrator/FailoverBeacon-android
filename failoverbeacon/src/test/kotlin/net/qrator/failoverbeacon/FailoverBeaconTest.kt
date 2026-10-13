@@ -11,12 +11,14 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
+import net.qrator.failoverbeacon.internal.ElapsedRealtimeClock
 import net.qrator.failoverbeacon.internal.LogcatLogger
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -48,6 +50,15 @@ class FailoverBeaconTest {
         FailoverBeacon.initialize(ContextWrapper(app), config)
 
         assertSame(app, SdkRegistry.instance?.appContext)
+    }
+
+    @Test
+    fun `assembles the SDK with the elapsed realtime clock and an empty exchange bus`() {
+        FailoverBeacon.initialize(app, config)
+
+        val instance = SdkRegistry.instance
+        assertSame(ElapsedRealtimeClock, instance?.clock)
+        assertFalse(instance?.exchangeBus?.hasSubscribers ?: true)
     }
 
     @Test

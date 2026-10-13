@@ -1,7 +1,6 @@
 package net.qrator.failoverbeacon
 
 import android.content.Context
-import net.qrator.failoverbeacon.core.SdkInstance
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.logging.LogOutput
@@ -9,6 +8,7 @@ import net.qrator.failoverbeacon.core.logging.info
 import net.qrator.failoverbeacon.core.logging.warn
 import net.qrator.failoverbeacon.internal.AndroidMainProcessDetector
 import net.qrator.failoverbeacon.internal.LogcatLogger
+import net.qrator.failoverbeacon.internal.SdkAssembly
 
 /**
  * Entry point of the FailoverBeacon SDK. Until [initialize], the SDK captures nothing. All
@@ -43,7 +43,7 @@ public object FailoverBeacon {
             SdkRegistry.logger.warn { "Not the main process. SDK is inactive" }
             return
         }
-        val sdkInstance = SdkInstance(appContext, toTrackingConsent(consent))
+        val sdkInstance = SdkAssembly.createInstance(appContext, toTrackingConsent(consent))
         if (!SdkRegistry.install(sdkInstance)) {
             SdkRegistry.logger.warn { "Already initialized. Ignored" }
             return
