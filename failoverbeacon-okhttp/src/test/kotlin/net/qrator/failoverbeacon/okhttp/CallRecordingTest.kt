@@ -1,20 +1,5 @@
 package net.qrator.failoverbeacon.okhttp
 
-import net.qrator.failoverbeacon.core.SdkRegistry
-import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
-import net.qrator.failoverbeacon.core.call.model.ConnectResult
-import net.qrator.failoverbeacon.core.call.model.Exchange
-import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
-import net.qrator.failoverbeacon.core.call.model.ExchangeStep
-import net.qrator.failoverbeacon.okhttp.fakes.installSdk
-import okhttp3.Cache
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
-import okhttp3.mockwebserver.SocketPolicy
-import okhttp3.tls.HandshakeCertificates
-import okhttp3.tls.HeldCertificate
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.InetAddress
@@ -41,6 +26,24 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import net.qrator.failoverbeacon.core.SdkRegistry
+import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
+import net.qrator.failoverbeacon.core.call.model.ConnectResult
+import net.qrator.failoverbeacon.core.call.model.Exchange
+import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
+import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.okhttp.fakes.installSdk
+import okhttp3.Cache
+import okhttp3.MediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
+import okhttp3.tls.HandshakeCertificates
+import okhttp3.tls.HeldCertificate
+import okio.BufferedSink
 
 /** Real calls through every OkHttp version of the test matrix. */
 class CallRecordingTest {
@@ -78,6 +81,39 @@ class CallRecordingTest {
         assertNotNull(exchange.timings.waitNanos)
         assertNotNull(exchange.timings.receiveNanos)
         assertEquals(ExchangeOutcome.Ok, exchange.outcome)
+    }
+
+    @Test
+    fun `records the size of a request body`() {
+        server.enqueue(MockResponse().setBody("ok"))
+        val body = object : RequestBody() {
+            override fun contentType(): MediaType? = null
+
+            override fun contentLength(): Long = 5
+
+            override fun writeTo(sink: BufferedSink) {
+                sink.writeUtf8("hello")
+            }
+        }
+        val request = Request.Builder().url(server.url("/")).post(body).build()
+
+        client().build().withFailoverBeacon().newCall(request).execute().use { it.body.string() }
+
+        val exchange = exchanges.single()
+        assertEquals("POST", exchange.request.method)
+        assertEquals(5L, exchange.request.bodyBytes)
+        assertNotNull(exchange.timings.sendNanos)
+    }
+
+    @Test
+    fun `records a chunked response without a content length`() {
+        server.enqueue(MockResponse().setChunkedBody("hello world", 4))
+
+        assertEquals("hello world", execute(client().build()))
+
+        val response = exchanges.single().response
+        assertNull(response?.contentLength)
+        assertEquals(11L, response?.bodyBytes)
     }
 
     @Test

@@ -368,6 +368,26 @@ class CallRecorderTest {
     }
 
     @Test
+    fun `ignores steps that come before the call reaches the network`() {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.dnsEnd()
+        recorder.tlsStart()
+        recorder.tlsEnd()
+        recorder.connectEnd("1.1.1.1", 443)
+        recorder.connectFailed("1.1.1.1", 443, IOException())
+        recorder.requestHeadersEnd("a.com", 443, "GET")
+        recorder.requestBodyEnd(1)
+        recorder.requestFailed(IOException())
+        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseBodyStart()
+        recorder.responseBodyEnd(1)
+        recorder.responseFailed(IOException())
+        recorder.callEnd()
+
+        assertTrue(published.isEmpty())
+    }
+
+    @Test
     fun `a call that never reached the network publishes nothing`() {
         recorder.callStart("a.com", 443, "GET")
         recorder.callEnd()
