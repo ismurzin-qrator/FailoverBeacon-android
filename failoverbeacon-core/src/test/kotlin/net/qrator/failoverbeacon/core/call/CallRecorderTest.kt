@@ -7,7 +7,7 @@ import java.net.ProtocolException
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
-import java.net.UnknownServiceException
+import javax.net.ssl.SSLHandshakeException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -18,6 +18,8 @@ import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.core.call.state.CallStopReason
+import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
 
 class CallRecorderTest {
     private var time = 0L
@@ -34,7 +36,6 @@ class CallRecorderTest {
         at(11) { requestHeadersStart() }
         at(12) { requestHeadersEnd("a.com", 443, "GET") }
         at(20) { responseHeadersEnd(200, "h2", 5) }
-        at(21) { responseBodyStart() }
         at(23) { responseBodyEnd(5) }
         at(30) { callEnd() }
 
@@ -49,7 +50,7 @@ class CallRecorderTest {
         assertEquals(2L, exchange.timings.dnsNanos)
         assertEquals(6L, exchange.timings.connectNanos)
         assertEquals(8L, exchange.timings.waitNanos)
-        assertEquals(2L, exchange.timings.receiveNanos)
+        assertEquals(3L, exchange.timings.receiveNanos)
         assertEquals(22L, exchange.durationNanos)
         assertEquals(ExchangeOutcome.Ok, exchange.outcome)
     }
@@ -67,6 +68,56 @@ class CallRecorderTest {
         recorder.callEnd()
 
         assertEquals(1, published.size)
+    }
+
+    @Test
+    fun `ignores steps that come before the call reaches the network`() {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.dnsEnd()
+        recorder.tlsStart()
+        recorder.tlsEnd()
+        recorder.connectEnd("1.1.1.1", 443)
+        recorder.connectFailed(
+            "1.1.1.1",
+            443,
+            IOException(),
+            ExchangeStep.TCP,
+            ConnectStopReason.NETWORK
+        )
+        recorder.requestHeadersEnd("a.com", 443, "GET")
+        recorder.requestBodyEnd(1)
+        recorder.requestFailed(IOException())
+        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseBodyEnd(1)
+        recorder.responseFailed(IOException())
+        recorder.callEnd()
+
+        assertTrue(published.isEmpty())
+    }
+
+    @Test
+    fun `ignores steps reported after the call ended`() {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.callEnd()
+
+        recorder.connectStart("1.1.1.2", 443)
+        recorder.dnsStart()
+        recorder.connectionAcquired("1.1.1.2", 443, "a.com", 443, "h2")
+        recorder.requestHeadersStart()
+
+        assertEquals(1, published.size)
+    }
+
+    @Test
+    fun `a call that ended without a response or a failure failed without a cause`() {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.callEnd()
+
+        assertEquals(ExchangeOutcome.Failed(null, cause = null), published.single().outcome)
     }
 
     @Test
@@ -95,6 +146,22 @@ class CallRecorderTest {
     }
 
     @Test
+    fun `a followed-up response ends at its headers`() {
+        recorder.callStart("a.com", 443, "GET")
+        at(0) { connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2") }
+        at(1) { requestHeadersStart() }
+        at(10) { responseHeadersEnd(401, "h2", 6) }
+        at(300) { responseBodyEnd(0) }
+        at(310) { requestHeadersStart() }
+        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.callEnd()
+
+        val challenge = published.first()
+        assertEquals(10L, challenge.durationNanos)
+        assertNull(challenge.timings.receiveNanos)
+    }
+
+    @Test
     fun `a follow-up on the connection the call holds reuses it`() {
         recorder.callStart("a.com", 443, "GET")
         connect("1.1.1.1")
@@ -113,42 +180,13 @@ class CallRecorderTest {
     }
 
     @Test
-    fun `a follow-up target is unknown until OkHttp names it`() {
-        recorder.callStart("a.com", 443, "POST")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
-        recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(303, "h2", 0)
-        connect("1.1.1.1", port = 8443, failure = ConnectException("refused"))
-        recorder.callFailed(ConnectException("refused"), canceled = false, timedOut = false)
-
-        val (redirect, followUp) = published
-        assertEquals("POST", redirect.request.method)
-        assertEquals(ExchangeRequest(null, null, null, bodyBytes = null), followUp.request)
-    }
-
-    @Test
-    fun `the acquired connection names the follow-up target`() {
+    fun `a connect to another port of the same IP is not this connection`() {
         recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
-        recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(307, "h2", 0)
-        recorder.connectionAcquired("2.2.2.2", 8443, "b.com", 8443, "h2")
+        connect("1.1.1.1", port = 443)
+        recorder.connectionAcquired("1.1.1.1", 8443, "a.com", 8443, "h2")
         recorder.callEnd()
 
-        val followUp = published.last().request
-        assertEquals("b.com", followUp.serverAddress)
-        assertEquals(8443, followUp.serverPort)
-        assertNull(followUp.method)
-    }
-
-    @Test
-    fun `the DNS lookup does not rename the target`() {
-        recorder.callStart("target.com", 443, "GET")
-        recorder.dnsStart()
-        connect("10.0.0.5", port = 3128, failure = ConnectException("refused"))
-        recorder.callFailed(ConnectException("refused"), canceled = false, timedOut = false)
-
-        assertEquals("target.com", published.single().request.serverAddress)
+        assertTrue(published.single().reusedConnection)
     }
 
     @Test
@@ -172,6 +210,164 @@ class CallRecorderTest {
     }
 
     @Test
+    fun `a follow-up target is unknown until OkHttp names it`() {
+        recorder.callStart("a.com", 443, "POST")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(303, "h2", 0)
+        connect("1.1.1.1", port = 8443, failure = ConnectException("refused"))
+        recorder.callFailed(ConnectException("refused"), CallStopReason.FAILED)
+
+        val (redirect, followUp) = published
+        assertEquals("POST", redirect.request.method)
+        assertEquals(ExchangeRequest(null, null, null, bodyBytes = null), followUp.request)
+    }
+
+    @Test
+    fun `the acquired connection names the follow-up target`() {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(307, "h2", 0)
+        recorder.connectionAcquired("2.2.2.2", 8443, "b.com", 8443, "h2")
+        recorder.callEnd()
+
+        val followUp = published.last().request
+        assertEquals("b.com", followUp.serverAddress)
+        assertEquals(8443, followUp.serverPort)
+        assertNull(followUp.method)
+    }
+
+    @Test
+    fun `a resend keeps the target and method of the failed request`() {
+        recorder.callStart("a.com", 443, "POST")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.requestHeadersStart()
+        recorder.requestHeadersEnd("a.com", 443, "POST")
+        recorder.responseFailed(SocketException("Connection reset"))
+        connect("1.1.1.1", failure = ConnectException("refused"))
+        recorder.callFailed(ConnectException("refused"), CallStopReason.FAILED)
+
+        assertEquals(
+            ExchangeRequest("a.com", 443, "POST", bodyBytes = null),
+            published.last().request
+        )
+    }
+
+    @Test
+    fun `the selected target replaces the one the app asked for`() {
+        recorder.callStart("primary.com", 443, "GET")
+        recorder.targetSelected("backup.com", 8443)
+        recorder.dnsStart()
+        recorder.callFailed(UnknownHostException("backup.com"), CallStopReason.FAILED)
+
+        assertEquals(
+            ExchangeRequest("backup.com", 8443, "GET", bodyBytes = null),
+            published.single().request
+        )
+    }
+
+    @Test
+    fun `the selected target names a follow-up before it is sent`() {
+        val unresolved = UnknownHostException("b.com")
+        recorder.callStart("a.com", 443, "GET")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(302, "h2", 0)
+        recorder.targetSelected("b.com", 8443)
+        recorder.dnsStart()
+        recorder.callFailed(unresolved, CallStopReason.FAILED)
+
+        val followUp = published.last()
+        assertEquals("b.com", followUp.request.serverAddress)
+        assertEquals(8443, followUp.request.serverPort)
+        assertEquals(ExchangeOutcome.Failed(ExchangeStep.DNS, unresolved), followUp.outcome)
+    }
+
+    @Test
+    fun `the selected target names an open exchange that has none`() {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(302, "h2", 0)
+        recorder.connectStart("2.2.2.2", 443)
+        recorder.targetSelected("b.com", 443)
+        recorder.callFailed(ConnectException("refused"), CallStopReason.FAILED)
+
+        assertEquals("b.com", published.last().request.serverAddress)
+    }
+
+    @Test
+    fun `an exchange given up for another server ends at its last network event`() {
+        val refused = ConnectException("refused")
+        recorder.callStart("primary.com", 443, "GET")
+        at(0) { targetSelected("primary.com", 443) }
+        at(1) { dnsStart() }
+        at(2) { dnsEnd() }
+        connect("1.1.1.1", start = 3, end = 5, failure = refused)
+        at(505) { targetSelected("backup.com", 443) }
+        recorder.dnsStart()
+        connect("2.2.2.2")
+        recorder.connectionAcquired("2.2.2.2", 443, "backup.com", 443, "h2")
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.callEnd()
+
+        val (primary, backup) = published
+        assertEquals("primary.com", primary.request.serverAddress)
+        assertEquals(ExchangeOutcome.Failed(ExchangeStep.TCP, refused), primary.outcome)
+        assertEquals(4L, primary.durationNanos)
+        assertEquals("backup.com", backup.request.serverAddress)
+        assertEquals(1, backup.resendCount)
+        assertEquals(ExchangeOutcome.Ok, backup.outcome)
+    }
+
+    @Test
+    fun `a pooled connection to another server ends the exchange given up`() {
+        recorder.callStart("primary.com", 443, "GET")
+        recorder.targetSelected("primary.com", 443)
+        recorder.dnsStart()
+        connect("1.1.1.1", failure = ConnectException("refused"))
+        recorder.connectionAcquired("2.2.2.2", 443, "backup.com", 443, "h2")
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.callEnd()
+
+        val (primary, backup) = published
+        assertEquals("primary.com", primary.request.serverAddress)
+        assertTrue(backup.reusedConnection)
+        assertTrue(backup.attempts.isEmpty())
+    }
+
+    @Test
+    fun `the same server selected again keeps the exchange`() {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.targetSelected("a.com", 443)
+        recorder.dnsStart()
+        connect("1.1.1.1", failure = SocketTimeoutException("connect timed out"))
+        recorder.targetSelected("a.com", 443)
+        connect("1.1.1.2")
+        recorder.connectionAcquired("1.1.1.2", 443, "a.com", 443, "h2")
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.callEnd()
+
+        assertEquals(2, published.single().attempts.size)
+    }
+
+    @Test
+    fun `a failed DNS lookup fails at DNS and ends when the failure is known`() {
+        val unresolved = UnknownHostException("a.com")
+        recorder.callStart("a.com", 443, "GET")
+        at(1) { dnsStart() }
+        at(3_000) { callFailed(unresolved, CallStopReason.FAILED) }
+
+        val exchange = published.single()
+        assertEquals(ExchangeOutcome.Failed(ExchangeStep.DNS, unresolved), exchange.outcome)
+        assertEquals(2_999L, exchange.durationNanos)
+    }
+
+    @Test
     fun `connects that sent nothing stay in one exchange`() {
         recorder.callStart("a.com", 443, "GET")
         connect("1.1.1.1", failure = SocketTimeoutException("connect timed out"))
@@ -184,33 +380,51 @@ class CallRecorderTest {
         val exchange = published.single()
         assertEquals(listOf("1.1.1.1", "1.1.1.2"), exchange.attempts.map { it.peerAddress })
         assertEquals("1.1.1.2", exchange.serverIp)
+        assertEquals(ExchangeOutcome.Ok, exchange.outcome)
     }
 
     @Test
-    fun `a connect failure goes to the earliest attempt to that address`() {
+    fun `a connect finishing its handshake is the latest to its address`() {
         recorder.callStart("a.com", 443, "GET")
         at(0) { connectStart("1.1.1.1", 443) }
-        at(10) { connectStart("1.1.1.1", 443) }
-        at(20) { connectFailed("1.1.1.1", 443, SocketException("Socket closed")) }
-        at(30) { connectEnd("1.1.1.1", 443) }
+        at(300) { connectStart("1.1.1.1", 443) }
+        at(320) { connectEnd("1.1.1.1", 443) }
+        at(380) {
+            connectFailed(
+                "1.1.1.1",
+                443,
+                SocketException("Socket closed"),
+                ExchangeStep.TCP,
+                ConnectStopReason.CLIENT
+            )
+        }
         recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
         recorder.callEnd()
 
-        val (canceled, retry) = published.single().attempts
-        assertEquals(20L, canceled.connectNanos)
-        assertEquals(ConnectResult.Connected, retry.result)
+        val (late, retry) = published.single().attempts
+        assertEquals(ConnectResult.Superseded, late.result)
         assertEquals(20L, retry.connectNanos)
     }
 
     @Test
-    fun `a handshake cut in a race belongs to the attempt that ended last`() {
+    fun `a handshake failure in a race belongs to the connect that reported it`() {
         val reset = SocketException("Connection reset")
         recorder.callStart("a.com", 443, "GET")
         at(0) { connectStart("1.1.1.1", 443) }
         at(250) { connectStart("1.1.1.2", 443) }
         at(271) { tlsStart() }
-        at(280) { connectFailed("1.1.1.1", 443, SocketException("Socket closed")) }
-        at(300) { connectFailed("1.1.1.2", 443, reset) }
+        at(280) {
+            connectFailed(
+                "1.1.1.1",
+                443,
+                SocketException("Socket closed"),
+                ExchangeStep.TCP,
+                ConnectStopReason.CLIENT
+            )
+        }
+        at(300) {
+            connectFailed("1.1.1.2", 443, reset, ExchangeStep.TLS, ConnectStopReason.NETWORK)
+        }
         at(310) { connectStart("1.1.1.1", 443) }
         at(320) { tlsStart() }
         at(330) { connectEnd("1.1.1.1", 443) }
@@ -228,6 +442,127 @@ class CallRecorderTest {
     }
 
     @Test
+    fun `the furthest failed connect decides the outcome`() {
+        val untrusted = SSLHandshakeException("untrusted")
+        val refused = ConnectException("refused")
+        recorder.callStart("a.com", 443, "GET")
+        at(0) { connectStart("1.1.1.1", 443) }
+        at(1) { tlsStart() }
+        at(5) {
+            connectFailed("1.1.1.1", 443, untrusted, ExchangeStep.TLS, ConnectStopReason.NETWORK)
+        }
+        at(6) { connectStart("1.1.1.2", 443) }
+        at(7) {
+            connectFailed("1.1.1.2", 443, refused, ExchangeStep.TCP, ConnectStopReason.NETWORK)
+        }
+        recorder.callFailed(refused, CallStopReason.FAILED)
+
+        assertEquals(
+            ExchangeOutcome.Failed(ExchangeStep.TLS, untrusted),
+            published.single().outcome
+        )
+    }
+
+    @Test
+    fun `among connects failed at one step the last to end decides`() {
+        val refused = ConnectException("refused")
+        val timeout = SocketTimeoutException("connect timed out")
+        recorder.callStart("a.com", 443, "GET")
+        at(0) { connectStart("1.1.1.1", 443) }
+        at(5) {
+            connectFailed("1.1.1.1", 443, refused, ExchangeStep.TCP, ConnectStopReason.NETWORK)
+        }
+        at(6) { connectStart("1.1.1.2", 443) }
+        at(600) {
+            connectFailed("1.1.1.2", 443, timeout, ExchangeStep.TCP, ConnectStopReason.NETWORK)
+        }
+        recorder.callFailed(refused, CallStopReason.FAILED)
+
+        assertEquals(ExchangeOutcome.Failed(ExchangeStep.TCP, timeout), published.single().outcome)
+    }
+
+    @Test
+    fun `a canceled call cancels the connects it stopped and keeps earlier failures`() {
+        val reset = SocketException("Connection reset")
+        recorder.callStart("a.com", 443, "GET")
+        at(0) { connectStart("1.1.1.1", 443) }
+        at(1) { tlsStart() }
+        at(5) { connectFailed("1.1.1.1", 443, reset, ExchangeStep.TLS, ConnectStopReason.NETWORK) }
+        at(6) { connectStart("1.1.1.2", 443) }
+        at(7) { connectStart("1.1.1.3", 443) }
+        at(700) {
+            connectFailed(
+                "1.1.1.2",
+                443,
+                SocketException("Socket closed"),
+                ExchangeStep.TCP,
+                ConnectStopReason.CALL
+            )
+        }
+        recorder.callFailed(IOException("Canceled"), CallStopReason.CANCELED)
+
+        val exchange = published.single()
+        assertEquals(
+            listOf(
+                ConnectResult.Failed(ExchangeStep.TLS, reset),
+                ConnectResult.Canceled,
+                ConnectResult.Canceled
+            ),
+            exchange.attempts.map { it.result }
+        )
+        assertEquals(ExchangeOutcome.Canceled, exchange.outcome)
+    }
+
+    @Test
+    fun `a call timeout fails the connects it stopped and outranks earlier failures`() {
+        val reset = SocketException("Connection reset")
+        val timeout = InterruptedIOException("timeout")
+        recorder.callStart("a.com", 443, "GET")
+        at(0) { connectStart("1.1.1.1", 443) }
+        at(1) { tlsStart() }
+        at(5) { connectFailed("1.1.1.1", 443, reset, ExchangeStep.TLS, ConnectStopReason.NETWORK) }
+        at(6) { connectStart("1.1.1.2", 443) }
+        at(700) {
+            connectFailed(
+                "1.1.1.2",
+                443,
+                SocketException("Socket closed"),
+                ExchangeStep.TCP,
+                ConnectStopReason.CALL
+            )
+        }
+        recorder.callFailed(timeout, CallStopReason.TIMED_OUT)
+
+        val exchange = published.single()
+        assertEquals(
+            listOf(
+                ConnectResult.Failed(ExchangeStep.TLS, reset),
+                ConnectResult.Failed(ExchangeStep.TCP, timeout)
+            ),
+            exchange.attempts.map { it.result }
+        )
+        assertEquals(ExchangeOutcome.Failed(ExchangeStep.TCP, timeout), exchange.outcome)
+    }
+
+    @Test
+    fun `a failed send keeps its first failure, has no wait and ends at the failure`() {
+        val broken = SocketException("Broken pipe")
+        recorder.callStart("a.com", 443, "POST")
+        at(0) { connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2") }
+        at(1) { requestHeadersStart() }
+        at(2) { requestHeadersEnd("a.com", 443, "POST") }
+        at(50) { requestFailed(broken) }
+        at(50) { responseFailed(SocketException("Socket closed")) }
+        at(500) { connectStart("1.1.1.1", 443) }
+
+        val exchange = published.single()
+        assertEquals(49L, exchange.timings.sendNanos)
+        assertNull(exchange.timings.waitNanos)
+        assertEquals(50L, exchange.durationNanos)
+        assertEquals(ExchangeOutcome.Failed(ExchangeStep.REQUEST, broken), exchange.outcome)
+    }
+
+    @Test
     fun `an early response after a failed request body is a response`() {
         recorder.callStart("a.com", 443, "POST")
         recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
@@ -239,38 +574,6 @@ class CallRecorderTest {
         val exchange = published.single()
         assertEquals(413, exchange.response?.statusCode)
         assertEquals(ExchangeOutcome.Ok, exchange.outcome)
-    }
-
-    @Test
-    fun `a body cut fails at RESPONSE and keeps the status`() {
-        val timeout = SocketTimeoutException("read")
-        recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
-        recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(200, "h2", 200_000)
-        recorder.responseBodyStart()
-        recorder.responseFailed(timeout)
-        recorder.callFailed(timeout, canceled = false, timedOut = false)
-
-        val exchange = published.single()
-        assertEquals(200, exchange.response?.statusCode)
-        assertEquals(200_000L, exchange.response?.contentLength)
-        assertNull(exchange.response?.bodyBytes)
-        assertEquals(ExchangeOutcome.Failed(ExchangeStep.RESPONSE, timeout), exchange.outcome)
-    }
-
-    @Test
-    fun `a failure while waiting for the headers ends the wait`() {
-        recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
-        at(0) { requestHeadersStart() }
-        at(1) { requestHeadersEnd("a.com", 443, "GET") }
-        at(10_001) { responseFailed(SocketTimeoutException("read")) }
-        recorder.callFailed(SocketTimeoutException("read"), canceled = false, timedOut = false)
-
-        val exchange = published.single()
-        assertEquals(10_000L, exchange.timings.waitNanos)
-        assertNull(exchange.timings.receiveNanos)
     }
 
     @Test
@@ -287,46 +590,38 @@ class CallRecorderTest {
     }
 
     @Test
-    fun `the last exchange lasts until its body ends`() {
+    fun `a failure while waiting for the headers ends the wait and the exchange`() {
         recorder.callStart("a.com", 443, "GET")
         at(0) { connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2") }
-        at(10) { requestHeadersStart() }
-        at(20) { responseHeadersEnd(200, "h2", 5) }
-        at(30) { responseBodyStart() }
-        at(40) { responseBodyEnd(5) }
-        at(1_000) { callEnd() }
+        at(1) { requestHeadersStart() }
+        at(2) { requestHeadersEnd("a.com", 443, "GET") }
+        at(302) { responseFailed(SocketTimeoutException("read")) }
+        at(802) { callFailed(SocketTimeoutException("read"), CallStopReason.FAILED) }
 
-        assertEquals(40L, published.single().durationNanos)
+        val exchange = published.single()
+        assertEquals(300L, exchange.timings.waitNanos)
+        assertNull(exchange.timings.receiveNanos)
+        assertEquals(302L, exchange.durationNanos)
     }
 
     @Test
-    fun `a redirect loop fails the last exchange`() {
-        val loop = ProtocolException("Too many follow-up requests: 21")
+    fun `a body cut fails at RESPONSE, keeps the status and is received from the headers`() {
+        val timeout = SocketTimeoutException("read")
         recorder.callStart("a.com", 443, "GET")
         recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
-        recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(302, "h2", 0)
-        recorder.callFailed(loop, canceled = false, timedOut = false)
+        at(0) { requestHeadersStart() }
+        at(1) { requestHeadersEnd("a.com", 443, "GET") }
+        at(51) { responseHeadersEnd(200, "h2", 200_000) }
+        at(451) { responseFailed(timeout) }
+        recorder.callFailed(timeout, CallStopReason.FAILED)
 
-        assertEquals(
-            ExchangeOutcome.Failed(ExchangeStep.RESPONSE, loop),
-            published.single().outcome
-        )
-    }
-
-    @Test
-    fun `a failure before the follow-up reaches the network leaves the response alone`() {
-        recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
-        recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(302, "h2", 0)
-        recorder.callFailed(
-            UnknownServiceException("CLEARTEXT communication not permitted"),
-            canceled = false,
-            timedOut = false
-        )
-
-        assertEquals(ExchangeOutcome.Ok, published.single().outcome)
+        val exchange = published.single()
+        assertEquals(200, exchange.response?.statusCode)
+        assertEquals(200_000L, exchange.response?.contentLength)
+        assertNull(exchange.response?.bodyBytes)
+        assertEquals(50L, exchange.timings.waitNanos)
+        assertEquals(400L, exchange.timings.receiveNanos)
+        assertEquals(ExchangeOutcome.Failed(ExchangeStep.RESPONSE, timeout), exchange.outcome)
     }
 
     @Test
@@ -336,9 +631,8 @@ class CallRecorderTest {
         recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
         recorder.requestHeadersStart()
         recorder.responseHeadersEnd(200, "h2", null)
-        recorder.responseBodyStart()
         recorder.responseFailed(SocketException("Socket closed"))
-        recorder.callFailed(timeout, canceled = false, timedOut = true)
+        recorder.callFailed(timeout, CallStopReason.TIMED_OUT)
 
         assertEquals(
             ExchangeOutcome.Failed(ExchangeStep.RESPONSE, timeout),
@@ -347,61 +641,43 @@ class CallRecorderTest {
     }
 
     @Test
-    fun `a canceled call publishes a canceled exchange`() {
-        recorder.callStart("a.com", 443, "GET")
-        recorder.dnsStart()
-        recorder.callFailed(IOException("Canceled"), canceled = true, timedOut = false)
+    fun `a call failure after a complete response leaves it Ok, ending at its headers`() {
+        val reasons =
+            listOf(CallStopReason.FAILED, CallStopReason.CANCELED, CallStopReason.TIMED_OUT)
+        for (reason in reasons) {
+            val published = mutableListOf<Exchange>()
+            val recorder = CallRecorder({ time }, published::add)
+            time = 0
+            recorder.callStart("a.com", 443, "GET")
+            recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+            time = 1
+            recorder.requestHeadersStart()
+            time = 10
+            recorder.responseHeadersEnd(401, "h2", 6)
+            time = 600
+            recorder.responseBodyEnd(0)
+            recorder.callFailed(IOException("stopped"), reason)
 
-        assertEquals(ExchangeOutcome.Canceled, published.single().outcome)
+            val exchange = published.single()
+            assertEquals(ExchangeOutcome.Ok, exchange.outcome, "$reason")
+            assertEquals(10L, exchange.durationNanos, "$reason")
+            assertNull(exchange.timings.receiveNanos, "$reason")
+        }
     }
 
     @Test
-    fun `a failed DNS lookup fails at DNS`() {
-        val unresolved = UnknownHostException("a.com")
-        recorder.callStart("a.com", 443, "GET")
-        recorder.dnsStart()
-        recorder.callFailed(unresolved, canceled = false, timedOut = false)
-
-        val exchange = published.single()
-        assertEquals("a.com", exchange.request.serverAddress)
-        assertEquals(ExchangeOutcome.Failed(ExchangeStep.DNS, unresolved), exchange.outcome)
-    }
-
-    @Test
-    fun `ignores steps that come before the call reaches the network`() {
-        recorder.callStart("a.com", 443, "GET")
-        recorder.dnsEnd()
-        recorder.tlsStart()
-        recorder.tlsEnd()
-        recorder.connectEnd("1.1.1.1", 443)
-        recorder.connectFailed("1.1.1.1", 443, IOException())
-        recorder.requestHeadersEnd("a.com", 443, "GET")
-        recorder.requestBodyEnd(1)
-        recorder.requestFailed(IOException())
-        recorder.responseHeadersEnd(200, "h2", null)
-        recorder.responseBodyStart()
-        recorder.responseBodyEnd(1)
-        recorder.responseFailed(IOException())
-        recorder.callEnd()
-
-        assertTrue(published.isEmpty())
-    }
-
-    @Test
-    fun `a call that never reached the network publishes nothing`() {
-        recorder.callStart("a.com", 443, "GET")
-        recorder.callEnd()
-
-        assertTrue(published.isEmpty())
-    }
-
-    @Test
-    fun `a call that ended without a response or a failure failed without a cause`() {
+    fun `a redirect loop fails the last exchange`() {
+        val loop = ProtocolException("Too many follow-up requests: 21")
         recorder.callStart("a.com", 443, "GET")
         recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
-        recorder.callEnd()
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(302, "h2", 0)
+        recorder.callFailed(loop, CallStopReason.RESPONSE_REJECTED)
 
-        assertEquals(ExchangeOutcome.Failed(null, cause = null), published.single().outcome)
+        assertEquals(
+            ExchangeOutcome.Failed(ExchangeStep.RESPONSE, loop),
+            published.single().outcome
+        )
     }
 
     private fun at(nanos: Long, step: CallRecorder.() -> Unit) {
@@ -418,7 +694,11 @@ class CallRecorderTest {
     ) {
         at(start) { connectStart(ip, port) }
         at(end) {
-            if (failure == null) connectEnd(ip, port) else connectFailed(ip, port, failure)
+            if (failure == null) {
+                connectEnd(ip, port)
+            } else {
+                connectFailed(ip, port, failure, ExchangeStep.TCP, ConnectStopReason.NETWORK)
+            }
         }
     }
 }

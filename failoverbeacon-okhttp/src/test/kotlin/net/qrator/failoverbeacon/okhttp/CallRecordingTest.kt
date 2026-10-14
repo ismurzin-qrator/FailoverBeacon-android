@@ -34,6 +34,7 @@ import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.okhttp.fakes.installSdk
 import okhttp3.Cache
+import okhttp3.EventListener
 import okhttp3.MediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -169,7 +170,7 @@ class CallRecordingTest {
     }
 
     @Test
-    fun `a redirect to a host that does not resolve fails at DNS with an unknown target`() {
+    fun `a redirect to a host that does not resolve fails at DNS`() {
         server.enqueue(
             MockResponse().setResponseCode(302).setHeader("Location", "http://nowhere.test/")
         )
@@ -184,7 +185,10 @@ class CallRecordingTest {
 
         val (redirect, followUp) = exchanges
         assertEquals(ExchangeOutcome.Ok, redirect.outcome)
-        assertNull(followUp.request.serverAddress)
+        assertEquals(
+            if (namesTargetEarly()) "nowhere.test" else null,
+            followUp.request.serverAddress
+        )
         assertEquals(ExchangeStep.DNS, assertIs<ExchangeOutcome.Failed>(followUp.outcome).step)
     }
 
@@ -208,11 +212,10 @@ class CallRecordingTest {
         val closedPort = ServerSocket(0, 1, LOOPBACK).use { it.localPort }
         val request = Request.Builder().url("http://localhost:$closedPort/").build()
 
-        assertFailsWith<IOException> {
-            client().build().withFailoverBeacon().newCall(request).execute()
-        }
+        // OkHttp 5 resends the request, 3.14 and 4.x fail the call.
+        runCatching { client().build().withFailoverBeacon().newCall(request).execute().close() }
 
-        val exchange = exchanges.single()
+        val exchange = exchanges.first()
         val attempt = assertIs<ConnectResult.Failed>(exchange.attempts.single().result)
         assertEquals(ExchangeStep.TCP, attempt.step)
         assertEquals(ExchangeStep.TCP, assertIs<ExchangeOutcome.Failed>(exchange.outcome).step)
@@ -266,7 +269,7 @@ class CallRecordingTest {
         val call = client().build().withFailoverBeacon()
             .newCall(Request.Builder().url(server.url("/")).build())
         val canceler = thread {
-            Thread.sleep(200)
+            server.takeRequest(5, TimeUnit.SECONDS)
             call.cancel()
         }
 
@@ -280,13 +283,18 @@ class CallRecordingTest {
     fun `a response from the cache makes no exchange`() {
         server.enqueue(MockResponse().setHeader("Cache-Control", "max-age=60").setBody("cached"))
         val cacheDir = Files.createTempDirectory("okhttp-cache").toFile()
-        val client = client().cache(Cache(cacheDir, 1024 * 1024)).build()
+        val cache = Cache(cacheDir, 1024 * 1024)
+        try {
+            val client = client().cache(cache).build()
 
-        execute(client)
-        execute(client)
+            execute(client)
+            execute(client)
 
-        assertEquals(1, exchanges.size)
-        cacheDir.deleteRecursively()
+            assertEquals(1, exchanges.size)
+        } finally {
+            cache.close()
+            cacheDir.deleteRecursively()
+        }
     }
 
     @Test
@@ -346,6 +354,107 @@ class CallRecordingTest {
         }
     }
 
+    @Test
+    fun `a failed upload fails at REQUEST with no wait`() {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_DURING_REQUEST_BODY))
+        server.enqueue(MockResponse().setBody("ok"))
+        val body = object : RequestBody() {
+            override fun contentType(): MediaType? = null
+
+            override fun contentLength(): Long = 4L * 1024 * 1024
+
+            override fun writeTo(sink: BufferedSink) {
+                repeat(4 * 1024) { sink.write(ByteArray(1024)) }
+            }
+        }
+        val request = Request.Builder().url(server.url("/")).post(body).build()
+
+        // OkHttp 5 resends the request, 3.14 and 4.x fail the call.
+        runCatching { client().build().withFailoverBeacon().newCall(request).execute().close() }
+
+        val exchange = exchanges.first()
+        assertEquals(ExchangeStep.REQUEST, assertIs<ExchangeOutcome.Failed>(exchange.outcome).step)
+        assertNull(exchange.timings.waitNanos)
+    }
+
+    @Test
+    fun `a body stalling before its first byte is received from the headers`() {
+        server.enqueue(MockResponse().setBody("x".repeat(100)).setBodyDelay(1, TimeUnit.SECONDS))
+        val client = client().readTimeout(300, TimeUnit.MILLISECONDS).build()
+
+        assertFailsWith<SocketTimeoutException> { execute(client) }
+
+        val timings = exchanges.single().timings
+        assertTrue(timings.waitNanos!! < timings.receiveNanos!!)
+    }
+
+    @Test
+    fun `a stale pooled connection is resent to the same server`() {
+        server.enqueue(MockResponse().setBody("a").setSocketPolicy(SocketPolicy.DISCONNECT_AT_END))
+        server.enqueue(MockResponse().setBody("b"))
+        val client = client().build()
+
+        execute(client)
+        assertEquals("b", execute(client))
+
+        val (_, stale, resent) = exchanges
+        assertTrue(stale.reusedConnection)
+        assertIs<ExchangeOutcome.Failed>(stale.outcome)
+        assertEquals(1, resent.resendCount)
+        assertEquals(stale.request, resent.request)
+        assertEquals(ExchangeOutcome.Ok, resent.outcome)
+    }
+
+    @Test
+    fun `an app interceptor moving on to another server records both requests`() {
+        server.enqueue(MockResponse().setBody("ok"))
+        val closed = ServerSocket(0, 1, LOOPBACK).use { it.localPort }
+        val client = client()
+            .addInterceptor { chain ->
+                val primary = chain.request().newBuilder().url("http://down.test:$closed/").build()
+                try {
+                    chain.proceed(primary)
+                } catch (_: IOException) {
+                    chain.proceed(chain.request().newBuilder().url(server.url("/")).build())
+                }
+            }
+            .build()
+
+        assertEquals("ok", execute(client, "http://app.test/"))
+
+        if (namesTargetEarly()) {
+            val (primary, backup) = exchanges
+            assertEquals("down.test", primary.request.serverAddress)
+            assertEquals(ExchangeStep.TCP, assertIs<ExchangeOutcome.Failed>(primary.outcome).step)
+            assertEquals(ExchangeOutcome.Ok, backup.outcome)
+        } else {
+            assertEquals(ExchangeOutcome.Ok, exchanges.single().outcome)
+        }
+    }
+
+    @Test
+    fun `a call canceled while connecting cancels the connect`() {
+        val factory = SilentFirstSocketFactory()
+        val client = client()
+            .dns { listOf(SILENT) }
+            .socketFactory(factory)
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .build()
+        val call = client.withFailoverBeacon()
+            .newCall(Request.Builder().url(server.url("/")).build())
+        val canceler = thread {
+            factory.silentConnect.await(5, TimeUnit.SECONDS)
+            call.cancel()
+        }
+
+        assertFailsWith<IOException> { call.execute() }
+        canceler.join()
+
+        val exchange = exchanges.single()
+        assertEquals(ConnectResult.Canceled, exchange.attempts.single().result)
+        assertEquals(ExchangeOutcome.Canceled, exchange.outcome)
+    }
+
     private fun client(): OkHttpClient.Builder = OkHttpClient.Builder().dns {
         listOf(LOOPBACK)
     }
@@ -355,13 +464,19 @@ class CallRecordingTest {
         return client.withFailoverBeacon().newCall(request).execute().use { it.body.string() }
     }
 
+    /** OkHttp 4.1+ names the server of a request before its DNS lookup, 3.14 only once it is sent. */
+    private fun namesTargetEarly(): Boolean =
+        EventListener::class.java.methods.any { it.name == "proxySelectStart" }
+
     /** OkHttp 5 races connects to several addresses; 3.14 and 4.x try them one by one. */
     private fun hasFastFallback(): Boolean =
         OkHttpClient.Builder::class.java.methods.any { it.name == "fastFallback" }
 
     /** Connects to [SILENT] never succeed: they wait until the socket is closed or time out. */
     private class SilentFirstSocketFactory : SocketFactory() {
-        override fun createSocket(): Socket = SilentFirstSocket()
+        val silentConnect = CountDownLatch(1)
+
+        override fun createSocket(): Socket = SilentFirstSocket(silentConnect)
 
         override fun createSocket(host: String, port: Int): Socket = unsupported()
 
@@ -384,7 +499,7 @@ class CallRecordingTest {
         private fun unsupported(): Nothing = throw UnsupportedOperationException()
     }
 
-    private class SilentFirstSocket : Socket() {
+    private class SilentFirstSocket(private val silentConnect: CountDownLatch) : Socket() {
         private val closed = CountDownLatch(1)
 
         override fun connect(endpoint: SocketAddress, timeout: Int) {
@@ -392,6 +507,7 @@ class CallRecordingTest {
                 super.connect(endpoint, timeout)
                 return
             }
+            silentConnect.countDown()
             // Closing the socket from another thread fails a real connect with a plain
             // SocketException. Timeout fails it with SocketTimeoutException.
             if (closed.await(timeout.toLong(), TimeUnit.MILLISECONDS)) {

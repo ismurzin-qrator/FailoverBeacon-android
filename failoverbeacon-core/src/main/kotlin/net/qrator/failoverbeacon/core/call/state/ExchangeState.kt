@@ -1,26 +1,21 @@
 package net.qrator.failoverbeacon.core.call.state
 
-import java.net.SocketException
-import javax.net.ssl.SSLException
-import net.qrator.failoverbeacon.core.call.model.ConnectResult
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.util.Interval
 
+/** What happened during one exchange, as reported. */
 internal class ExchangeState(
-    var serverAddress: String?,
-    var serverPort: Int?,
+    var target: Target?,
     var method: String?,
     val resendCount: Int,
-    startNanos: Long
+    val startNanos: Long
 ) {
-    val totalInterval = Interval(startNanos)
     val dnsInterval = Interval()
     val tlsInterval = Interval()
     val sendInterval = Interval()
     val waitInterval = Interval()
     val receiveInterval = Interval()
     val attempts = ArrayList<AttemptState>()
-    val tlsStartTimes = ArrayList<Long>()
     var serverIp: String? = null
     var protocol: String? = null
     var reusedConnection = false
@@ -30,51 +25,35 @@ internal class ExchangeState(
     var responseBodyBytes: Long? = null
     var lastStep: ExchangeStep? = null
     var failure: Throwable? = null
-    var canceled = false
+    var requestUnsent = false
+    var followedUp = false
+    var callFailure: Throwable? = null
+    var callStopReason: CallStopReason? = null
+    var closedNanos: Long? = null
 
     val responded: Boolean get() = statusCode != null
     val ended: Boolean get() = responded || failure != null
+    val completed: Boolean get() = responded && failure == null
 
-    val connectedAttempt: AttemptState?
-        get() = attempts.lastOrNull { it.isConnected && it.peerAddress == serverIp }
+    /** Why the call stopped this exchange; a call stopped after a complete response did not. */
+    val stopReason: CallStopReason? get() = callStopReason.takeUnless { completed }
+    val allAttemptsFailed: Boolean
+        get() = attempts.isNotEmpty() && attempts.all { it.failure != null }
 
-    /** Connect attempts that owned TLS handshakes (mapped by in-flight connect timing). */
-    val tlsOwners: Set<AttemptState>
-        get() = tlsStartTimes.mapNotNullTo(HashSet()) { tlsStart ->
-            val racers = attempts.filter { it.connectInterval.contains(tlsStart) }
-            if (racers.any { it.isConnected }) {
-                null
-            } else {
-                racers.maxByOrNull { it.connectInterval.endNanos ?: Long.MIN_VALUE }
-            }
-        }
+    fun isOtherServer(target: Target): Boolean = this.target != null && this.target != target
 
-    fun getConnectingAttempt(ip: String, port: Int): AttemptState? =
-        attempts.firstOrNull { it.isConnecting && it.peerAddress == ip && it.port == port }
-
-    fun classifyAttempt(attempt: AttemptState): ConnectResult {
-        val owners = tlsOwners
-        return when {
-            attempt.isConnected -> ConnectResult.Connected
-            isSuperseded(attempt, owners) -> ConnectResult.Superseded
-            reachedTls(attempt, owners) -> ConnectResult.Failed(ExchangeStep.TLS, attempt.failure)
-            else -> ConnectResult.Failed(ExchangeStep.TCP, attempt.failure)
-        }
+    fun fail(step: ExchangeStep, failure: Throwable) {
+        // Keeps the first failure, later ones are its consequences.
+        if (this.failure != null) return
+        lastStep = step
+        this.failure = failure
     }
 
-    // OkHttp cancels racing connects once one gets through TCP by closing their sockets.
-    // Cancel is a fail with a plain SocketException without subclasses.
-    private fun isSuperseded(attempt: AttemptState, tlsOwners: Set<AttemptState>): Boolean {
-        val failure = attempt.failure
-        if (failure != null && failure.javaClass != SocketException::class.java) return false
-        if (reachedTls(attempt, tlsOwners)) return false
-        return attempts.any { other ->
-            other !== attempt &&
-                (other.isConnected || reachedTls(other, tlsOwners)) &&
-                attempt.connectInterval.overlaps(other.connectInterval)
+    fun getConnectingAttempt(ip: String, port: Int, step: ExchangeStep): AttemptState? {
+        val connecting = attempts.filter {
+            it.isConnecting && it.peerAddress == ip &&
+                it.port == port
         }
+        return if (step == ExchangeStep.TLS) connecting.lastOrNull() else connecting.firstOrNull()
     }
-
-    private fun reachedTls(attempt: AttemptState, tlsOwners: Set<AttemptState>): Boolean =
-        attempt in tlsOwners || attempt.failure is SSLException
 }

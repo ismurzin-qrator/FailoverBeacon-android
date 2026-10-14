@@ -2,8 +2,16 @@ package net.qrator.failoverbeacon.okhttp.internal
 
 import java.io.IOException
 import java.io.InterruptedIOException
+import java.net.ConnectException
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.ProtocolException
+import java.net.Proxy
+import java.net.SocketException
+import java.net.SocketTimeoutException
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -14,13 +22,17 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.call.CallRecorder
+import net.qrator.failoverbeacon.core.call.model.ConnectResult
 import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
+import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.logging.LogOutput
 import net.qrator.failoverbeacon.core.time.MonotonicClock
 import okhttp3.Call
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
+import okhttp3.Response
 
 class CallRecordingEventListenerTest {
     private val logs = CopyOnWriteArrayList<Pair<String, Throwable?>>()
@@ -120,9 +132,126 @@ class CallRecordingEventListenerTest {
         assertIs<InterruptedIOException>(outcome.cause)
     }
 
+    @Test
+    fun `a connect failing on a canceled call is canceled, an earlier one is a failure`() {
+        val call = call(OkHttpClient())
+        var now = 0L
+        val listener = listener { now++ }
+
+        listener.connectStart(call, FIRST, Proxy.NO_PROXY)
+        listener.connectFailed(call, FIRST, Proxy.NO_PROXY, null, ConnectException("refused"))
+        listener.connectStart(call, SECOND, Proxy.NO_PROXY)
+        call.cancel()
+        listener.connectFailed(call, SECOND, Proxy.NO_PROXY, null, SocketException("Socket closed"))
+        listener.callFailed(call, IOException("Canceled"))
+
+        val (refused, canceled) = published.single().attempts
+        assertIs<ConnectResult.Failed>(refused.result)
+        assertEquals(ConnectResult.Canceled, canceled.result)
+    }
+
+    @Test
+    fun `a connect OkHttp dropped after another connected is superseded`() {
+        val call = call(OkHttpClient())
+        var now = 0L
+        val listener = listener { now++ }
+
+        listener.connectStart(call, FIRST, Proxy.NO_PROXY)
+        listener.connectStart(call, SECOND, Proxy.NO_PROXY)
+        listener.connectEnd(call, SECOND, Proxy.NO_PROXY, null)
+        listener.connectFailed(call, FIRST, Proxy.NO_PROXY, null, IOException("canceled"))
+        listener.callEnd(call)
+
+        assertEquals(ConnectResult.Superseded, published.single().attempts.first().result)
+    }
+
+    @Test
+    fun `a socket timeout is not the call timeout`() {
+        val call = call(OkHttpClient.Builder().callTimeout(1, TimeUnit.SECONDS).build())
+        val closed = SocketException("Socket closed")
+        val listener = listener { 0 }
+        listener.requestHeadersStart(call)
+        listener.requestFailed(call, closed)
+
+        listener.callFailed(call, SocketTimeoutException("timeout"))
+
+        assertEquals(closed, assertIs<ExchangeOutcome.Failed>(published.single().outcome).cause)
+    }
+
+    @Test
+    fun `a protocol failure after a response rejects it`() {
+        val call = call(OkHttpClient())
+        val loop = ProtocolException("Too many follow-up requests: 21")
+        val listener = listener { 0 }
+        listener.requestHeadersStart(call)
+        listener.responseHeadersEnd(call, response(call, 302))
+
+        listener.callFailed(call, loop)
+
+        assertEquals(loop, assertIs<ExchangeOutcome.Failed>(published.single().outcome).cause)
+    }
+
+    @Test
+    fun `a failure on the handshake's thread is the handshake's, another thread's is not`() {
+        val call = call(OkHttpClient())
+        var now = 0L
+        val listener = listener { now++ }
+        val reset = SocketException("Connection reset")
+
+        listener.connectStart(call, FIRST, Proxy.NO_PROXY)
+        listener.connectStart(call, SECOND, Proxy.NO_PROXY)
+        listener.secureConnectStart(call)
+        thread {
+            listener.connectFailed(
+                call,
+                SECOND,
+                Proxy.NO_PROXY,
+                null,
+                SocketException("Socket closed")
+            )
+        }.join()
+        listener.connectFailed(call, FIRST, Proxy.NO_PROXY, null, reset)
+        listener.callFailed(call, reset)
+
+        val (winner, loser) = published.single().attempts
+        assertEquals(ConnectResult.Failed(ExchangeStep.TLS, reset), winner.result)
+        assertEquals(ConnectResult.Superseded, loser.result)
+    }
+
+    @Test
+    fun `a refused racing connect is a failure, not a dropped one`() {
+        val call = call(OkHttpClient())
+        var now = 0L
+        val listener = listener { now++ }
+        val refused = ConnectException("refused")
+
+        listener.connectStart(call, FIRST, Proxy.NO_PROXY)
+        listener.connectStart(call, SECOND, Proxy.NO_PROXY)
+        listener.connectEnd(call, SECOND, Proxy.NO_PROXY, null)
+        listener.connectFailed(call, FIRST, Proxy.NO_PROXY, null, refused)
+        listener.callEnd(call)
+
+        assertEquals(
+            ConnectResult.Failed(ExchangeStep.TCP, refused),
+            published.single().attempts.first().result
+        )
+    }
+
     private fun listener(clock: MonotonicClock) =
         CallRecordingEventListener(CallRecorder(clock, published::add))
 
     private fun call(client: OkHttpClient): Call =
         client.newCall(Request.Builder().url("http://example.test/").build())
+
+    private fun response(call: Call, code: Int): Response = Response.Builder()
+        .request(call.request())
+        .protocol(Protocol.HTTP_1_1)
+        .code(code)
+        .message("")
+        .build()
+
+    private companion object {
+        val FIRST = InetSocketAddress(InetAddress.getByAddress(byteArrayOf(10, 0, 0, 1)), 80)
+        val SECOND = InetSocketAddress(InetAddress.getByAddress(byteArrayOf(10, 0, 0, 2)), 80)
+    }
 }

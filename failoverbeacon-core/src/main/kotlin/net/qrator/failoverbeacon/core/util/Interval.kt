@@ -10,10 +10,7 @@ internal class Interval(var startNanos: Long? = null) {
             return if (end < start) null else end - start
         }
 
-    fun contains(time: Long): Boolean {
-        val start = startNanos ?: return false
-        return start < time && time < (endNanos ?: Long.MAX_VALUE)
-    }
+    fun endsAfter(time: Long?): Boolean = time != null && (endNanos ?: Long.MAX_VALUE) > time
 
     fun overlaps(other: Interval): Boolean {
         val start = startNanos ?: return false

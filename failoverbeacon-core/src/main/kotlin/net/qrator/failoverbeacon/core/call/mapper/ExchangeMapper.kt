@@ -2,18 +2,17 @@ package net.qrator.failoverbeacon.core.call.mapper
 
 import net.qrator.failoverbeacon.core.call.model.ConnectAttempt
 import net.qrator.failoverbeacon.core.call.model.Exchange
-import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
-import net.qrator.failoverbeacon.core.call.model.ExchangeTimings
 import net.qrator.failoverbeacon.core.call.state.ExchangeState
 
 internal object ExchangeMapper {
     internal fun toExchange(state: ExchangeState): Exchange = with(state) {
+        val results = AttemptClassifier.classify(attempts, stopReason, callFailure)
         Exchange(
             request = ExchangeRequest(
-                serverAddress = serverAddress,
-                serverPort = serverPort,
+                serverAddress = target?.address,
+                serverPort = target?.port,
                 method = method,
                 bodyBytes = requestBodyBytes
             ),
@@ -28,30 +27,16 @@ internal object ExchangeMapper {
             serverIp = serverIp,
             protocol = protocol,
             reusedConnection = reusedConnection,
-            attempts = attempts.map {
+            attempts = attempts.zip(results) { attempt, result ->
                 ConnectAttempt(
-                    peerAddress = it.peerAddress,
-                    connectNanos = it.connectInterval.durationNanos,
-                    result = classifyAttempt(it)
+                    peerAddress = attempt.peerAddress,
+                    connectNanos = attempt.connectInterval.durationNanos,
+                    result = result
                 )
             },
-            timings = ExchangeTimings(
-                dnsNanos = dnsInterval.durationNanos,
-                connectNanos = connectedAttempt?.connectInterval?.durationNanos,
-                tlsNanos = tlsInterval.durationNanos,
-                sendNanos = sendInterval.durationNanos,
-                waitNanos = waitInterval.durationNanos,
-                receiveNanos = receiveInterval.durationNanos
-            ),
-            durationNanos = totalInterval.durationNanos ?: 0,
-            outcome = toOutcome()
+            timings = TimingsMapper.toTimings(state),
+            durationNanos = TimingsMapper.toDurationNanos(state),
+            outcome = OutcomeMapper.toOutcome(state, results)
         )
-    }
-
-    private fun ExchangeState.toOutcome(): ExchangeOutcome = when {
-        canceled -> ExchangeOutcome.Canceled
-        failure != null -> ExchangeOutcome.Failed(lastStep, failure)
-        responded -> ExchangeOutcome.Ok
-        else -> ExchangeOutcome.Failed(lastStep, cause = null)
     }
 }

@@ -8,4 +8,7 @@ sealed interface ConnectResult {
 
     /** Another connection was ready first. */
     data object Superseded : ConnectResult
+
+    /** The app canceled the call while connecting. */
+    data object Canceled : ConnectResult
 }

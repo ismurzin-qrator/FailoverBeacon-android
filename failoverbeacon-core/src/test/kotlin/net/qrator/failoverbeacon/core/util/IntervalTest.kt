@@ -25,29 +25,6 @@ class IntervalTest {
     }
 
     @Test
-    fun `contains times strictly between start and end`() {
-        val interval = interval(10, 20)
-
-        assertTrue(interval.contains(15))
-        assertFalse(interval.contains(10))
-        assertFalse(interval.contains(20))
-        assertFalse(interval.contains(5))
-    }
-
-    @Test
-    fun `an interval without an end contains every later time`() {
-        val interval = Interval(startNanos = 10)
-
-        assertTrue(interval.contains(Long.MAX_VALUE - 1))
-        assertFalse(interval.contains(10))
-    }
-
-    @Test
-    fun `an interval without a start contains nothing`() {
-        assertFalse(Interval().apply { endNanos = 20 }.contains(15))
-    }
-
-    @Test
     fun `overlapping intervals overlap each other`() {
         val first = interval(10, 20)
         val second = interval(15, 25)

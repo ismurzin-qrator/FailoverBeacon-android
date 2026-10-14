@@ -4,15 +4,21 @@ import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.ProtocolException
 import java.net.Proxy
+import java.net.SocketException
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.call.CallRecorder
+import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.core.call.state.CallStopReason
+import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
 import net.qrator.failoverbeacon.core.logging.error
 import net.qrator.failoverbeacon.core.util.catchSdkFailure
 import okhttp3.Call
 import okhttp3.Connection
 import okhttp3.EventListener
 import okhttp3.Handshake
+import okhttp3.HttpUrl
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
@@ -22,10 +28,18 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
     @Volatile
     private var failed = false
 
+    // OkHttp 5 connects TCP on its own threads but runs the handshake on the call's thread, so only
+    // a failure reported on the handshake's thread is the handshake's.
+    @Volatile
+    private var handshakeThread: Thread? = null
+
     override fun callStart(call: Call) = safely {
         val request = call.request()
         recorder.callStart(request.url.host, request.url.port, request.method)
     }
+
+    override fun proxySelectStart(call: Call, url: HttpUrl) =
+        safely { recorder.targetSelected(url.host, url.port) }
 
     override fun dnsStart(call: Call, domainName: String) = safely { recorder.dnsStart() }
 
@@ -38,7 +52,10 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
     override fun connectStart(call: Call, inetSocketAddress: InetSocketAddress, proxy: Proxy) =
         safely { recorder.connectStart(inetSocketAddress.ip(), inetSocketAddress.port) }
 
-    override fun secureConnectStart(call: Call) = safely { recorder.tlsStart() }
+    override fun secureConnectStart(call: Call) = safely {
+        handshakeThread = Thread.currentThread()
+        recorder.tlsStart()
+    }
 
     override fun secureConnectEnd(call: Call, handshake: Handshake?) = safely { recorder.tlsEnd() }
 
@@ -47,7 +64,10 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
         inetSocketAddress: InetSocketAddress,
         proxy: Proxy,
         protocol: Protocol?
-    ) = safely { recorder.connectEnd(inetSocketAddress.ip(), inetSocketAddress.port) }
+    ) = safely {
+        endHandshake()
+        recorder.connectEnd(inetSocketAddress.ip(), inetSocketAddress.port)
+    }
 
     override fun connectFailed(
         call: Call,
@@ -55,7 +75,22 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
         proxy: Proxy,
         protocol: Protocol?,
         ioe: IOException
-    ) = safely { recorder.connectFailed(inetSocketAddress.ip(), inetSocketAddress.port, ioe) }
+    ) = safely {
+        val step = if (endHandshake()) ExchangeStep.TLS else ExchangeStep.TCP
+        val stop = when {
+            // A call, also a timed-out one, is marked canceled before its sockets are closed.
+            call.isCanceled() -> ConnectStopReason.CALL
+
+            // OkHttp drops a connection it no longer needs by closing its socket, or before creating it.
+            step == ExchangeStep.TCP && (
+                ioe.javaClass == SocketException::class.java ||
+                    ioe.javaClass == IOException::class.java
+                ) -> ConnectStopReason.CLIENT
+
+            else -> ConnectStopReason.NETWORK
+        }
+        recorder.connectFailed(inetSocketAddress.ip(), inetSocketAddress.port, ioe, step, stop)
+    }
 
     override fun connectionAcquired(call: Call, connection: Connection) = safely {
         val route = connection.route()
@@ -89,8 +124,6 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
         )
     }
 
-    override fun responseBodyStart(call: Call) = safely { recorder.responseBodyStart() }
-
     override fun responseBodyEnd(call: Call, byteCount: Long) =
         safely { recorder.responseBodyEnd(byteCount) }
 
@@ -100,9 +133,26 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
     override fun callEnd(call: Call) = safely { recorder.callEnd() }
 
     override fun callFailed(call: Call, ioe: IOException) = safely {
-        // A call timeout cancels the call too, so it's a failure.
-        val timedOut = ioe is InterruptedIOException && call.timeout().timeoutNanos() > 0
-        recorder.callFailed(ioe, canceled = call.isCanceled() && !timedOut, timedOut = timedOut)
+        val stop = when {
+            // A call timeout fails with exactly this class.
+            ioe.javaClass == InterruptedIOException::class.java &&
+                call.timeout().timeoutNanos() > 0 -> CallStopReason.TIMED_OUT
+
+            call.isCanceled() -> CallStopReason.CANCELED
+
+            // OkHttp rejects a response it cannot follow, as after too many redirects.
+            ioe is ProtocolException -> CallStopReason.RESPONSE_REJECTED
+
+            else -> CallStopReason.FAILED
+        }
+        recorder.callFailed(ioe, stop)
+    }
+
+    /** Whether this thread was in a handshake, which has now ended. */
+    private fun endHandshake(): Boolean {
+        if (handshakeThread !== Thread.currentThread()) return false
+        handshakeThread = null
+        return true
     }
 
     private inline fun safely(block: () -> Unit) {
