@@ -183,7 +183,7 @@ class CallRecorder(private val clock: MonotonicClock, private val publish: (Exch
     @Synchronized
     fun callEnd() = finish(failure = null, canceled = false, timedOut = false)
 
-    /** [canceled] if the app canceled the call, a call timeout is a failure. */
+    /** [canceled] if the app canceled the call, [timedOut] if the call timeout fired. */
     @Synchronized
     fun callFailed(failure: Throwable, canceled: Boolean, timedOut: Boolean) =
         finish(failure, canceled, timedOut)

@@ -17,7 +17,7 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 
-/** Records one call into [recorder] */
+/** Records one call into [recorder]. */
 internal class CallRecordingEventListener(private val recorder: CallRecorder) : EventListener() {
     @Volatile
     private var failed = false
@@ -126,7 +126,7 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
     private fun InetSocketAddress.ip(): String = address?.hostAddress ?: hostString
 
     companion object {
-        /** Whether the SDK fits this OkHttp version. */
+        /** Whether the SDK does not fit this OkHttp version. */
         @Volatile
         var incompatible = false
     }
