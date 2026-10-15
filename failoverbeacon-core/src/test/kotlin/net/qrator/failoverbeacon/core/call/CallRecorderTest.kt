@@ -694,6 +694,38 @@ class CallRecorderTest {
         )
     }
 
+    @Test
+    fun `a call publishes its first 20 exchanges and its last one`() {
+        exchanges(30)
+        recorder.callEnd()
+
+        assertEquals((0..19) + 29, published.map { it.resendCount })
+    }
+
+    @Test
+    fun `a call of 21 exchanges publishes them all`() {
+        exchanges(21)
+        recorder.callEnd()
+
+        assertEquals((0..20).toList(), published.map { it.resendCount })
+    }
+
+    @Test
+    fun `a call that does not end publishes only its first 20 exchanges`() {
+        exchanges(30)
+
+        assertEquals((0..19).toList(), published.map { it.resendCount })
+    }
+
+    private fun exchanges(count: Int) {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        repeat(count) {
+            recorder.requestHeadersStart()
+            recorder.responseHeadersEnd(302, "h2", 0)
+        }
+    }
+
     private fun at(nanos: Long, step: CallRecorder.() -> Unit) {
         time = nanos
         recorder.step()

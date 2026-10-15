@@ -250,6 +250,12 @@ class CallRecorder(private val clock: MonotonicClock, private val publish: (Exch
         val exchange = current ?: return
         exchange.closedNanos = now
         current = null
-        publish(ExchangeMapper.toExchange(exchange))
+        if (exchange.resendCount < MAX_EXCHANGES || finished) {
+            publish(ExchangeMapper.toExchange(exchange))
+        }
+    }
+
+    private companion object {
+        const val MAX_EXCHANGES = 20
     }
 }
