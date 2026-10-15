@@ -23,6 +23,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -126,7 +127,8 @@ class CallRecordingTest {
         execute(client)
         execute(client)
 
-        val second = exchanges[1]
+        val (first, second) = exchanges
+        assertNotEquals(first.callId, second.callId)
         assertTrue(second.reusedConnection)
         assertTrue(second.attempts.isEmpty())
         assertEquals(LOOPBACK_IP, second.serverIp)
@@ -141,6 +143,7 @@ class CallRecordingTest {
 
         val (redirect, followUp) = exchanges
         assertEquals(302, redirect.response?.statusCode)
+        assertEquals(redirect.callId, followUp.callId)
         assertEquals(1, followUp.resendCount)
         assertEquals(200, followUp.response?.statusCode)
         assertTrue(followUp.reusedConnection)

@@ -12,6 +12,7 @@ import net.qrator.failoverbeacon.core.time.MonotonicClock
 
 /** Builds the exchanges of one call from its steps and passes each finished one to [publish]. */
 class CallRecorder(private val clock: MonotonicClock, private val publish: (Exchange) -> Unit) {
+    private val callId = CallIdGenerator.next()
     private var callTarget: Target? = null
     private var callMethod: String? = null
     private var nextTarget: Target? = null
@@ -224,6 +225,7 @@ class CallRecorder(private val clock: MonotonicClock, private val publish: (Exch
         val next = ExchangeState(
             target = nextTarget ?: if (isFirst) callTarget else resent?.target,
             method = if (isFirst) callMethod else resent?.method,
+            callId = callId,
             resendCount = exchangeCount,
             startNanos = now
         )

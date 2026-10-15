@@ -7,6 +7,7 @@ import net.qrator.failoverbeacon.core.util.Interval
 internal class ExchangeState(
     var target: Target?,
     var method: String?,
+    val callId: Long,
     val resendCount: Int,
     val startNanos: Long
 ) {

@@ -14,7 +14,8 @@ import net.qrator.failoverbeacon.core.call.state.ExchangeState
 import net.qrator.failoverbeacon.core.call.state.Target
 
 class ExchangeMapperTest {
-    private val state = ExchangeState(Target("a.com", 443), "POST", resendCount = 1, startNanos = 0)
+    private val state =
+        ExchangeState(Target("a.com", 443), "POST", callId = 7, resendCount = 1, startNanos = 0)
 
     @Test
     fun `maps every field of a finished exchange`() {
@@ -43,6 +44,7 @@ class ExchangeMapperTest {
 
         val exchange = ExchangeMapper.toExchange(state)
 
+        assertEquals(7L, exchange.callId)
         assertEquals(ExchangeRequest("a.com", 443, "POST", bodyBytes = 3), exchange.request)
         assertEquals(ExchangeResponse(200, contentLength = 5, bodyBytes = 5), exchange.response)
         assertEquals(1, exchange.resendCount)

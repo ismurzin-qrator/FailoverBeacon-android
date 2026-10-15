@@ -9,7 +9,7 @@ import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 
 class ExchangeStateTest {
     private val exchange =
-        ExchangeState(Target("a.com", 443), "GET", resendCount = 0, startNanos = 0)
+        ExchangeState(Target("a.com", 443), "GET", callId = 0, resendCount = 0, startNanos = 0)
 
     @Test
     fun `a TCP failure goes to the earliest connect to an address, a handshake to the latest`() {
@@ -28,7 +28,8 @@ class ExchangeStateTest {
         assertFalse(exchange.isOtherServer(Target("a.com", 443)))
         assertTrue(exchange.isOtherServer(Target("a.com", 8443)))
         assertTrue(exchange.isOtherServer(Target("b.com", 443)))
-        assertFalse(ExchangeState(null, null, 1, 0).isOtherServer(Target("b.com", 443)))
+        val unnamed = ExchangeState(null, null, callId = 0, resendCount = 1, startNanos = 0)
+        assertFalse(unnamed.isOtherServer(Target("b.com", 443)))
     }
 
     private fun attempt(ip: String, port: Int = 443, start: Long, end: Long? = null) =

@@ -10,6 +10,7 @@ internal object ExchangeMapper {
     internal fun toExchange(state: ExchangeState): Exchange = with(state) {
         val results = AttemptClassifier.classify(attempts, stopReason, callFailure)
         Exchange(
+            callId = callId,
             request = ExchangeRequest(
                 serverAddress = target?.address,
                 serverPort = target?.port,

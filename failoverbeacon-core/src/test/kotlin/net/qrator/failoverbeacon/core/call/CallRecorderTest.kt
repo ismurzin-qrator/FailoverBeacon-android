@@ -146,6 +146,20 @@ class CallRecorderTest {
     }
 
     @Test
+    fun `every exchange of a call carries its call ID`() {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(302, "h2", 0)
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.callEnd()
+
+        assertEquals(2, published.size)
+        assertEquals(1, published.map { it.callId }.distinct().size)
+    }
+
+    @Test
     fun `a followed-up response ends at its headers`() {
         recorder.callStart("a.com", 443, "GET")
         at(0) { connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2") }
