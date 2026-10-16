@@ -26,5 +26,5 @@ configure<AnimalSnifferExtension> {
     signatures = files(okhttpMinimumSignature.map { it.outputFiles })
     excludeJars = listOf("okhttp-*")
     ignore = listOf("java.*", "javax.*", "android.*")
-    annotation = "net.qrator.failoverbeacon.okhttp.internal.SuppressSignatureCheck"
+    annotation = "net.qrator.failoverbeacon.okhttp.internal.util.SuppressSignatureCheck"
 }

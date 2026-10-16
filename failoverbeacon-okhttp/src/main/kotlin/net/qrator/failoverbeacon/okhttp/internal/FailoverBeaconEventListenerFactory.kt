@@ -2,6 +2,7 @@ package net.qrator.failoverbeacon.okhttp.internal
 
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.call.CallRecorder
+import net.qrator.failoverbeacon.okhttp.internal.util.SuppressSignatureCheck
 import okhttp3.Call
 import okhttp3.EventListener
 

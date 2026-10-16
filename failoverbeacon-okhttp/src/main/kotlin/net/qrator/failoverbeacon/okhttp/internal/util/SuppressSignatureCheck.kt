@@ -1,4 +1,4 @@
-package net.qrator.failoverbeacon.okhttp.internal
+package net.qrator.failoverbeacon.okhttp.internal.util
 
 /** Allows the annotated function to call OkHttp API added in OkHttp [since], newer than 3.14. */
 @Retention(AnnotationRetention.BINARY)

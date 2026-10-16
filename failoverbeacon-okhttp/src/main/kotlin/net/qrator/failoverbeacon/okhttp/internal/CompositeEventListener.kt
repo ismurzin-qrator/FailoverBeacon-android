@@ -4,6 +4,7 @@ import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Proxy
+import net.qrator.failoverbeacon.okhttp.internal.util.SuppressSignatureCheck
 import okhttp3.Call
 import okhttp3.Connection
 import okhttp3.Dispatcher
