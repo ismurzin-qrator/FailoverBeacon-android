@@ -26,6 +26,7 @@ import net.qrator.failoverbeacon.core.call.model.ConnectResult
 import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.core.call.model.FailureType
 import net.qrator.failoverbeacon.core.logging.LogOutput
 import net.qrator.failoverbeacon.core.time.MonotonicClock
 import okhttp3.Call
@@ -129,7 +130,7 @@ class CallRecordingEventListenerTest {
         listener.callFailed(call, InterruptedIOException("timeout"))
 
         val outcome = assertIs<ExchangeOutcome.Failed>(published.single().outcome)
-        assertIs<InterruptedIOException>(outcome.cause)
+        assertEquals(FailureType.TIMED_OUT, outcome.type)
     }
 
     @Test
@@ -175,7 +176,10 @@ class CallRecordingEventListenerTest {
 
         listener.callFailed(call, SocketTimeoutException("timeout"))
 
-        assertEquals(closed, assertIs<ExchangeOutcome.Failed>(published.single().outcome).cause)
+        assertEquals(
+            FailureType.OTHER,
+            assertIs<ExchangeOutcome.Failed>(published.single().outcome).type
+        )
     }
 
     @Test
@@ -188,7 +192,10 @@ class CallRecordingEventListenerTest {
 
         listener.callFailed(call, loop)
 
-        assertEquals(loop, assertIs<ExchangeOutcome.Failed>(published.single().outcome).cause)
+        assertEquals(
+            FailureType.PROTOCOL_ERROR,
+            assertIs<ExchangeOutcome.Failed>(published.single().outcome).type
+        )
     }
 
     @Test
@@ -214,7 +221,7 @@ class CallRecordingEventListenerTest {
         listener.callFailed(call, reset)
 
         val (winner, loser) = published.single().attempts
-        assertEquals(ConnectResult.Failed(ExchangeStep.TLS, reset), winner.result)
+        assertEquals(ConnectResult.Failed(ExchangeStep.TLS, FailureType.RESET), winner.result)
         assertEquals(ConnectResult.Superseded, loser.result)
     }
 
@@ -223,7 +230,7 @@ class CallRecordingEventListenerTest {
         val call = call(OkHttpClient())
         var now = 0L
         val listener = listener { now++ }
-        val refused = ConnectException("refused")
+        val refused = ConnectException("Connection refused")
 
         listener.connectStart(call, FIRST, Proxy.NO_PROXY)
         listener.connectStart(call, SECOND, Proxy.NO_PROXY)
@@ -232,13 +239,13 @@ class CallRecordingEventListenerTest {
         listener.callEnd(call)
 
         assertEquals(
-            ConnectResult.Failed(ExchangeStep.TCP, refused),
+            ConnectResult.Failed(ExchangeStep.TCP, FailureType.REFUSED),
             published.single().attempts.first().result
         )
     }
 
     private fun listener(clock: MonotonicClock) =
-        CallRecordingEventListener(CallRecorder(clock, published::add))
+        CallRecordingEventListener(CallRecorder(clock, OkHttpFailureMapper(), published::add))
 
     private fun call(client: OkHttpClient): Call =
         client.newCall(Request.Builder().url("http://example.test/").build())

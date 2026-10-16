@@ -6,20 +6,23 @@ import net.qrator.failoverbeacon.core.call.state.AttemptState
 import net.qrator.failoverbeacon.core.call.state.CallStopReason
 import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
 
-internal object AttemptClassifier {
+internal class AttemptMapper(private val failureMapper: FailureMapper) {
     /** [callStopReason] and [callFailure] tell how the call ended the connects it stopped. */
-    fun classify(
+    fun toResults(
         attempts: List<AttemptState>,
         callStopReason: CallStopReason?,
         callFailure: Throwable?
     ): List<ConnectResult> = attempts.map { attempt ->
         if (attempt.isConnected) return@map ConnectResult.Connected
         val step = attempt.failedStep ?: ExchangeStep.TCP
-        val failed = ConnectResult.Failed(step, attempt.failure)
+        val failed = ConnectResult.Failed(step, attempt.failure?.let(failureMapper::toFailureType))
         val superseded = if (isSuperseded(attempt, attempts)) ConnectResult.Superseded else null
         val stoppedWithCall = when (callStopReason) {
             CallStopReason.CANCELED -> ConnectResult.Canceled
-            CallStopReason.TIMED_OUT -> ConnectResult.Failed(step, callFailure)
+
+            CallStopReason.TIMED_OUT ->
+                ConnectResult.Failed(step, callFailure?.let(failureMapper::toFailureType))
+
             else -> null
         }
         when {

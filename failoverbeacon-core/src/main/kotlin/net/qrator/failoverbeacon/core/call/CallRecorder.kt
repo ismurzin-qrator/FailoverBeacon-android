@@ -1,7 +1,7 @@
 package net.qrator.failoverbeacon.core.call
 
 import net.qrator.failoverbeacon.core.call.mapper.ExchangeMapper
-import net.qrator.failoverbeacon.core.call.model.Exchange
+import net.qrator.failoverbeacon.core.call.mapper.FailureMapper
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.state.AttemptState
 import net.qrator.failoverbeacon.core.call.state.CallStopReason
@@ -10,9 +10,14 @@ import net.qrator.failoverbeacon.core.call.state.ExchangeState
 import net.qrator.failoverbeacon.core.call.state.Target
 import net.qrator.failoverbeacon.core.time.MonotonicClock
 
-/** Builds the exchanges of one call from its steps and passes each finished one to [publish]. */
-class CallRecorder(private val clock: MonotonicClock, private val publish: (Exchange) -> Unit) {
+/** Builds the exchanges of one call from its steps and passes each finished one to [publisher]. */
+class CallRecorder(
+    private val clock: MonotonicClock,
+    failureMapper: FailureMapper,
+    private val publisher: ExchangePublisher
+) {
     private val callId = CallIdGenerator.next()
+    private val exchangeMapper = ExchangeMapper(failureMapper)
     private var callTarget: Target? = null
     private var callMethod: String? = null
     private var nextTarget: Target? = null
@@ -251,7 +256,7 @@ class CallRecorder(private val clock: MonotonicClock, private val publish: (Exch
         exchange.closedNanos = now
         current = null
         if (exchange.resendCount < MAX_EXCHANGES || finished) {
-            publish(ExchangeMapper.toExchange(exchange))
+            publisher.publish(exchangeMapper.toExchange(exchange))
         }
     }
 

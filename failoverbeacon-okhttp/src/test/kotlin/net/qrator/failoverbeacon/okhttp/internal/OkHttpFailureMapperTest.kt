@@ -22,7 +22,7 @@ import okhttp3.internal.http2.ConnectionShutdownException
 import okhttp3.internal.http2.ErrorCode
 import okhttp3.internal.http2.StreamResetException
 
-class FailureMapperTest {
+class OkHttpFailureMapperTest {
     @Test
     fun `connect failures`() {
         assertType(
@@ -144,7 +144,7 @@ class FailureMapperTest {
     }
 
     private fun assertType(expected: FailureType, failure: Throwable) {
-        assertEquals(expected, FailureMapper.toFailureType(failure), failure.toString())
+        assertEquals(expected, OkHttpFailureMapper().toFailureType(failure), failure.toString())
     }
 
     private fun <T : Throwable> T.causedBy(cause: Throwable): T = apply { initCause(cause) }

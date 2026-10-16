@@ -8,11 +8,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import net.qrator.failoverbeacon.core.call.model.ConnectResult
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.core.call.model.FailureType
 import net.qrator.failoverbeacon.core.call.state.AttemptState
 import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
 
 /** Connect races of OkHttp 5 fast fallback, where timing decides the result. */
-class AttemptClassifierTest {
+class AttemptMapperTest {
     private val attempts = ArrayList<AttemptState>()
 
     @Test
@@ -64,7 +65,10 @@ class AttemptClassifierTest {
         )
 
         assertEquals(
-            listOf(ConnectResult.Failed(ExchangeStep.TLS, reset), ConnectResult.Superseded),
+            listOf(
+                ConnectResult.Failed(ExchangeStep.TLS, FailureType.RESET),
+                ConnectResult.Superseded
+            ),
             results()
         )
     }
@@ -91,8 +95,8 @@ class AttemptClassifierTest {
 
         assertEquals(
             listOf(
-                ConnectResult.Failed(ExchangeStep.TCP, timeout),
-                ConnectResult.Failed(ExchangeStep.TCP, refused),
+                ConnectResult.Failed(ExchangeStep.TCP, FailureType.TIMED_OUT),
+                ConnectResult.Failed(ExchangeStep.TCP, FailureType.REFUSED),
                 ConnectResult.Connected
             ),
             results()
@@ -105,13 +109,14 @@ class AttemptClassifierTest {
         attempt("1.1.1.2", start = 20, end = 40)
 
         assertEquals(
-            ConnectResult.Failed(ExchangeStep.TCP, attempts[0].failure),
+            ConnectResult.Failed(ExchangeStep.TCP, FailureType.CLOSED),
             results()[0]
         )
     }
 
-    private fun results() =
-        AttemptClassifier.classify(attempts, callStopReason = null, callFailure = null)
+    private fun results() = AttemptMapper(
+        TestFailureMapper
+    ).toResults(attempts, callStopReason = null, callFailure = null)
 
     private fun closed() = SocketException("Socket closed")
 

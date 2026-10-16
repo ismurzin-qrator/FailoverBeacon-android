@@ -6,9 +6,13 @@ import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
 import net.qrator.failoverbeacon.core.call.state.ExchangeState
 
-internal object ExchangeMapper {
-    internal fun toExchange(state: ExchangeState): Exchange = with(state) {
-        val results = AttemptClassifier.classify(attempts, stopReason, callFailure)
+internal class ExchangeMapper(failureMapper: FailureMapper) {
+    private val attemptMapper = AttemptMapper(failureMapper)
+    private val outcomeMapper = OutcomeMapper(failureMapper)
+    private val timingsMapper = TimingsMapper()
+
+    fun toExchange(state: ExchangeState): Exchange = with(state) {
+        val results = attemptMapper.toResults(attempts, stopReason, callFailure)
         Exchange(
             callId = callId,
             request = ExchangeRequest(
@@ -35,9 +39,9 @@ internal object ExchangeMapper {
                     result = result
                 )
             },
-            timings = TimingsMapper.toTimings(state),
-            durationNanos = TimingsMapper.toDurationNanos(state),
-            outcome = OutcomeMapper.toOutcome(state, results)
+            timings = timingsMapper.toTimings(state),
+            durationNanos = timingsMapper.toDurationNanos(state),
+            outcome = outcomeMapper.toOutcome(state, results)
         )
     }
 }

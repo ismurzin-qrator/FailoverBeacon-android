@@ -33,6 +33,7 @@ import net.qrator.failoverbeacon.core.call.model.ConnectResult
 import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.core.call.model.FailureType
 import net.qrator.failoverbeacon.okhttp.fakes.installSdk
 import okhttp3.Cache
 import okhttp3.EventListener
@@ -192,7 +193,10 @@ class CallRecordingTest {
             if (namesTargetEarly()) "nowhere.test" else null,
             followUp.request.serverAddress
         )
-        assertEquals(ExchangeStep.DNS, assertIs<ExchangeOutcome.Failed>(followUp.outcome).step)
+        assertEquals(
+            ExchangeOutcome.Failed(ExchangeStep.DNS, FailureType.NAME_NOT_RESOLVED),
+            followUp.outcome
+        )
     }
 
     @Test
@@ -219,9 +223,12 @@ class CallRecordingTest {
         runCatching { client().build().withFailoverBeacon().newCall(request).execute().close() }
 
         val exchange = exchanges.first()
-        val attempt = assertIs<ConnectResult.Failed>(exchange.attempts.single().result)
-        assertEquals(ExchangeStep.TCP, attempt.step)
-        assertEquals(ExchangeStep.TCP, assertIs<ExchangeOutcome.Failed>(exchange.outcome).step)
+        val refused = ConnectResult.Failed(ExchangeStep.TCP, FailureType.REFUSED)
+        assertEquals(refused, exchange.attempts.single().result)
+        assertEquals(
+            ExchangeOutcome.Failed(ExchangeStep.TCP, FailureType.REFUSED),
+            exchange.outcome
+        )
     }
 
     @Test
@@ -234,7 +241,7 @@ class CallRecordingTest {
         val exchange = exchanges.single()
         val outcome = assertIs<ExchangeOutcome.Failed>(exchange.outcome)
         assertEquals(ExchangeStep.RESPONSE, outcome.step)
-        assertIs<SocketTimeoutException>(outcome.cause)
+        assertEquals(FailureType.TIMED_OUT, outcome.type)
         assertNotNull(exchange.timings.waitNanos)
     }
 
@@ -261,8 +268,9 @@ class CallRecordingTest {
 
         assertFailsWith<InterruptedIOException> { execute(client) }
 
-        assertIs<InterruptedIOException>(
-            assertIs<ExchangeOutcome.Failed>(exchanges.single().outcome).cause
+        assertEquals(
+            FailureType.TIMED_OUT,
+            assertIs<ExchangeOutcome.Failed>(exchanges.single().outcome).type
         )
     }
 
@@ -328,11 +336,12 @@ class CallRecordingTest {
         }
 
         val exchange = exchanges.single()
+        val untrusted = ConnectResult.Failed(ExchangeStep.TLS, FailureType.CERT_UNTRUSTED)
+        assertEquals(untrusted, exchange.attempts.single().result)
         assertEquals(
-            ExchangeStep.TLS,
-            assertIs<ConnectResult.Failed>(exchange.attempts.single().result).step
+            ExchangeOutcome.Failed(ExchangeStep.TLS, FailureType.CERT_UNTRUSTED),
+            exchange.outcome
         )
-        assertEquals(ExchangeStep.TLS, assertIs<ExchangeOutcome.Failed>(exchange.outcome).step)
     }
 
     @Test
@@ -353,7 +362,7 @@ class CallRecordingTest {
             assertEquals(ConnectResult.Superseded, silent.result)
         } else {
             val failed = assertIs<ConnectResult.Failed>(silent.result)
-            assertIs<SocketTimeoutException>(failed.cause)
+            assertEquals(FailureType.TIMED_OUT, failed.type)
         }
     }
 

@@ -4,7 +4,7 @@ import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.model.ExchangeTimings
 import net.qrator.failoverbeacon.core.call.state.ExchangeState
 
-internal object TimingsMapper {
+internal class TimingsMapper {
     fun toTimings(state: ExchangeState): ExchangeTimings = with(state) {
         ExchangeTimings(
             dnsNanos = dnsInterval.durationNanos,

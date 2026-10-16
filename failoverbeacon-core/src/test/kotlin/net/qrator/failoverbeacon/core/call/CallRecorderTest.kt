@@ -13,18 +13,20 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import net.qrator.failoverbeacon.core.call.mapper.TestFailureMapper
 import net.qrator.failoverbeacon.core.call.model.ConnectResult
 import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.core.call.model.FailureType
 import net.qrator.failoverbeacon.core.call.state.CallStopReason
 import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
 
 class CallRecorderTest {
     private var time = 0L
     private val published = mutableListOf<Exchange>()
-    private val recorder = CallRecorder({ time }, published::add)
+    private val recorder = CallRecorder({ time }, TestFailureMapper, published::add)
 
     @Test
     fun `records a call as one exchange`() {
@@ -117,7 +119,7 @@ class CallRecorderTest {
         recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
         recorder.callEnd()
 
-        assertEquals(ExchangeOutcome.Failed(null, cause = null), published.single().outcome)
+        assertEquals(ExchangeOutcome.Failed(null, type = null), published.single().outcome)
     }
 
     @Test
@@ -295,7 +297,10 @@ class CallRecorderTest {
         val followUp = published.last()
         assertEquals("b.com", followUp.request.serverAddress)
         assertEquals(8443, followUp.request.serverPort)
-        assertEquals(ExchangeOutcome.Failed(ExchangeStep.DNS, unresolved), followUp.outcome)
+        assertEquals(
+            ExchangeOutcome.Failed(ExchangeStep.DNS, FailureType.NAME_NOT_RESOLVED),
+            followUp.outcome
+        )
     }
 
     @Test
@@ -329,7 +334,7 @@ class CallRecorderTest {
 
         val (primary, backup) = published
         assertEquals("primary.com", primary.request.serverAddress)
-        assertEquals(ExchangeOutcome.Failed(ExchangeStep.TCP, refused), primary.outcome)
+        assertEquals(ExchangeOutcome.Failed(ExchangeStep.TCP, FailureType.REFUSED), primary.outcome)
         assertEquals(4L, primary.durationNanos)
         assertEquals("backup.com", backup.request.serverAddress)
         assertEquals(1, backup.resendCount)
@@ -377,7 +382,10 @@ class CallRecorderTest {
         at(3_000) { callFailed(unresolved, CallStopReason.FAILED) }
 
         val exchange = published.single()
-        assertEquals(ExchangeOutcome.Failed(ExchangeStep.DNS, unresolved), exchange.outcome)
+        assertEquals(
+            ExchangeOutcome.Failed(ExchangeStep.DNS, FailureType.NAME_NOT_RESOLVED),
+            exchange.outcome
+        )
         assertEquals(2_999L, exchange.durationNanos)
     }
 
@@ -448,7 +456,7 @@ class CallRecorderTest {
         assertEquals(
             listOf(
                 ConnectResult.Superseded,
-                ConnectResult.Failed(ExchangeStep.TLS, reset),
+                ConnectResult.Failed(ExchangeStep.TLS, FailureType.RESET),
                 ConnectResult.Connected
             ),
             published.single().attempts.map { it.result }
@@ -472,7 +480,7 @@ class CallRecorderTest {
         recorder.callFailed(refused, CallStopReason.FAILED)
 
         assertEquals(
-            ExchangeOutcome.Failed(ExchangeStep.TLS, untrusted),
+            ExchangeOutcome.Failed(ExchangeStep.TLS, FailureType.CERT_UNTRUSTED),
             published.single().outcome
         )
     }
@@ -492,7 +500,10 @@ class CallRecorderTest {
         }
         recorder.callFailed(refused, CallStopReason.FAILED)
 
-        assertEquals(ExchangeOutcome.Failed(ExchangeStep.TCP, timeout), published.single().outcome)
+        assertEquals(
+            ExchangeOutcome.Failed(ExchangeStep.TCP, FailureType.TIMED_OUT),
+            published.single().outcome
+        )
     }
 
     @Test
@@ -518,7 +529,7 @@ class CallRecorderTest {
         val exchange = published.single()
         assertEquals(
             listOf(
-                ConnectResult.Failed(ExchangeStep.TLS, reset),
+                ConnectResult.Failed(ExchangeStep.TLS, FailureType.RESET),
                 ConnectResult.Canceled,
                 ConnectResult.Canceled
             ),
@@ -550,12 +561,15 @@ class CallRecorderTest {
         val exchange = published.single()
         assertEquals(
             listOf(
-                ConnectResult.Failed(ExchangeStep.TLS, reset),
-                ConnectResult.Failed(ExchangeStep.TCP, timeout)
+                ConnectResult.Failed(ExchangeStep.TLS, FailureType.RESET),
+                ConnectResult.Failed(ExchangeStep.TCP, FailureType.TIMED_OUT)
             ),
             exchange.attempts.map { it.result }
         )
-        assertEquals(ExchangeOutcome.Failed(ExchangeStep.TCP, timeout), exchange.outcome)
+        assertEquals(
+            ExchangeOutcome.Failed(ExchangeStep.TCP, FailureType.TIMED_OUT),
+            exchange.outcome
+        )
     }
 
     @Test
@@ -573,7 +587,10 @@ class CallRecorderTest {
         assertEquals(49L, exchange.timings.sendNanos)
         assertNull(exchange.timings.waitNanos)
         assertEquals(50L, exchange.durationNanos)
-        assertEquals(ExchangeOutcome.Failed(ExchangeStep.REQUEST, broken), exchange.outcome)
+        assertEquals(
+            ExchangeOutcome.Failed(ExchangeStep.REQUEST, FailureType.RESET),
+            exchange.outcome
+        )
     }
 
     @Test
@@ -635,7 +652,10 @@ class CallRecorderTest {
         assertNull(exchange.response?.bodyBytes)
         assertEquals(50L, exchange.timings.waitNanos)
         assertEquals(400L, exchange.timings.receiveNanos)
-        assertEquals(ExchangeOutcome.Failed(ExchangeStep.RESPONSE, timeout), exchange.outcome)
+        assertEquals(
+            ExchangeOutcome.Failed(ExchangeStep.RESPONSE, FailureType.TIMED_OUT),
+            exchange.outcome
+        )
     }
 
     @Test
@@ -649,7 +669,7 @@ class CallRecorderTest {
         recorder.callFailed(timeout, CallStopReason.TIMED_OUT)
 
         assertEquals(
-            ExchangeOutcome.Failed(ExchangeStep.RESPONSE, timeout),
+            ExchangeOutcome.Failed(ExchangeStep.RESPONSE, FailureType.TIMED_OUT),
             published.single().outcome
         )
     }
@@ -660,7 +680,7 @@ class CallRecorderTest {
             listOf(CallStopReason.FAILED, CallStopReason.CANCELED, CallStopReason.TIMED_OUT)
         for (reason in reasons) {
             val published = mutableListOf<Exchange>()
-            val recorder = CallRecorder({ time }, published::add)
+            val recorder = CallRecorder({ time }, TestFailureMapper, published::add)
             time = 0
             recorder.callStart("a.com", 443, "GET")
             recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
@@ -689,7 +709,7 @@ class CallRecorderTest {
         recorder.callFailed(loop, CallStopReason.RESPONSE_REJECTED)
 
         assertEquals(
-            ExchangeOutcome.Failed(ExchangeStep.RESPONSE, loop),
+            ExchangeOutcome.Failed(ExchangeStep.RESPONSE, FailureType.PROTOCOL_ERROR),
             published.single().outcome
         )
     }

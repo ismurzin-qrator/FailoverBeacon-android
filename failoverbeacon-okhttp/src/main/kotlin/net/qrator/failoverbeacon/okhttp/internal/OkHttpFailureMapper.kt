@@ -23,12 +23,13 @@ import javax.net.ssl.SSLException
 import javax.net.ssl.SSLHandshakeException
 import javax.net.ssl.SSLPeerUnverifiedException
 import javax.net.ssl.SSLProtocolException
+import net.qrator.failoverbeacon.core.call.mapper.FailureMapper
 import net.qrator.failoverbeacon.core.call.model.FailureType
 import okhttp3.internal.http2.ConnectionShutdownException
 import okhttp3.internal.http2.StreamResetException
 
-internal object FailureMapper {
-    fun toFailureType(failure: Throwable): FailureType {
+internal class OkHttpFailureMapper : FailureMapper {
+    override fun toFailureType(failure: Throwable): FailureType {
         val chain = generateSequence(failure) { it.cause }.take(MAX_CAUSES).toList()
         return chain.firstNotNullOfOrNull(::byErrno)
             ?: chain.firstNotNullOfOrNull(::byClass)
@@ -104,5 +105,7 @@ internal object FailureMapper {
         else -> null
     }
 
-    private const val MAX_CAUSES = 8
+    private companion object {
+        const val MAX_CAUSES = 8
+    }
 }

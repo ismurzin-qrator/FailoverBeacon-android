@@ -42,7 +42,7 @@ class ExchangeMapperTest {
             lastStep = ExchangeStep.RESPONSE
         }
 
-        val exchange = ExchangeMapper.toExchange(state)
+        val exchange = ExchangeMapper(TestFailureMapper).toExchange(state)
 
         assertEquals(7L, exchange.callId)
         assertEquals(ExchangeRequest("a.com", 443, "POST", bodyBytes = 3), exchange.request)
@@ -70,6 +70,6 @@ class ExchangeMapperTest {
         }
         state.serverIp = "1.1.1.2"
 
-        assertEquals(15L, ExchangeMapper.toExchange(state).timings.connectNanos)
+        assertEquals(15L, ExchangeMapper(TestFailureMapper).toExchange(state).timings.connectNanos)
     }
 }

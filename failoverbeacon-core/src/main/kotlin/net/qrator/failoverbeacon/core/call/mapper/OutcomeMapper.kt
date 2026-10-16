@@ -6,7 +6,7 @@ import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.state.CallStopReason
 import net.qrator.failoverbeacon.core.call.state.ExchangeState
 
-internal object OutcomeMapper {
+internal class OutcomeMapper(private val failureMapper: FailureMapper) {
     /** [results] are the results of the exchange's attempts, in the same order. */
     fun toOutcome(state: ExchangeState, results: List<ConnectResult>): ExchangeOutcome =
         with(state) {
@@ -18,13 +18,16 @@ internal object OutcomeMapper {
                 stopReason == CallStopReason.CANCELED -> ExchangeOutcome.Canceled
 
                 connectFailure != null ->
-                    ExchangeOutcome.Failed(connectFailure.step, connectFailure.cause)
+                    ExchangeOutcome.Failed(connectFailure.step, connectFailure.type)
 
-                cause != null -> ExchangeOutcome.Failed(lastStep, cause)
+                cause != null -> ExchangeOutcome.Failed(
+                    lastStep,
+                    failureMapper.toFailureType(cause)
+                )
 
                 responded -> ExchangeOutcome.Ok
 
-                else -> ExchangeOutcome.Failed(lastStep, cause = null)
+                else -> ExchangeOutcome.Failed(lastStep, type = null)
             }
         }
 

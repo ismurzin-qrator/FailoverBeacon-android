@@ -12,7 +12,7 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [24, 36])
-class FailureMapperErrnoTest {
+class OkHttpFailureMapperErrnoTest {
     @Test
     fun `maps errno as Chromium does`() {
         val expected = mapOf(
@@ -29,7 +29,7 @@ class FailureMapperErrnoTest {
         )
 
         val actual = expected.mapValues { (errno, _) ->
-            FailureMapper.toFailureType(ErrnoException("connect", errno))
+            OkHttpFailureMapper().toFailureType(ErrnoException("connect", errno))
         }
 
         assertEquals(expected, actual)
@@ -39,7 +39,7 @@ class FailureMapperErrnoTest {
     fun `an unknown errno is other`() {
         assertEquals(
             FailureType.OTHER,
-            FailureMapper.toFailureType(ErrnoException("read", OsConstants.EIO))
+            OkHttpFailureMapper().toFailureType(ErrnoException("read", OsConstants.EIO))
         )
     }
 
@@ -53,6 +53,6 @@ class FailureMapperErrnoTest {
             )
         }
 
-        assertEquals(FailureType.REFUSED, FailureMapper.toFailureType(failure))
+        assertEquals(FailureType.REFUSED, OkHttpFailureMapper().toFailureType(failure))
     }
 }

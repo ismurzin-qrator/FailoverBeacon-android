@@ -7,7 +7,7 @@ import net.qrator.failoverbeacon.core.logging.error
 import net.qrator.failoverbeacon.core.util.catchSdkFailure
 
 /** Delivers each finished exchange to every subscriber. */
-class ExchangeBus(private val logger: InternalLogger) {
+class ExchangeBus(private val logger: InternalLogger) : ExchangePublisher {
     private val subscribers = CopyOnWriteArrayList<ExchangeSubscriber>()
 
     val hasSubscribers: Boolean get() = subscribers.isNotEmpty()
@@ -16,7 +16,7 @@ class ExchangeBus(private val logger: InternalLogger) {
         subscribers += subscriber
     }
 
-    fun publish(exchange: Exchange) {
+    override fun publish(exchange: Exchange) {
         for (subscriber in subscribers) {
             catchSdkFailure(::logFailure) { subscriber.onExchange(exchange) }
         }
