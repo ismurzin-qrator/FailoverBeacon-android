@@ -25,6 +25,6 @@ val okhttpMinimumSignature by tasks.registering(BuildSignatureTask::class) {
 configure<AnimalSnifferExtension> {
     signatures = files(okhttpMinimumSignature.map { it.outputFiles })
     excludeJars = listOf("okhttp-*")
-    ignore = listOf("java.*")
+    ignore = listOf("java.*", "javax.*", "android.*")
     annotation = "net.qrator.failoverbeacon.okhttp.internal.SuppressSignatureCheck"
 }

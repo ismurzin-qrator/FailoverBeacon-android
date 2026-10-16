@@ -1,21 +1,16 @@
 plugins {
     id("failoverbeacon.public-api")
+    id("failoverbeacon.robolectric")
 }
 
 android {
     namespace = "net.qrator.failoverbeacon"
 
-    testOptions {
-        unitTests.isIncludeAndroidResources = true
-        // Robolectric on API 36 reflects into JDK internals.
-        // https://robolectric.org/getting-started/
-        unitTests.all { it.jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED") }
-    }
+    // Robolectric picks the SDK from the manifest; without it, tests would run below minSdk.
+    testOptions.unitTests.isIncludeAndroidResources = true
 }
 
 dependencies {
     implementation(project(":failoverbeacon-core"))
     implementation(project(":failoverbeacon-telemetry"))
-
-    testImplementation(libs.robolectric)
 }
