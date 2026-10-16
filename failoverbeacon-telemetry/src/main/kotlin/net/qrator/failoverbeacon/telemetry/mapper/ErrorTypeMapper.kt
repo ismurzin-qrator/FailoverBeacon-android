@@ -1,15 +1,10 @@
-package net.qrator.failoverbeacon.telemetry.event
+package net.qrator.failoverbeacon.telemetry.mapper
 
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.model.FailureType
+import net.qrator.failoverbeacon.telemetry.model.ErrorType
 
 internal class ErrorTypeMapper {
-    fun toPhase(step: ExchangeStep?): Phase = when (step) {
-        ExchangeStep.DNS -> Phase.DNS
-        ExchangeStep.TCP, ExchangeStep.TLS -> Phase.CONNECTION
-        ExchangeStep.REQUEST, ExchangeStep.RESPONSE, null -> Phase.APPLICATION
-    }
-
     fun toErrorType(step: ExchangeStep?, type: FailureType?): ErrorType = when (type) {
         null -> ErrorType.UNKNOWN
         FailureType.NAME_NOT_RESOLVED -> ErrorType.DNS_NAME_NOT_RESOLVED

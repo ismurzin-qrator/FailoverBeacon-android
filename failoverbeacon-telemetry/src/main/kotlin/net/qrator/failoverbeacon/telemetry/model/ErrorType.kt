@@ -1,4 +1,4 @@
-package net.qrator.failoverbeacon.telemetry.event
+package net.qrator.failoverbeacon.telemetry.model
 
 /** Values and [code]s from the NEL dictionary of network error types. */
 internal enum class ErrorType(val code: String) {
