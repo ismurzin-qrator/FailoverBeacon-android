@@ -38,6 +38,15 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
     @Volatile
     private var handshakeThread: Thread? = null
 
+    // OkHttp reports no connectionAcquired for a follow-up on the connection the call keeps, and
+    // keeps it only for the same host and port:
+    // Transmitter.java:126 in 3.14.9,
+    // ExchangeFinder.kt:157 in 4.12.0,
+    // RealRoutePlanner.planReuseCallConnection in 5.x.
+    // Every request is announced on it again.
+    @Volatile
+    private var heldConnection: Connection? = null
+
     override fun callStart(call: Call) = safely {
         val request = call.request()
         recorder.callStart(request.url.host, request.url.port, request.method)
@@ -110,20 +119,13 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
         )
     }
 
-    override fun connectionAcquired(call: Call, connection: Connection) = safely {
-        val route = connection.route()
-        recorder.connectionAcquired(
-            peerAddress = route.socketAddress.peerAddress(),
-            peerPort = route.socketAddress.port,
-            serverAddress = route.address.url.host,
-            serverPort = route.address.url.port,
-            protocol = connection.protocol().toString(),
-            proxy = proxyTypeMapper.toProxyType(route.proxy),
-            tls = connection.handshake()?.let { tlsMapper.toTls(it, connection.socket()) }
-        )
-    }
+    override fun connectionAcquired(call: Call, connection: Connection) =
+        safely { acquire(connection) }
 
-    override fun requestHeadersStart(call: Call) = safely { recorder.requestHeadersStart() }
+    override fun requestHeadersStart(call: Call) = safely {
+        heldConnection?.let(::acquire)
+        recorder.requestHeadersStart()
+    }
 
     override fun requestHeadersEnd(call: Call, request: Request) = safely {
         recorder.requestHeadersEnd(request.url.host, request.url.port, request.method)
@@ -165,6 +167,20 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
             else -> CallStopReason.FAILED
         }
         recorder.callFailed(ioe, stop)
+    }
+
+    private fun acquire(connection: Connection) {
+        heldConnection = connection
+        val route = connection.route()
+        recorder.connectionAcquired(
+            peerAddress = route.socketAddress.peerAddress(),
+            peerPort = route.socketAddress.port,
+            serverAddress = route.address.url.host,
+            serverPort = route.address.url.port,
+            protocol = connection.protocol().toString(),
+            proxy = proxyTypeMapper.toProxyType(route.proxy),
+            tls = connection.handshake()?.let { tlsMapper.toTls(it, connection.socket()) }
+        )
     }
 
     /** Whether this thread was in a handshake, which has now ended. */

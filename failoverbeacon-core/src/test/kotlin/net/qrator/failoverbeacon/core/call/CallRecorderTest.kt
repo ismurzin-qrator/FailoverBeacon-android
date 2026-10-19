@@ -91,23 +91,6 @@ class CallRecorderTest {
     }
 
     @Test
-    fun `a follow-up on the held connection has it but no lookup`() {
-        recorder.callStart("a.com", 443, "GET")
-        recorder.dnsStart()
-        recorder.dnsEnd(listOf("1.1.1.1"))
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.HTTP, TLS)
-        recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(302, 0)
-        recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(200, null)
-        recorder.callEnd()
-
-        val followUp = published.last()
-        assertNull(followUp.dnsAddresses)
-        assertEquals(connection("1.1.1.1", ProxyType.HTTP), followUp.connection)
-    }
-
-    @Test
     fun `publishes an exchange only once it ends`() {
         recorder.callStart("a.com", 443, "GET")
         recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
@@ -237,24 +220,6 @@ class CallRecorderTest {
         val challenge = published.first()
         assertEquals(10L, challenge.durationNanos)
         assertNull(challenge.timings.receiveNanos)
-    }
-
-    @Test
-    fun `a follow-up on the connection the call holds reuses it`() {
-        recorder.callStart("a.com", 443, "GET")
-        connect("1.1.1.1")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
-        recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(401, 0)
-        recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(200, null)
-        recorder.callEnd()
-
-        val (challenge, retry) = published
-        assertFalse(challenge.reusedConnection)
-        assertEquals("1.1.1.1", retry.connection?.peerAddress)
-        assertEquals("h2", retry.connection?.protocol)
-        assertTrue(retry.reusedConnection)
     }
 
     @Test

@@ -26,6 +26,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
@@ -187,6 +188,7 @@ class CallRecordingTest {
         assertEquals(200, followUp.response?.statusCode)
         assertTrue(followUp.reusedConnection)
         assertEquals(LOOPBACK_IP, followUp.connection?.peerAddress)
+        assertNull(followUp.dnsAddresses)
     }
 
     @Test
@@ -250,6 +252,29 @@ class CallRecordingTest {
         execute(client)
 
         assertEquals(listOf(401, 200), exchanges.map { it.response?.statusCode })
+    }
+
+    @Test
+    fun `a follow-up failing before its headers are sent is to the server of its connection`() {
+        server.enqueue(MockResponse().setResponseCode(401))
+        val client = client()
+            .authenticator { _, response ->
+                response.request.newBuilder().header("X-Big", "x".repeat(LARGE_HEADER)).build()
+            }
+            .addNetworkInterceptor { chain ->
+                if (chain.request().header("X-Big") != null) chain.call().cancel()
+                chain.proceed(chain.request())
+            }
+            .build()
+
+        // OkHttp 4.12.0 throws IllegalStateException here, with or without the SDK.
+        assertFails { execute(client, "http://a.test:${server.port}/") }
+
+        val (challenge, followUp) = exchanges
+        assertEquals(401, challenge.response?.statusCode)
+        assertEquals("a.test", followUp.request.serverAddress)
+        assertEquals(server.port, followUp.request.serverPort)
+        assertTrue(followUp.reusedConnection)
     }
 
     @Test
@@ -650,6 +675,7 @@ class CallRecordingTest {
     private companion object {
         const val LOOPBACK_IP = "127.0.0.1"
         const val MAX_FOLLOW_UPS = 20
+        const val LARGE_HEADER = 64 * 1024
         val LOOPBACK: InetAddress = InetAddress.getByName(LOOPBACK_IP)
         val SILENT: InetAddress = InetAddress.getByAddress(byteArrayOf(10, 0, 0, 1))
 

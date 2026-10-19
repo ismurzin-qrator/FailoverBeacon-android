@@ -26,7 +26,6 @@ class CallRecorder(
     private var nextTarget: Target? = null
     private var exchangeCount = 0
     private var current: ExchangeState? = null
-    private var heldConnection: ExchangeConnection? = null
     private var finished = false
 
     @Synchronized
@@ -135,7 +134,6 @@ class CallRecorder(
                 it.isConnected && it.peerAddress == peerAddress && it.peerPort == peerPort
             }
         }
-        heldConnection = connection
         nextTarget = null
     }
 
@@ -145,11 +143,6 @@ class CallRecorder(
         currentOrNextExchange(now)?.apply {
             sendInterval.startNanos = now
             lastStep = ExchangeStep.REQUEST
-            // A call reusing the connection it holds may report none for a follow-up.
-            if (connection == null) {
-                connection = heldConnection
-                reusedConnection = heldConnection != null
-            }
         }
     }
 
