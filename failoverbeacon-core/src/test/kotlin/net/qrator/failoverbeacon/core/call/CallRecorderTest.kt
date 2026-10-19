@@ -164,6 +164,18 @@ class CallRecorderTest {
     }
 
     @Test
+    fun `a call failing after its connect and before its request fails at no network step`() {
+        recorder.callStart("a.com", 443, "GET")
+        connect("1.1.1.1")
+        recorder.tlsStart()
+        recorder.tlsEnd()
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
+        recorder.callFailed(IOException(), CallStopReason.FAILED)
+
+        assertEquals(ExchangeOutcome.Failed(null, FailureType.OTHER), published.single().outcome)
+    }
+
+    @Test
     fun `a call that ended without a response or a failure failed without a cause`() {
         recorder.callStart("a.com", 443, "GET")
         recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)

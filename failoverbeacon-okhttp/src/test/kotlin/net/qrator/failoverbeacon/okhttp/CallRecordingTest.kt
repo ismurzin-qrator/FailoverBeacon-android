@@ -407,6 +407,24 @@ class CallRecordingTest {
     }
 
     @Test
+    fun `an app interceptor failing after the handshake fails at no network step`() {
+        server.useHttps(serverCertificates.sslSocketFactory(), false)
+        val client = client()
+            .sslSocketFactory(
+                clientCertificates.sslSocketFactory(),
+                clientCertificates.trustManager
+            )
+            .addNetworkInterceptor { throw IOException("no token") }
+            .build()
+
+        assertFailsWith<IOException> { execute(client, "https://localhost:${server.port}/") }
+
+        val exchange = exchanges.single()
+        assertEquals(ConnectResult.Connected, exchange.attempts.single().result)
+        assertEquals(ExchangeOutcome.Failed(null, FailureType.OTHER), exchange.outcome)
+    }
+
+    @Test
     fun `an untrusted certificate fails at TLS`() {
         server.useHttps(serverCertificates.sslSocketFactory(), false)
 

@@ -129,6 +129,8 @@ class CallRecorder(
         currentOrNextExchange(now)?.apply {
             this.target = target
             this.connection = connection
+            // Connecting is over: a failure before the request is not a network step's.
+            lastStep = null
             reusedConnection = attempts.none {
                 it.isConnected && it.peerAddress == peerAddress && it.peerPort == peerPort
             }
