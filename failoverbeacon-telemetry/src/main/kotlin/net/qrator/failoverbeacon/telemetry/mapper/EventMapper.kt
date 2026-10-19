@@ -12,13 +12,16 @@ import net.qrator.failoverbeacon.telemetry.model.TelemetryEvent
 internal class EventMapper {
     private val errorTypeMapper = ErrorTypeMapper()
     private val phaseMapper = PhaseMapper()
+    private val proxyTypeMapper = ProxyTypeMapper()
     private val stepMapper = StepMapper()
     private val timingsMapper = TimingsMapper()
+    private val tlsMapper = TlsMapper()
 
     fun toEvent(exchange: Exchange): TelemetryEvent {
         val outcome = exchange.outcome
         val failedStep = (outcome as? ExchangeOutcome.Failed)?.step
         val statusCode = exchange.response?.statusCode
+        val connection = exchange.connection
         return TelemetryEvent(
             callId = exchange.callId,
             resendCount = exchange.resendCount,
@@ -29,9 +32,12 @@ internal class EventMapper {
             type = toErrorType(outcome, statusCode),
             step = failedStep?.let(stepMapper::toStep),
             statusCode = statusCode,
-            protocol = exchange.connection?.protocol,
-            serverIp = exchange.connection?.peerAddress,
+            protocol = connection?.protocol,
+            serverIp = connection?.peerAddress,
+            proxy = connection?.proxy?.let(proxyTypeMapper::toProxyType),
+            tls = connection?.tls?.let(tlsMapper::toTls),
             reusedConnection = exchange.reusedConnection,
+            dnsAddresses = exchange.dnsAddresses,
             elapsedMs = timingsMapper.toMillis(exchange.durationNanos),
             timings = timingsMapper.toTimings(exchange.timings),
             requestBodyBytes = exchange.request.bodyBytes,
@@ -55,6 +61,7 @@ internal class EventMapper {
         val failed = attempt.result as? ConnectResult.Failed
         return EventAttempt(
             ip = attempt.peerAddress,
+            proxy = proxyTypeMapper.toProxyType(attempt.proxy),
             ms = attempt.connectNanos?.let(timingsMapper::toMillis),
             result = when (attempt.result) {
                 ConnectResult.Connected -> AttemptResult.CONNECTED

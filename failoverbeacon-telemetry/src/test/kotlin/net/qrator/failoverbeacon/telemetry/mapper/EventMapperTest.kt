@@ -12,13 +12,16 @@ import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.model.ExchangeTimings
+import net.qrator.failoverbeacon.core.call.model.ExchangeTls
 import net.qrator.failoverbeacon.core.call.model.FailureType
-import net.qrator.failoverbeacon.core.call.model.ProxyType
+import net.qrator.failoverbeacon.core.call.model.ProxyType as ExchangeProxyType
 import net.qrator.failoverbeacon.telemetry.model.AttemptResult
 import net.qrator.failoverbeacon.telemetry.model.ErrorType
 import net.qrator.failoverbeacon.telemetry.model.EventAttempt
 import net.qrator.failoverbeacon.telemetry.model.EventTimings
+import net.qrator.failoverbeacon.telemetry.model.EventTls
 import net.qrator.failoverbeacon.telemetry.model.Phase
+import net.qrator.failoverbeacon.telemetry.model.ProxyType
 import net.qrator.failoverbeacon.telemetry.model.Step
 import net.qrator.failoverbeacon.telemetry.model.TelemetryEvent
 
@@ -30,7 +33,16 @@ class EventMapperTest {
         val exchange = exchange(
             request = ExchangeRequest("a.com", 443, "POST", bodyBytes = 3),
             response = ExchangeResponse(200, contentLength = 5, bodyBytes = 5),
-            attempts = listOf(attempt("1.1.1.1", ConnectResult.Connected, connectNanos = 20 * MS)),
+            connection = ExchangeConnection("1.1.1.1", "h2", ExchangeProxyType.HTTP, TLS),
+            dnsAddresses = listOf("1.1.1.1", "1.1.1.2"),
+            attempts = listOf(
+                attempt(
+                    "1.1.1.1",
+                    ConnectResult.Connected,
+                    connectNanos = 20 * MS,
+                    ExchangeProxyType.HTTP
+                )
+            ),
             timings = ExchangeTimings(1 * MS, 20 * MS, 12 * MS, 2 * MS, 30 * MS, 4 * MS)
         )
 
@@ -46,13 +58,18 @@ class EventMapperTest {
             statusCode = 200,
             protocol = "h2",
             serverIp = "1.1.1.1",
+            proxy = ProxyType.HTTP,
+            tls = EventTls("TLSv1.3", "TLS_AES_128_GCM_SHA256", "CN=Test CA"),
             reusedConnection = false,
+            dnsAddresses = listOf("1.1.1.1", "1.1.1.2"),
             elapsedMs = 60,
             timings = EventTimings(1, 20, 12, 2, 30, 4),
             requestBodyBytes = 3,
             responseContentLength = 5,
             responseBodyBytes = 5,
-            attempts = listOf(EventAttempt("1.1.1.1", 20, AttemptResult.CONNECTED, null, null))
+            attempts = listOf(
+                EventAttempt("1.1.1.1", ProxyType.HTTP, 20, AttemptResult.CONNECTED, null, null)
+            )
         )
         assertEquals(expected, mapper.toEvent(exchange))
     }
@@ -91,6 +108,7 @@ class EventMapperTest {
         assertEquals(
             EventAttempt(
                 "1.1.1.1",
+                ProxyType.DIRECT,
                 40,
                 AttemptResult.FAILED,
                 ErrorType.TLS_CERT_AUTHORITY_INVALID,
@@ -113,8 +131,8 @@ class EventMapperTest {
 
         assertEquals(
             listOf(
-                EventAttempt("1.1.1.1", 300, AttemptResult.CANCELED, null, null),
-                EventAttempt("1.1.1.2", null, AttemptResult.CANCELED, null, null)
+                EventAttempt("1.1.1.1", ProxyType.DIRECT, 300, AttemptResult.CANCELED, null, null),
+                EventAttempt("1.1.1.2", ProxyType.DIRECT, null, AttemptResult.CANCELED, null, null)
             ),
             event.attempts
         )
@@ -126,6 +144,7 @@ class EventMapperTest {
             exchange(
                 request = ExchangeRequest(null, null, null, null),
                 response = null,
+                connection = null,
                 outcome = ExchangeOutcome.Failed(ExchangeStep.DNS, FailureType.NAME_NOT_RESOLVED)
             )
         )
@@ -133,6 +152,9 @@ class EventMapperTest {
         assertNull(event.host)
         assertNull(event.port)
         assertNull(event.method)
+        assertNull(event.serverIp)
+        assertNull(event.proxy)
+        assertNull(event.tls)
         assertEquals(ErrorType.DNS_NAME_NOT_RESOLVED, event.type)
         assertEquals(Phase.DNS, event.phase)
     }
@@ -140,6 +162,9 @@ class EventMapperTest {
     private fun exchange(
         request: ExchangeRequest = ExchangeRequest("a.com", 443, "GET", bodyBytes = null),
         response: ExchangeResponse? = ExchangeResponse(200, contentLength = null, bodyBytes = 0),
+        connection: ExchangeConnection? =
+            ExchangeConnection("1.1.1.1", "h2", ExchangeProxyType.DIRECT, tls = null),
+        dnsAddresses: List<String>? = null,
         attempts: List<ConnectAttempt> = emptyList(),
         timings: ExchangeTimings = ExchangeTimings(null, null, null, null, null, null),
         durationNanos: Long = 60 * MS,
@@ -149,19 +174,24 @@ class EventMapperTest {
         request = request,
         response = response,
         resendCount = 1,
-        connection = ExchangeConnection("1.1.1.1", "h2", ProxyType.DIRECT, tls = null),
+        connection = connection,
         reusedConnection = false,
-        dnsAddresses = null,
+        dnsAddresses = dnsAddresses,
         attempts = attempts,
         timings = timings,
         durationNanos = durationNanos,
         outcome = outcome
     )
 
-    private fun attempt(ip: String, result: ConnectResult, connectNanos: Long?) =
-        ConnectAttempt(ip, ProxyType.DIRECT, connectNanos, result)
+    private fun attempt(
+        ip: String,
+        result: ConnectResult,
+        connectNanos: Long?,
+        proxy: ExchangeProxyType = ExchangeProxyType.DIRECT
+    ) = ConnectAttempt(ip, proxy, connectNanos, result)
 
     private companion object {
         const val MS = 1_000_000L
+        val TLS = ExchangeTls("TLSv1.3", "TLS_AES_128_GCM_SHA256", "CN=Test CA")
     }
 }
