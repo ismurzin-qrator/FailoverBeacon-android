@@ -11,7 +11,6 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
@@ -53,12 +52,12 @@ class FailoverBeaconTest {
     }
 
     @Test
-    fun `assembles the SDK with the nano time clock and an empty exchange bus`() {
+    fun `assembles the SDK with the nano time clock and installs telemetry`() {
         FailoverBeacon.initialize(app, config)
 
         val instance = SdkRegistry.instance
         assertSame(NanoTimeClock, instance?.clock)
-        assertFalse(instance?.exchangeBus?.hasSubscribers ?: true)
+        assertTrue(instance?.exchangeBus?.hasSubscribers ?: false)
     }
 
     @Test

@@ -9,6 +9,7 @@ import net.qrator.failoverbeacon.core.logging.warn
 import net.qrator.failoverbeacon.internal.AndroidMainProcessDetector
 import net.qrator.failoverbeacon.internal.LogcatLogger
 import net.qrator.failoverbeacon.internal.SdkAssembly
+import net.qrator.failoverbeacon.internal.installFeatures
 
 /**
  * Entry point of the FailoverBeacon SDK. Until [initialize], the SDK captures nothing. All
@@ -48,6 +49,7 @@ public object FailoverBeacon {
             SdkRegistry.logger.warn { "Already initialized. Ignored" }
             return
         }
+        installFeatures(sdkInstance, config)
         SdkRegistry.logger.info { "SDK initialized" }
     }
 
