@@ -7,7 +7,7 @@ import net.qrator.failoverbeacon.core.time.MonotonicClock
 /** The running SDK. */
 class SdkInstance(
     val appContext: Context,
-    @Volatile var consent: TrackingConsent,
+    @Volatile override var consent: TrackingConsent,
     val clock: MonotonicClock,
     val exchangeBus: ExchangeBus
-)
+) : ConsentSource

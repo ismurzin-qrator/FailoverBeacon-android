@@ -17,7 +17,7 @@ internal class EventMapper {
     private val timingsMapper = TimingsMapper()
     private val tlsMapper = TlsMapper()
 
-    fun toEvent(exchange: Exchange): TelemetryEvent {
+    fun toEvent(exchange: Exchange, samplingFraction: Double): TelemetryEvent {
         val outcome = exchange.outcome
         val failedStep = (outcome as? ExchangeOutcome.Failed)?.step
         val statusCode = exchange.response?.statusCode
@@ -25,6 +25,7 @@ internal class EventMapper {
         return TelemetryEvent(
             callId = exchange.callId,
             resendCount = exchange.resendCount,
+            samplingFraction = samplingFraction,
             host = exchange.request.serverAddress,
             port = exchange.request.serverPort,
             method = exchange.request.method,
