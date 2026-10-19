@@ -9,6 +9,7 @@ import kotlin.test.assertEquals
 import net.qrator.failoverbeacon.core.call.model.ConnectResult
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.model.FailureType
+import net.qrator.failoverbeacon.core.call.model.ProxyType
 import net.qrator.failoverbeacon.core.call.state.AttemptState
 import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
 
@@ -128,7 +129,7 @@ class AttemptMapperTest {
         stop: ConnectStopReason? = null,
         tls: Boolean = false
     ) {
-        attempts += AttemptState(ip, 443, start).also {
+        attempts += AttemptState(ip, 443, ProxyType.DIRECT, start).also {
             it.connectInterval.endNanos = end
             it.failure = failure
             it.failedStep = when {

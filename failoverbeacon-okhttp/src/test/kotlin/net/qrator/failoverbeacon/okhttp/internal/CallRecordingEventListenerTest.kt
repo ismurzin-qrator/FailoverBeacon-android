@@ -29,6 +29,7 @@ import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.model.FailureType
 import net.qrator.failoverbeacon.core.logging.LogOutput
 import net.qrator.failoverbeacon.core.time.MonotonicClock
+import net.qrator.failoverbeacon.okhttp.internal.mapper.OkHttpFailureMapper
 import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Protocol

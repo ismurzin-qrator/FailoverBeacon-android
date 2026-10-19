@@ -1,9 +1,15 @@
 package net.qrator.failoverbeacon.core.call.state
 
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.core.call.model.ProxyType
 import net.qrator.failoverbeacon.core.util.Interval
 
-internal class AttemptState(val peerAddress: String, val port: Int, startNanos: Long) {
+internal class AttemptState(
+    val peerAddress: String,
+    val peerPort: Int,
+    val proxy: ProxyType,
+    startNanos: Long
+) {
     val connectInterval = Interval(startNanos)
     var failure: Throwable? = null
     var failedStep: ExchangeStep? = null

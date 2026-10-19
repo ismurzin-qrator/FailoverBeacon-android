@@ -6,6 +6,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.core.call.model.ProxyType
 
 class ExchangeStateTest {
     private val exchange =
@@ -33,7 +34,7 @@ class ExchangeStateTest {
     }
 
     private fun attempt(ip: String, port: Int = 443, start: Long, end: Long? = null) =
-        AttemptState(ip, port, start).also {
+        AttemptState(ip, port, ProxyType.DIRECT, start).also {
             it.connectInterval.endNanos = end
             exchange.attempts += it
         }

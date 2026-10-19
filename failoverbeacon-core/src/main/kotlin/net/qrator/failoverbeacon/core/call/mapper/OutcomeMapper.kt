@@ -11,7 +11,7 @@ internal class OutcomeMapper(private val failureMapper: FailureMapper) {
     fun toOutcome(state: ExchangeState, results: List<ConnectResult>): ExchangeOutcome =
         with(state) {
             val cause = exchangeFailure
-            val failedConnecting = serverIp == null &&
+            val failedConnecting = connection == null &&
                 (cause == null || attempts.any { it.failure === cause })
             val connectFailure = if (failedConnecting) furthestFailure(results) else null
             when {

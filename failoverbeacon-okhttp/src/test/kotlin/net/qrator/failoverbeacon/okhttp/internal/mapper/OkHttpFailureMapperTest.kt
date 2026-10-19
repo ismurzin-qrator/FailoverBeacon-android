@@ -1,4 +1,4 @@
-package net.qrator.failoverbeacon.okhttp.internal
+package net.qrator.failoverbeacon.okhttp.internal.mapper
 
 import java.io.EOFException
 import java.io.IOException

@@ -4,6 +4,7 @@ import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketAddress
@@ -34,6 +35,7 @@ import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.model.FailureType
+import net.qrator.failoverbeacon.core.call.model.ProxyType
 import net.qrator.failoverbeacon.okhttp.fakes.installSdk
 import okhttp3.Cache
 import okhttp3.EventListener
@@ -76,14 +78,46 @@ class CallRecordingTest {
         assertEquals("GET", exchange.request.method)
         assertEquals(200, exchange.response?.statusCode)
         assertEquals(5L, exchange.response?.bodyBytes)
-        assertEquals(LOOPBACK_IP, exchange.serverIp)
-        assertEquals("http/1.1", exchange.protocol)
+        assertEquals(LOOPBACK_IP, exchange.connection?.peerAddress)
+        assertEquals("http/1.1", exchange.connection?.protocol)
+        assertEquals(ProxyType.DIRECT, exchange.connection?.proxy)
+        assertNull(exchange.connection?.tls)
         assertEquals(false, exchange.reusedConnection)
+        assertEquals(listOf(LOOPBACK_IP), exchange.dnsAddresses)
         assertEquals(ConnectResult.Connected, exchange.attempts.single().result)
+        assertEquals(ProxyType.DIRECT, exchange.attempts.single().proxy)
         assertNotNull(exchange.timings.connectNanos)
         assertNotNull(exchange.timings.waitNanos)
         assertNotNull(exchange.timings.receiveNanos)
         assertEquals(ExchangeOutcome.Ok, exchange.outcome)
+    }
+
+    @Test
+    fun `records every address of the lookup`() {
+        server.enqueue(MockResponse().setBody("ok"))
+        val client = client().dns { listOf(LOOPBACK, SECOND_LOOPBACK) }.build()
+
+        execute(client)
+
+        assertEquals(listOf(LOOPBACK_IP, "127.0.0.2"), exchanges.single().dnsAddresses)
+    }
+
+    @Test
+    fun `a call through an HTTP proxy records the proxy and its address`() {
+        server.enqueue(MockResponse().setBody("proxied"))
+        // Like the system selector, names the proxy by host: OkHttp resolves it with the client's Dns.
+        val proxyAddress = InetSocketAddress.createUnresolved("proxy.test", server.port)
+        val client = client().proxy(Proxy(Proxy.Type.HTTP, proxyAddress)).build()
+
+        assertEquals("proxied", execute(client, "http://origin.test/"))
+
+        val exchange = exchanges.single()
+        assertEquals("origin.test", exchange.request.serverAddress)
+        assertEquals(LOOPBACK_IP, exchange.connection?.peerAddress)
+        assertEquals(listOf(LOOPBACK_IP), exchange.dnsAddresses)
+        assertEquals(ProxyType.HTTP, exchange.connection?.proxy)
+        assertEquals(ProxyType.HTTP, exchange.attempts.single().proxy)
+        assertEquals(false, exchange.reusedConnection)
     }
 
     @Test
@@ -132,7 +166,7 @@ class CallRecordingTest {
         assertNotEquals(first.callId, second.callId)
         assertTrue(second.reusedConnection)
         assertTrue(second.attempts.isEmpty())
-        assertEquals(LOOPBACK_IP, second.serverIp)
+        assertEquals(LOOPBACK_IP, second.connection?.peerAddress)
     }
 
     @Test
@@ -148,7 +182,7 @@ class CallRecordingTest {
         assertEquals(1, followUp.resendCount)
         assertEquals(200, followUp.response?.statusCode)
         assertTrue(followUp.reusedConnection)
-        assertEquals(LOOPBACK_IP, followUp.serverIp)
+        assertEquals(LOOPBACK_IP, followUp.connection?.peerAddress)
     }
 
     @Test
@@ -325,6 +359,32 @@ class CallRecordingTest {
         assertNotNull(exchange.timings.tlsNanos)
         assertEquals(ConnectResult.Connected, exchange.attempts.single().result)
         assertEquals(ExchangeOutcome.Ok, exchange.outcome)
+        val tls = assertNotNull(exchange.connection?.tls)
+        assertTrue(tls.version.startsWith("TLSv"), tls.version)
+        assertTrue(tls.cipher.startsWith("TLS_"), tls.cipher)
+        assertEquals("CN=Test CA", tls.issuer)
+    }
+
+    @Test
+    fun `a pooled HTTPS connection keeps its handshake`() {
+        server.useHttps(serverCertificates.sslSocketFactory(), false)
+        server.enqueue(MockResponse().setBody("first"))
+        server.enqueue(MockResponse().setBody("second"))
+        val client = client()
+            .sslSocketFactory(
+                clientCertificates.sslSocketFactory(),
+                clientCertificates.trustManager
+            )
+            .build()
+
+        execute(client, "https://localhost:${server.port}/")
+        execute(client, "https://localhost:${server.port}/")
+
+        val (first, second) = exchanges
+        assertTrue(second.reusedConnection)
+        assertNull(second.dnsAddresses)
+        assertEquals(first.connection?.tls, second.connection?.tls)
+        assertNotNull(second.connection?.tls)
     }
 
     @Test
@@ -540,14 +600,21 @@ class CallRecordingTest {
         val LOOPBACK: InetAddress = InetAddress.getByName(LOOPBACK_IP)
         val SILENT: InetAddress = InetAddress.getByAddress(byteArrayOf(10, 0, 0, 1))
 
+        val SECOND_LOOPBACK: InetAddress = InetAddress.getByName("127.0.0.2")
+
+        val root: HeldCertificate = HeldCertificate.Builder()
+            .certificateAuthority(0)
+            .commonName("Test CA")
+            .build()
         val certificate: HeldCertificate = HeldCertificate.Builder()
             .addSubjectAlternativeName("localhost")
+            .signedBy(root)
             .build()
         val serverCertificates: HandshakeCertificates = HandshakeCertificates.Builder()
-            .heldCertificate(certificate)
+            .heldCertificate(certificate, root.certificate)
             .build()
         val clientCertificates: HandshakeCertificates = HandshakeCertificates.Builder()
-            .addTrustedCertificate(certificate.certificate)
+            .addTrustedCertificate(root.certificate)
             .build()
     }
 }

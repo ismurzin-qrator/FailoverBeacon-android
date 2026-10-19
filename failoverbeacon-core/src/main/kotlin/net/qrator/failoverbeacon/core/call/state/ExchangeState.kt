@@ -1,5 +1,6 @@
 package net.qrator.failoverbeacon.core.call.state
 
+import net.qrator.failoverbeacon.core.call.model.ExchangeConnection
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.util.Interval
 
@@ -17,8 +18,8 @@ internal class ExchangeState(
     val waitInterval = Interval()
     val receiveInterval = Interval()
     val attempts = ArrayList<AttemptState>()
-    var serverIp: String? = null
-    var protocol: String? = null
+    var dnsAddresses: List<String>? = null
+    var connection: ExchangeConnection? = null
     var reusedConnection = false
     var statusCode: Int? = null
     var contentLength: Long? = null
@@ -50,10 +51,13 @@ internal class ExchangeState(
         this.failure = failure
     }
 
-    fun getConnectingAttempt(ip: String, port: Int, step: ExchangeStep): AttemptState? {
+    fun getConnectingAttempt(
+        peerAddress: String,
+        peerPort: Int,
+        step: ExchangeStep
+    ): AttemptState? {
         val connecting = attempts.filter {
-            it.isConnecting && it.peerAddress == ip &&
-                it.port == port
+            it.isConnecting && it.peerAddress == peerAddress && it.peerPort == peerPort
         }
         return if (step == ExchangeStep.TLS) connecting.lastOrNull() else connecting.firstOrNull()
     }

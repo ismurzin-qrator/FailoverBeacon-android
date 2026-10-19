@@ -1,4 +1,4 @@
-package net.qrator.failoverbeacon.okhttp.internal
+package net.qrator.failoverbeacon.okhttp.internal.mapper
 
 import android.system.ErrnoException
 import android.system.OsConstants.EADDRNOTAVAIL

@@ -9,7 +9,7 @@ internal class TimingsMapper {
         ExchangeTimings(
             dnsNanos = dnsInterval.durationNanos,
             connectNanos = attempts
-                .lastOrNull { it.isConnected && it.peerAddress == serverIp }
+                .lastOrNull { it.isConnected && it.peerAddress == connection?.peerAddress }
                 ?.connectInterval?.durationNanos,
             tlsNanos = tlsInterval.durationNanos,
             sendNanos = sendInterval.durationNanos,

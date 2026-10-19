@@ -14,6 +14,8 @@ import net.qrator.failoverbeacon.core.call.state.CallStopReason
 import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
 import net.qrator.failoverbeacon.core.logging.error
 import net.qrator.failoverbeacon.core.util.catchSdkFailure
+import net.qrator.failoverbeacon.okhttp.internal.mapper.ProxyTypeMapper
+import net.qrator.failoverbeacon.okhttp.internal.mapper.TlsMapper
 import okhttp3.Call
 import okhttp3.Connection
 import okhttp3.EventListener
@@ -25,6 +27,9 @@ import okhttp3.Response
 
 /** Records one call into [recorder]. */
 internal class CallRecordingEventListener(private val recorder: CallRecorder) : EventListener() {
+    private val proxyTypeMapper = ProxyTypeMapper()
+    private val tlsMapper = TlsMapper()
+
     @Volatile
     private var failed = false
 
@@ -47,10 +52,17 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
         call: Call,
         domainName: String,
         inetAddressList: List<@JvmSuppressWildcards InetAddress>
-    ) = safely { recorder.dnsEnd() }
+    ) = safely { recorder.dnsEnd(inetAddressList.mapNotNull { it.hostAddress }) }
 
     override fun connectStart(call: Call, inetSocketAddress: InetSocketAddress, proxy: Proxy) =
-        safely { recorder.connectStart(inetSocketAddress.ip(), inetSocketAddress.port) }
+        safely {
+            val proxyType = proxyTypeMapper.toProxyType(proxy)
+            recorder.connectStart(
+                inetSocketAddress.peerAddress(),
+                inetSocketAddress.port,
+                proxyType
+            )
+        }
 
     override fun secureConnectStart(call: Call) = safely {
         handshakeThread = Thread.currentThread()
@@ -66,7 +78,7 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
         protocol: Protocol?
     ) = safely {
         endHandshake()
-        recorder.connectEnd(inetSocketAddress.ip(), inetSocketAddress.port)
+        recorder.connectEnd(inetSocketAddress.peerAddress(), inetSocketAddress.port)
     }
 
     override fun connectFailed(
@@ -89,17 +101,25 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
 
             else -> ConnectStopReason.NETWORK
         }
-        recorder.connectFailed(inetSocketAddress.ip(), inetSocketAddress.port, ioe, step, stop)
+        recorder.connectFailed(
+            inetSocketAddress.peerAddress(),
+            inetSocketAddress.port,
+            ioe,
+            step,
+            stop
+        )
     }
 
     override fun connectionAcquired(call: Call, connection: Connection) = safely {
         val route = connection.route()
         recorder.connectionAcquired(
-            route.socketAddress.ip(),
-            route.socketAddress.port,
-            route.address.url.host,
-            route.address.url.port,
-            connection.protocol().toString()
+            peerAddress = route.socketAddress.peerAddress(),
+            peerPort = route.socketAddress.port,
+            serverAddress = route.address.url.host,
+            serverPort = route.address.url.port,
+            protocol = connection.protocol().toString(),
+            proxy = proxyTypeMapper.toProxyType(route.proxy),
+            tls = connection.handshake()?.let(tlsMapper::toTls)
         )
     }
 
@@ -119,7 +139,6 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
     override fun responseHeadersEnd(call: Call, response: Response) = safely {
         recorder.responseHeadersEnd(
             response.code,
-            response.protocol.toString(),
             response.headers["Content-Length"]?.toLongOrNull()
         )
     }
@@ -173,7 +192,7 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
         }
     }
 
-    private fun InetSocketAddress.ip(): String = address?.hostAddress ?: hostString
+    private fun InetSocketAddress.peerAddress(): String = address?.hostAddress ?: hostString
 
     companion object {
         /** Whether the SDK does not fit this OkHttp version. */

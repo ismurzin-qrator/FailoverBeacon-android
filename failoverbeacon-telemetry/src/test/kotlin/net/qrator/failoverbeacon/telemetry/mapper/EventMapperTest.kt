@@ -6,12 +6,14 @@ import kotlin.test.assertNull
 import net.qrator.failoverbeacon.core.call.model.ConnectAttempt
 import net.qrator.failoverbeacon.core.call.model.ConnectResult
 import net.qrator.failoverbeacon.core.call.model.Exchange
+import net.qrator.failoverbeacon.core.call.model.ExchangeConnection
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.model.ExchangeTimings
 import net.qrator.failoverbeacon.core.call.model.FailureType
+import net.qrator.failoverbeacon.core.call.model.ProxyType
 import net.qrator.failoverbeacon.telemetry.model.AttemptResult
 import net.qrator.failoverbeacon.telemetry.model.ErrorType
 import net.qrator.failoverbeacon.telemetry.model.EventAttempt
@@ -147,9 +149,9 @@ class EventMapperTest {
         request = request,
         response = response,
         resendCount = 1,
-        serverIp = "1.1.1.1",
-        protocol = "h2",
+        connection = ExchangeConnection("1.1.1.1", "h2", ProxyType.DIRECT, tls = null),
         reusedConnection = false,
+        dnsAddresses = null,
         attempts = attempts,
         timings = timings,
         durationNanos = durationNanos,
@@ -157,7 +159,7 @@ class EventMapperTest {
     )
 
     private fun attempt(ip: String, result: ConnectResult, connectNanos: Long?) =
-        ConnectAttempt(ip, connectNanos, result)
+        ConnectAttempt(ip, ProxyType.DIRECT, connectNanos, result)
 
     private companion object {
         const val MS = 1_000_000L

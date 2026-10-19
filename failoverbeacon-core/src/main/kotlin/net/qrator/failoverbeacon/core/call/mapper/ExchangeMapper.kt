@@ -29,12 +29,13 @@ internal class ExchangeMapper(failureMapper: FailureMapper) {
                 )
             },
             resendCount = resendCount,
-            serverIp = serverIp,
-            protocol = protocol,
+            connection = connection,
             reusedConnection = reusedConnection,
+            dnsAddresses = dnsAddresses,
             attempts = attempts.zip(results) { attempt, result ->
                 ConnectAttempt(
                     peerAddress = attempt.peerAddress,
+                    proxy = attempt.proxy,
                     connectNanos = attempt.connectInterval.durationNanos,
                     result = result
                 )

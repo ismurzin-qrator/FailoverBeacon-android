@@ -16,10 +16,13 @@ import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.call.mapper.TestFailureMapper
 import net.qrator.failoverbeacon.core.call.model.ConnectResult
 import net.qrator.failoverbeacon.core.call.model.Exchange
+import net.qrator.failoverbeacon.core.call.model.ExchangeConnection
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.core.call.model.ExchangeTls
 import net.qrator.failoverbeacon.core.call.model.FailureType
+import net.qrator.failoverbeacon.core.call.model.ProxyType
 import net.qrator.failoverbeacon.core.call.state.CallStopReason
 import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
 
@@ -32,12 +35,12 @@ class CallRecorderTest {
     fun `records a call as one exchange`() {
         recorder.callStart("a.com", 443, "GET")
         at(1) { dnsStart() }
-        at(3) { dnsEnd() }
+        at(3) { dnsEnd(listOf("1.1.1.1")) }
         connect("1.1.1.1", start = 4, end = 10)
-        at(10) { connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2") }
+        at(10) { connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS) }
         at(11) { requestHeadersStart() }
         at(12) { requestHeadersEnd("a.com", 443, "GET") }
-        at(20) { responseHeadersEnd(200, "h2", 5) }
+        at(20) { responseHeadersEnd(200, 5) }
         at(23) { responseBodyEnd(5) }
         at(30) { callEnd() }
 
@@ -45,8 +48,8 @@ class CallRecorderTest {
         assertEquals(ExchangeRequest("a.com", 443, "GET", bodyBytes = null), exchange.request)
         assertEquals(200, exchange.response?.statusCode)
         assertEquals(5L, exchange.response?.bodyBytes)
-        assertEquals("1.1.1.1", exchange.serverIp)
-        assertEquals("h2", exchange.protocol)
+        assertEquals("1.1.1.1", exchange.connection?.peerAddress)
+        assertEquals("h2", exchange.connection?.protocol)
         assertFalse(exchange.reusedConnection)
         assertEquals(ConnectResult.Connected, exchange.attempts.single().result)
         assertEquals(2L, exchange.timings.dnsNanos)
@@ -58,11 +61,58 @@ class CallRecorderTest {
     }
 
     @Test
+    fun `records the addresses, the proxy and the handshake of the route`() {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.dnsStart()
+        recorder.dnsEnd(listOf("10.0.0.5", "10.0.0.6"))
+        recorder.connectStart("10.0.0.5", 3128, ProxyType.HTTP)
+        recorder.connectEnd("10.0.0.5", 3128)
+        recorder.connectionAcquired("10.0.0.5", 3128, "a.com", 443, "h2", ProxyType.HTTP, TLS)
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(200, null)
+        recorder.callEnd()
+
+        val exchange = published.single()
+        assertEquals(listOf("10.0.0.5", "10.0.0.6"), exchange.dnsAddresses)
+        assertEquals(ProxyType.HTTP, exchange.attempts.single().proxy)
+        assertEquals(connection("10.0.0.5", ProxyType.HTTP), exchange.connection)
+    }
+
+    @Test
+    fun `a second lookup of an exchange replaces the addresses`() {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.dnsStart()
+        recorder.dnsEnd(listOf("10.0.0.5"))
+        recorder.dnsStart()
+        recorder.dnsEnd(listOf("10.0.0.6"))
+        recorder.callEnd()
+
+        assertEquals(listOf("10.0.0.6"), published.single().dnsAddresses)
+    }
+
+    @Test
+    fun `a follow-up on the held connection has it but no lookup`() {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.dnsStart()
+        recorder.dnsEnd(listOf("1.1.1.1"))
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.HTTP, TLS)
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(302, 0)
+        recorder.requestHeadersStart()
+        recorder.responseHeadersEnd(200, null)
+        recorder.callEnd()
+
+        val followUp = published.last()
+        assertNull(followUp.dnsAddresses)
+        assertEquals(connection("1.1.1.1", ProxyType.HTTP), followUp.connection)
+    }
+
+    @Test
     fun `publishes an exchange only once it ends`() {
         recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseHeadersEnd(200, null)
 
         assertTrue(published.isEmpty())
 
@@ -75,7 +125,7 @@ class CallRecorderTest {
     @Test
     fun `ignores steps that come before the call reaches the network`() {
         recorder.callStart("a.com", 443, "GET")
-        recorder.dnsEnd()
+        recorder.dnsEnd(listOf("1.1.1.1"))
         recorder.tlsStart()
         recorder.tlsEnd()
         recorder.connectEnd("1.1.1.1", 443)
@@ -89,7 +139,7 @@ class CallRecorderTest {
         recorder.requestHeadersEnd("a.com", 443, "GET")
         recorder.requestBodyEnd(1)
         recorder.requestFailed(IOException())
-        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseHeadersEnd(200, null)
         recorder.responseBodyEnd(1)
         recorder.responseFailed(IOException())
         recorder.callEnd()
@@ -100,14 +150,14 @@ class CallRecorderTest {
     @Test
     fun `ignores steps reported after the call ended`() {
         recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseHeadersEnd(200, null)
         recorder.callEnd()
 
-        recorder.connectStart("1.1.1.2", 443)
+        recorder.connectStart("1.1.1.2", 443, ProxyType.DIRECT)
         recorder.dnsStart()
-        recorder.connectionAcquired("1.1.1.2", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.2", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
 
         assertEquals(1, published.size)
@@ -116,7 +166,7 @@ class CallRecorderTest {
     @Test
     fun `a call that ended without a response or a failure failed without a cause`() {
         recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.callEnd()
 
         assertEquals(ExchangeOutcome.Failed(null, type = null), published.single().outcome)
@@ -125,36 +175,36 @@ class CallRecorderTest {
     @Test
     fun `a follow-up is a new exchange and publishes the previous one`() {
         recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(302, "h2", 0)
+        recorder.responseHeadersEnd(302, 0)
         recorder.dnsStart()
 
         assertEquals(302, published.single().response?.statusCode)
 
         connect("2.2.2.2")
-        recorder.connectionAcquired("2.2.2.2", 443, "b.com", 443, "h2")
+        recorder.connectionAcquired("2.2.2.2", 443, "b.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
         recorder.requestHeadersEnd("b.com", 443, "GET")
-        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseHeadersEnd(200, null)
         recorder.callEnd()
 
         val (redirect, followUp) = published
         assertEquals("a.com", redirect.request.serverAddress)
         assertEquals(0, redirect.resendCount)
         assertEquals("b.com", followUp.request.serverAddress)
-        assertEquals("2.2.2.2", followUp.serverIp)
+        assertEquals("2.2.2.2", followUp.connection?.peerAddress)
         assertEquals(1, followUp.resendCount)
     }
 
     @Test
     fun `every exchange of a call carries its call ID`() {
         recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(302, "h2", 0)
+        recorder.responseHeadersEnd(302, 0)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseHeadersEnd(200, null)
         recorder.callEnd()
 
         assertEquals(2, published.size)
@@ -164,12 +214,12 @@ class CallRecorderTest {
     @Test
     fun `a followed-up response ends at its headers`() {
         recorder.callStart("a.com", 443, "GET")
-        at(0) { connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2") }
+        at(0) { connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS) }
         at(1) { requestHeadersStart() }
-        at(10) { responseHeadersEnd(401, "h2", 6) }
+        at(10) { responseHeadersEnd(401, 6) }
         at(300) { responseBodyEnd(0) }
         at(310) { requestHeadersStart() }
-        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseHeadersEnd(200, null)
         recorder.callEnd()
 
         val challenge = published.first()
@@ -181,17 +231,17 @@ class CallRecorderTest {
     fun `a follow-up on the connection the call holds reuses it`() {
         recorder.callStart("a.com", 443, "GET")
         connect("1.1.1.1")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(401, "h2", 0)
+        recorder.responseHeadersEnd(401, 0)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseHeadersEnd(200, null)
         recorder.callEnd()
 
         val (challenge, retry) = published
         assertFalse(challenge.reusedConnection)
-        assertEquals("1.1.1.1", retry.serverIp)
-        assertEquals("h2", retry.protocol)
+        assertEquals("1.1.1.1", retry.connection?.peerAddress)
+        assertEquals("h2", retry.connection?.protocol)
         assertTrue(retry.reusedConnection)
     }
 
@@ -199,7 +249,7 @@ class CallRecorderTest {
     fun `a connect to another port of the same IP is not this connection`() {
         recorder.callStart("a.com", 443, "GET")
         connect("1.1.1.1", port = 443)
-        recorder.connectionAcquired("1.1.1.1", 8443, "a.com", 8443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 8443, "a.com", 8443, "h2", ProxyType.DIRECT, TLS)
         recorder.callEnd()
 
         assertTrue(published.single().reusedConnection)
@@ -208,13 +258,13 @@ class CallRecorderTest {
     @Test
     fun `a retry after a failed request is a new exchange`() {
         recorder.callStart("a.com", 443, "POST")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
         recorder.requestFailed(SocketException("reset"))
         connect("1.1.1.1")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseHeadersEnd(200, null)
         recorder.callEnd()
 
         val (stale, retry) = published
@@ -228,9 +278,9 @@ class CallRecorderTest {
     @Test
     fun `a follow-up target is unknown until OkHttp names it`() {
         recorder.callStart("a.com", 443, "POST")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(303, "h2", 0)
+        recorder.responseHeadersEnd(303, 0)
         connect("1.1.1.1", port = 8443, failure = ConnectException("refused"))
         recorder.callFailed(ConnectException("refused"), CallStopReason.FAILED)
 
@@ -242,10 +292,10 @@ class CallRecorderTest {
     @Test
     fun `the acquired connection names the follow-up target`() {
         recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(307, "h2", 0)
-        recorder.connectionAcquired("2.2.2.2", 8443, "b.com", 8443, "h2")
+        recorder.responseHeadersEnd(307, 0)
+        recorder.connectionAcquired("2.2.2.2", 8443, "b.com", 8443, "h2", ProxyType.DIRECT, TLS)
         recorder.callEnd()
 
         val followUp = published.last().request
@@ -257,7 +307,7 @@ class CallRecorderTest {
     @Test
     fun `a resend keeps the target and method of the failed request`() {
         recorder.callStart("a.com", 443, "POST")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
         recorder.requestHeadersEnd("a.com", 443, "POST")
         recorder.responseFailed(SocketException("Connection reset"))
@@ -287,9 +337,9 @@ class CallRecorderTest {
     fun `the selected target names a follow-up before it is sent`() {
         val unresolved = UnknownHostException("b.com")
         recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(302, "h2", 0)
+        recorder.responseHeadersEnd(302, 0)
         recorder.targetSelected("b.com", 8443)
         recorder.dnsStart()
         recorder.callFailed(unresolved, CallStopReason.FAILED)
@@ -306,10 +356,10 @@ class CallRecorderTest {
     @Test
     fun `the selected target names an open exchange that has none`() {
         recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(302, "h2", 0)
-        recorder.connectStart("2.2.2.2", 443)
+        recorder.responseHeadersEnd(302, 0)
+        recorder.connectStart("2.2.2.2", 443, ProxyType.DIRECT)
         recorder.targetSelected("b.com", 443)
         recorder.callFailed(ConnectException("refused"), CallStopReason.FAILED)
 
@@ -322,14 +372,14 @@ class CallRecorderTest {
         recorder.callStart("primary.com", 443, "GET")
         at(0) { targetSelected("primary.com", 443) }
         at(1) { dnsStart() }
-        at(2) { dnsEnd() }
+        at(2) { dnsEnd(listOf("1.1.1.1")) }
         connect("1.1.1.1", start = 3, end = 5, failure = refused)
         at(505) { targetSelected("backup.com", 443) }
         recorder.dnsStart()
         connect("2.2.2.2")
-        recorder.connectionAcquired("2.2.2.2", 443, "backup.com", 443, "h2")
+        recorder.connectionAcquired("2.2.2.2", 443, "backup.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseHeadersEnd(200, null)
         recorder.callEnd()
 
         val (primary, backup) = published
@@ -347,9 +397,9 @@ class CallRecorderTest {
         recorder.targetSelected("primary.com", 443)
         recorder.dnsStart()
         connect("1.1.1.1", failure = ConnectException("refused"))
-        recorder.connectionAcquired("2.2.2.2", 443, "backup.com", 443, "h2")
+        recorder.connectionAcquired("2.2.2.2", 443, "backup.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseHeadersEnd(200, null)
         recorder.callEnd()
 
         val (primary, backup) = published
@@ -366,9 +416,9 @@ class CallRecorderTest {
         connect("1.1.1.1", failure = SocketTimeoutException("connect timed out"))
         recorder.targetSelected("a.com", 443)
         connect("1.1.1.2")
-        recorder.connectionAcquired("1.1.1.2", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.2", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseHeadersEnd(200, null)
         recorder.callEnd()
 
         assertEquals(2, published.single().attempts.size)
@@ -394,22 +444,22 @@ class CallRecorderTest {
         recorder.callStart("a.com", 443, "GET")
         connect("1.1.1.1", failure = SocketTimeoutException("connect timed out"))
         connect("1.1.1.2")
-        recorder.connectionAcquired("1.1.1.2", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.2", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseHeadersEnd(200, null)
         recorder.callEnd()
 
         val exchange = published.single()
         assertEquals(listOf("1.1.1.1", "1.1.1.2"), exchange.attempts.map { it.peerAddress })
-        assertEquals("1.1.1.2", exchange.serverIp)
+        assertEquals("1.1.1.2", exchange.connection?.peerAddress)
         assertEquals(ExchangeOutcome.Ok, exchange.outcome)
     }
 
     @Test
     fun `a connect finishing its handshake is the latest to its address`() {
         recorder.callStart("a.com", 443, "GET")
-        at(0) { connectStart("1.1.1.1", 443) }
-        at(300) { connectStart("1.1.1.1", 443) }
+        at(0) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }
+        at(300) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }
         at(320) { connectEnd("1.1.1.1", 443) }
         at(380) {
             connectFailed(
@@ -420,7 +470,7 @@ class CallRecorderTest {
                 ConnectStopReason.CLIENT
             )
         }
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.callEnd()
 
         val (late, retry) = published.single().attempts
@@ -432,8 +482,8 @@ class CallRecorderTest {
     fun `a handshake failure in a race belongs to the connect that reported it`() {
         val reset = SocketException("Connection reset")
         recorder.callStart("a.com", 443, "GET")
-        at(0) { connectStart("1.1.1.1", 443) }
-        at(250) { connectStart("1.1.1.2", 443) }
+        at(0) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }
+        at(250) { connectStart("1.1.1.2", 443, ProxyType.DIRECT) }
         at(271) { tlsStart() }
         at(280) {
             connectFailed(
@@ -447,10 +497,10 @@ class CallRecorderTest {
         at(300) {
             connectFailed("1.1.1.2", 443, reset, ExchangeStep.TLS, ConnectStopReason.NETWORK)
         }
-        at(310) { connectStart("1.1.1.1", 443) }
+        at(310) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }
         at(320) { tlsStart() }
         at(330) { connectEnd("1.1.1.1", 443) }
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.callEnd()
 
         assertEquals(
@@ -468,12 +518,12 @@ class CallRecorderTest {
         val untrusted = SSLHandshakeException("untrusted")
         val refused = ConnectException("refused")
         recorder.callStart("a.com", 443, "GET")
-        at(0) { connectStart("1.1.1.1", 443) }
+        at(0) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }
         at(1) { tlsStart() }
         at(5) {
             connectFailed("1.1.1.1", 443, untrusted, ExchangeStep.TLS, ConnectStopReason.NETWORK)
         }
-        at(6) { connectStart("1.1.1.2", 443) }
+        at(6) { connectStart("1.1.1.2", 443, ProxyType.DIRECT) }
         at(7) {
             connectFailed("1.1.1.2", 443, refused, ExchangeStep.TCP, ConnectStopReason.NETWORK)
         }
@@ -490,11 +540,11 @@ class CallRecorderTest {
         val refused = ConnectException("refused")
         val timeout = SocketTimeoutException("connect timed out")
         recorder.callStart("a.com", 443, "GET")
-        at(0) { connectStart("1.1.1.1", 443) }
+        at(0) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }
         at(5) {
             connectFailed("1.1.1.1", 443, refused, ExchangeStep.TCP, ConnectStopReason.NETWORK)
         }
-        at(6) { connectStart("1.1.1.2", 443) }
+        at(6) { connectStart("1.1.1.2", 443, ProxyType.DIRECT) }
         at(600) {
             connectFailed("1.1.1.2", 443, timeout, ExchangeStep.TCP, ConnectStopReason.NETWORK)
         }
@@ -510,11 +560,11 @@ class CallRecorderTest {
     fun `a canceled call cancels the connects it stopped and keeps earlier failures`() {
         val reset = SocketException("Connection reset")
         recorder.callStart("a.com", 443, "GET")
-        at(0) { connectStart("1.1.1.1", 443) }
+        at(0) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }
         at(1) { tlsStart() }
         at(5) { connectFailed("1.1.1.1", 443, reset, ExchangeStep.TLS, ConnectStopReason.NETWORK) }
-        at(6) { connectStart("1.1.1.2", 443) }
-        at(7) { connectStart("1.1.1.3", 443) }
+        at(6) { connectStart("1.1.1.2", 443, ProxyType.DIRECT) }
+        at(7) { connectStart("1.1.1.3", 443, ProxyType.DIRECT) }
         at(700) {
             connectFailed(
                 "1.1.1.2",
@@ -543,10 +593,10 @@ class CallRecorderTest {
         val reset = SocketException("Connection reset")
         val timeout = InterruptedIOException("timeout")
         recorder.callStart("a.com", 443, "GET")
-        at(0) { connectStart("1.1.1.1", 443) }
+        at(0) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }
         at(1) { tlsStart() }
         at(5) { connectFailed("1.1.1.1", 443, reset, ExchangeStep.TLS, ConnectStopReason.NETWORK) }
-        at(6) { connectStart("1.1.1.2", 443) }
+        at(6) { connectStart("1.1.1.2", 443, ProxyType.DIRECT) }
         at(700) {
             connectFailed(
                 "1.1.1.2",
@@ -576,12 +626,12 @@ class CallRecorderTest {
     fun `a failed send keeps its first failure, has no wait and ends at the failure`() {
         val broken = SocketException("Broken pipe")
         recorder.callStart("a.com", 443, "POST")
-        at(0) { connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2") }
+        at(0) { connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS) }
         at(1) { requestHeadersStart() }
         at(2) { requestHeadersEnd("a.com", 443, "POST") }
         at(50) { requestFailed(broken) }
         at(50) { responseFailed(SocketException("Socket closed")) }
-        at(500) { connectStart("1.1.1.1", 443) }
+        at(500) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }
 
         val exchange = published.single()
         assertEquals(49L, exchange.timings.sendNanos)
@@ -596,10 +646,10 @@ class CallRecorderTest {
     @Test
     fun `an early response after a failed request body is a response`() {
         recorder.callStart("a.com", 443, "POST")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
         recorder.requestFailed(SocketException("Broken pipe"))
-        recorder.responseHeadersEnd(413, "h2", 0)
+        recorder.responseHeadersEnd(413, 0)
         recorder.callEnd()
 
         val exchange = published.single()
@@ -610,10 +660,10 @@ class CallRecorderTest {
     @Test
     fun `a request body ending after the response leaves no wait time`() {
         recorder.callStart("a.com", 443, "POST")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         at(0) { requestHeadersStart() }
         at(1) { requestHeadersEnd("a.com", 443, "POST") }
-        at(5) { responseHeadersEnd(200, "h2", null) }
+        at(5) { responseHeadersEnd(200, null) }
         at(9) { requestBodyEnd(10) }
         recorder.callEnd()
 
@@ -623,7 +673,7 @@ class CallRecorderTest {
     @Test
     fun `a failure while waiting for the headers ends the wait and the exchange`() {
         recorder.callStart("a.com", 443, "GET")
-        at(0) { connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2") }
+        at(0) { connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS) }
         at(1) { requestHeadersStart() }
         at(2) { requestHeadersEnd("a.com", 443, "GET") }
         at(302) { responseFailed(SocketTimeoutException("read")) }
@@ -639,10 +689,10 @@ class CallRecorderTest {
     fun `a body cut fails at RESPONSE, keeps the status and is received from the headers`() {
         val timeout = SocketTimeoutException("read")
         recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         at(0) { requestHeadersStart() }
         at(1) { requestHeadersEnd("a.com", 443, "GET") }
-        at(51) { responseHeadersEnd(200, "h2", 200_000) }
+        at(51) { responseHeadersEnd(200, 200_000) }
         at(451) { responseFailed(timeout) }
         recorder.callFailed(timeout, CallStopReason.FAILED)
 
@@ -662,9 +712,9 @@ class CallRecorderTest {
     fun `a call timeout wins over the read failure it caused`() {
         val timeout = InterruptedIOException("timeout")
         recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(200, "h2", null)
+        recorder.responseHeadersEnd(200, null)
         recorder.responseFailed(SocketException("Socket closed"))
         recorder.callFailed(timeout, CallStopReason.TIMED_OUT)
 
@@ -683,11 +733,11 @@ class CallRecorderTest {
             val recorder = CallRecorder({ time }, TestFailureMapper, published::add)
             time = 0
             recorder.callStart("a.com", 443, "GET")
-            recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+            recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
             time = 1
             recorder.requestHeadersStart()
             time = 10
-            recorder.responseHeadersEnd(401, "h2", 6)
+            recorder.responseHeadersEnd(401, 6)
             time = 600
             recorder.responseBodyEnd(0)
             recorder.callFailed(IOException("stopped"), reason)
@@ -703,9 +753,9 @@ class CallRecorderTest {
     fun `a redirect loop fails the last exchange`() {
         val loop = ProtocolException("Too many follow-up requests: 21")
         recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         recorder.requestHeadersStart()
-        recorder.responseHeadersEnd(302, "h2", 0)
+        recorder.responseHeadersEnd(302, 0)
         recorder.callFailed(loop, CallStopReason.RESPONSE_REJECTED)
 
         assertEquals(
@@ -739,10 +789,10 @@ class CallRecorderTest {
 
     private fun exchanges(count: Int) {
         recorder.callStart("a.com", 443, "GET")
-        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
         repeat(count) {
             recorder.requestHeadersStart()
-            recorder.responseHeadersEnd(302, "h2", 0)
+            recorder.responseHeadersEnd(302, 0)
         }
     }
 
@@ -758,7 +808,7 @@ class CallRecorderTest {
         end: Long = time,
         failure: Throwable? = null
     ) {
-        at(start) { connectStart(ip, port) }
+        at(start) { connectStart(ip, port, ProxyType.DIRECT) }
         at(end) {
             if (failure == null) {
                 connectEnd(ip, port)
@@ -766,5 +816,12 @@ class CallRecorderTest {
                 connectFailed(ip, port, failure, ExchangeStep.TCP, ConnectStopReason.NETWORK)
             }
         }
+    }
+
+    private fun connection(ip: String, proxy: ProxyType = ProxyType.DIRECT) =
+        ExchangeConnection(ip, "h2", proxy, TLS)
+
+    private companion object {
+        val TLS = ExchangeTls("TLSv1.3", "TLS_AES_128_GCM_SHA256", "CN=Test CA")
     }
 }

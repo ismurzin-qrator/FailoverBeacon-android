@@ -2,7 +2,10 @@ package net.qrator.failoverbeacon.core.call
 
 import net.qrator.failoverbeacon.core.call.mapper.ExchangeMapper
 import net.qrator.failoverbeacon.core.call.mapper.FailureMapper
+import net.qrator.failoverbeacon.core.call.model.ExchangeConnection
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.core.call.model.ExchangeTls
+import net.qrator.failoverbeacon.core.call.model.ProxyType
 import net.qrator.failoverbeacon.core.call.state.AttemptState
 import net.qrator.failoverbeacon.core.call.state.CallStopReason
 import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
@@ -23,8 +26,7 @@ class CallRecorder(
     private var nextTarget: Target? = null
     private var exchangeCount = 0
     private var current: ExchangeState? = null
-    private var connectionIp: String? = null
-    private var connectionProtocol: String? = null
+    private var heldConnection: ExchangeConnection? = null
     private var finished = false
 
     @Synchronized
@@ -55,15 +57,18 @@ class CallRecorder(
     }
 
     @Synchronized
-    fun dnsEnd() {
-        current?.dnsInterval?.endNanos = clock.nanoTime()
+    fun dnsEnd(addresses: List<String>) {
+        current?.apply {
+            dnsInterval.endNanos = clock.nanoTime()
+            dnsAddresses = addresses
+        }
     }
 
     @Synchronized
-    fun connectStart(ip: String, port: Int) {
+    fun connectStart(peerAddress: String, peerPort: Int, proxy: ProxyType) {
         val now = clock.nanoTime()
         currentOrNextExchange(now)?.apply {
-            attempts += AttemptState(ip, port, startNanos = now)
+            attempts += AttemptState(peerAddress, peerPort, proxy, startNanos = now)
             lastStep = ExchangeStep.TCP
         }
     }
@@ -82,21 +87,21 @@ class CallRecorder(
     }
 
     @Synchronized
-    fun connectEnd(ip: String, port: Int) {
-        val attempt = current?.getConnectingAttempt(ip, port, ExchangeStep.TLS)
+    fun connectEnd(peerAddress: String, peerPort: Int) {
+        val attempt = current?.getConnectingAttempt(peerAddress, peerPort, ExchangeStep.TLS)
         attempt?.connectInterval?.endNanos = clock.nanoTime()
     }
 
     /** [step] is TLS if the connection failed during its handshake. */
     @Synchronized
     fun connectFailed(
-        ip: String,
-        port: Int,
+        peerAddress: String,
+        peerPort: Int,
         failure: Throwable,
         step: ExchangeStep,
         stop: ConnectStopReason
     ) {
-        current?.getConnectingAttempt(ip, port, step)?.apply {
+        current?.getConnectingAttempt(peerAddress, peerPort, step)?.apply {
             connectInterval.endNanos = clock.nanoTime()
             this.failure = failure
             failedStep = step
@@ -106,12 +111,15 @@ class CallRecorder(
 
     @Synchronized
     fun connectionAcquired(
-        ip: String,
-        port: Int,
+        peerAddress: String,
+        peerPort: Int,
         serverAddress: String,
         serverPort: Int,
-        protocol: String
+        protocol: String,
+        proxy: ProxyType,
+        tls: ExchangeTls?
     ) {
+        val connection = ExchangeConnection(peerAddress, protocol, proxy, tls)
         val target = Target(serverAddress, serverPort)
         val now = clock.nanoTime()
         val exchange = current
@@ -120,13 +128,12 @@ class CallRecorder(
         }
         currentOrNextExchange(now)?.apply {
             this.target = target
-            this.protocol = protocol
-            serverIp = ip
-            reusedConnection =
-                attempts.none { it.isConnected && it.peerAddress == ip && it.port == port }
+            this.connection = connection
+            reusedConnection = attempts.none {
+                it.isConnected && it.peerAddress == peerAddress && it.peerPort == peerPort
+            }
         }
-        connectionIp = ip
-        connectionProtocol = protocol
+        heldConnection = connection
         nextTarget = null
     }
 
@@ -137,10 +144,9 @@ class CallRecorder(
             sendInterval.startNanos = now
             lastStep = ExchangeStep.REQUEST
             // A call reusing the connection it holds may report none for a follow-up.
-            if (serverIp == null) {
-                serverIp = connectionIp
-                protocol = connectionProtocol
-                reusedConnection = connectionIp != null
+            if (connection == null) {
+                connection = heldConnection
+                reusedConnection = heldConnection != null
             }
         }
     }
@@ -176,7 +182,7 @@ class CallRecorder(
     }
 
     @Synchronized
-    fun responseHeadersEnd(statusCode: Int, protocol: String, contentLength: Long?) {
+    fun responseHeadersEnd(statusCode: Int, contentLength: Long?) {
         current?.apply {
             val now = clock.nanoTime()
             waitInterval.endNanos = now
@@ -184,7 +190,6 @@ class CallRecorder(
             receiveInterval.startNanos = now
             lastStep = ExchangeStep.RESPONSE
             this.statusCode = statusCode
-            this.protocol = protocol
             this.contentLength = contentLength
             // The server answered before the failed send ended.
             failure = null
