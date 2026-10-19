@@ -1,5 +1,6 @@
 package net.qrator.failoverbeacon
 
+import java.net.IDN
 import java.net.URI
 import java.net.URISyntaxException
 import java.util.Locale
@@ -49,11 +50,10 @@ public class FailoverBeaconConfig private constructor(
          * match. Pass host names without a port: `"analytics.example:443"` never matches.
          * By default, no hosts are blocked.
          *
-         * @throws IllegalArgumentException if a host is blank or is a URL instead of a host name.
+         * @throws IllegalArgumentException if a host is blank, is a URL or is not a valid name.
          */
         public fun blockedHosts(hosts: List<String>): Builder = apply {
-            hosts.forEach(::checkHostName)
-            blockedHosts = hosts.mapTo(LinkedHashSet()) { it.lowercase(Locale.ROOT) }
+            blockedHosts = hosts.mapTo(LinkedHashSet(), ::toAsciiHost)
         }
 
         /**
@@ -115,10 +115,11 @@ public class FailoverBeaconConfig private constructor(
                 require(!uri.host.isNullOrEmpty()) { "Beacon URL must have a host: $url" }
             }
 
-            private fun checkHostName(host: String) {
+            private fun toAsciiHost(host: String): String {
                 require(host.isNotBlank() && host.none { it == '/' || it.isWhitespace() }) {
                     "blockedHosts must contain host names, was \"$host\""
                 }
+                return IDN.toASCII(host).lowercase(Locale.ROOT)
             }
 
             private fun checkSampleRate(name: String, rate: Double): Double {

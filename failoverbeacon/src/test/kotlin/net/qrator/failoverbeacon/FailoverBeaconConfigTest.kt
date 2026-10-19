@@ -103,8 +103,26 @@ class FailoverBeaconConfigTest {
     }
 
     @Test
-    fun `blockedHosts rejects blank names and urls`() {
-        val hosts = listOf("", " ", "https://analytics.example", "analytics.example/path", "a b")
+    fun `blockedHosts take internationalized names in Unicode or ASCII`() {
+        val config = builderWithBeacon()
+            .blockedHosts(listOf("Пример.РФ", "xn--e1afmkfd.xn--p1ai"))
+            .build()
+
+        assertEquals(setOf("xn--e1afmkfd.xn--p1ai"), config.blockedHosts)
+    }
+
+    @Test
+    fun `blockedHosts rejects blank names, urls and invalid names`() {
+        val tooLongLabel = "a".repeat(64) + ".example"
+        val hosts =
+            listOf(
+                "",
+                " ",
+                "https://analytics.example",
+                "analytics.example/path",
+                "a b",
+                tooLongLabel
+            )
         for (host in hosts) {
             assertFailsWith<IllegalArgumentException>(host) {
                 builderWithBeacon().blockedHosts(listOf(host))
