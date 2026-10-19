@@ -4,6 +4,7 @@ import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.ProtocolException
 import java.net.Proxy
 import java.net.ServerSocket
 import java.net.Socket
@@ -296,6 +297,20 @@ class CallRecordingTest {
         assertEquals(200, exchange.response?.statusCode)
         assertNull(exchange.response?.bodyBytes)
         assertEquals(ExchangeStep.RESPONSE, assertIs<ExchangeOutcome.Failed>(exchange.outcome).step)
+    }
+
+    @Test
+    fun `too many redirects fail the last exchange as a redirect loop`() {
+        repeat(MAX_FOLLOW_UPS + 1) {
+            server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "/"))
+        }
+
+        assertFailsWith<ProtocolException> { execute(client().build()) }
+
+        assertEquals(
+            ExchangeOutcome.Failed(ExchangeStep.RESPONSE, FailureType.REDIRECT_LOOP),
+            exchanges.last().outcome
+        )
     }
 
     @Test
@@ -634,6 +649,7 @@ class CallRecordingTest {
 
     private companion object {
         const val LOOPBACK_IP = "127.0.0.1"
+        const val MAX_FOLLOW_UPS = 20
         val LOOPBACK: InetAddress = InetAddress.getByName(LOOPBACK_IP)
         val SILENT: InetAddress = InetAddress.getByAddress(byteArrayOf(10, 0, 0, 1))
 

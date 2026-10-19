@@ -4,6 +4,7 @@ import net.qrator.failoverbeacon.core.call.model.ConnectAttempt
 import net.qrator.failoverbeacon.core.call.model.ConnectResult
 import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
+import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
 import net.qrator.failoverbeacon.telemetry.model.AttemptResult
 import net.qrator.failoverbeacon.telemetry.model.ErrorType
 import net.qrator.failoverbeacon.telemetry.model.EventAttempt
@@ -11,7 +12,6 @@ import net.qrator.failoverbeacon.telemetry.model.TelemetryEvent
 
 internal class EventMapper {
     private val errorTypeMapper = ErrorTypeMapper()
-    private val phaseMapper = PhaseMapper()
     private val proxyTypeMapper = ProxyTypeMapper()
     private val stepMapper = StepMapper()
     private val timingsMapper = TimingsMapper()
@@ -22,14 +22,15 @@ internal class EventMapper {
         val failedStep = (outcome as? ExchangeOutcome.Failed)?.step
         val statusCode = exchange.response?.statusCode
         val connection = exchange.connection
+        val type = toErrorType(outcome, exchange.response)
         return TelemetryEvent(
             callId = exchange.callId,
             resendCount = exchange.resendCount,
             host = exchange.request.serverAddress,
             port = exchange.request.serverPort,
             method = exchange.request.method,
-            phase = phaseMapper.toPhase(failedStep),
-            type = toErrorType(outcome, statusCode),
+            phase = type.phase,
+            type = type,
             step = failedStep?.let(stepMapper::toStep),
             statusCode = statusCode,
             protocol = connection?.protocol,
@@ -47,10 +48,10 @@ internal class EventMapper {
         )
     }
 
-    private fun toErrorType(outcome: ExchangeOutcome, statusCode: Int?): ErrorType =
+    private fun toErrorType(outcome: ExchangeOutcome, response: ExchangeResponse?): ErrorType =
         when (outcome) {
             ExchangeOutcome.Ok ->
-                if (statusCode != null && statusCode >= MIN_HTTP_ERROR_STATUS) {
+                if (response != null && response.statusCode >= MIN_HTTP_ERROR_STATUS) {
                     ErrorType.HTTP_ERROR
                 } else {
                     ErrorType.OK
@@ -58,7 +59,8 @@ internal class EventMapper {
 
             ExchangeOutcome.Canceled -> ErrorType.ABANDONED
 
-            is ExchangeOutcome.Failed -> errorTypeMapper.toErrorType(outcome.step, outcome.type)
+            is ExchangeOutcome.Failed ->
+                errorTypeMapper.toErrorType(outcome.step, outcome.type, response)
         }
 
     private fun toAttempt(attempt: ConnectAttempt): EventAttempt {
@@ -72,7 +74,7 @@ internal class EventMapper {
                 is ConnectResult.Failed -> AttemptResult.FAILED
                 ConnectResult.Superseded, ConnectResult.Canceled -> AttemptResult.CANCELED
             },
-            type = failed?.let { errorTypeMapper.toErrorType(it.step, it.type) },
+            type = failed?.let { errorTypeMapper.toErrorType(it.step, it.type, response = null) },
             step = failed?.step?.let(stepMapper::toStep)
         )
     }

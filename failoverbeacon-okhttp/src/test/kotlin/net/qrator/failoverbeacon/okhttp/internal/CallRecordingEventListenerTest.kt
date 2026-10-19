@@ -184,7 +184,7 @@ class CallRecordingEventListenerTest {
     }
 
     @Test
-    fun `a protocol failure after a response rejects it`() {
+    fun `too many follow-ups after a response reject it as a redirect loop`() {
         val call = call(OkHttpClient())
         val loop = ProtocolException("Too many follow-up requests: 21")
         val listener = listener { 0 }
@@ -194,7 +194,7 @@ class CallRecordingEventListenerTest {
         listener.callFailed(call, loop)
 
         assertEquals(
-            FailureType.PROTOCOL_ERROR,
+            FailureType.REDIRECT_LOOP,
             assertIs<ExchangeOutcome.Failed>(published.single().outcome).type
         )
     }

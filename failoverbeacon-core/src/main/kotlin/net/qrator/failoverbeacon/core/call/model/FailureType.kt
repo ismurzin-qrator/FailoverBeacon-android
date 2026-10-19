@@ -14,6 +14,7 @@ enum class FailureType {
     CERT_PIN_MISMATCH,
     TLS_PROTOCOL_ERROR,
     PROTOCOL_ERROR,
+    REDIRECT_LOOP,
     STREAM_RESET,
     OTHER
 }

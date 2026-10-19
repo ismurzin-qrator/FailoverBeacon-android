@@ -95,6 +95,9 @@ internal class OkHttpFailureMapper : FailureMapper {
             failure is ProtocolException && message == "unexpected end of stream" ->
                 FailureType.CLOSED
 
+            failure is ProtocolException && message.startsWith("Too many follow-up requests") ->
+                FailureType.REDIRECT_LOOP
+
             else -> null
         }
     }

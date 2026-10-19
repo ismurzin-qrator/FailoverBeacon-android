@@ -2,6 +2,7 @@ package net.qrator.failoverbeacon.telemetry.mapper
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.model.FailureType
 import net.qrator.failoverbeacon.telemetry.model.ErrorType
@@ -25,12 +26,13 @@ class ErrorTypeMapperTest {
             FailureType.CERT_PIN_MISMATCH to ErrorType.TLS_CERT_PINNED_KEY_NOT_IN_CERT_CHAIN,
             FailureType.TLS_PROTOCOL_ERROR to ErrorType.TLS_PROTOCOL_ERROR,
             FailureType.PROTOCOL_ERROR to ErrorType.HTTP_PROTOCOL_ERROR,
+            FailureType.REDIRECT_LOOP to ErrorType.HTTP_RESPONSE_REDIRECT_LOOP,
             FailureType.STREAM_RESET to ErrorType.HTTP_PROTOCOL_ERROR,
             FailureType.OTHER to ErrorType.HTTP_FAILED
         )
 
         val actual = expected.mapValues { (type, _) ->
-            mapper.toErrorType(ExchangeStep.REQUEST, type)
+            mapper.toErrorType(ExchangeStep.REQUEST, type, response = null)
         }
 
         assertEquals(expected, actual)
@@ -46,24 +48,48 @@ class ErrorTypeMapperTest {
             ExchangeStep.RESPONSE to ErrorType.HTTP_FAILED
         )
 
-        val actual = expected.mapValues { (step, _) -> mapper.toErrorType(step, FailureType.OTHER) }
+        val actual = expected.mapValues { (step, _) -> toErrorType(step, FailureType.OTHER) }
 
         assertEquals(expected, actual)
-        assertEquals(ErrorType.UNKNOWN, mapper.toErrorType(null, FailureType.OTHER))
+        assertEquals(ErrorType.UNKNOWN, toErrorType(null, FailureType.OTHER))
+    }
+
+    @Test
+    fun `a timeout during DNS is a DNS timeout`() {
+        assertEquals(ErrorType.DNS_TIMED_OUT, toErrorType(ExchangeStep.DNS, FailureType.TIMED_OUT))
+    }
+
+    @Test
+    fun `a response cut short is named by what arrived`() {
+        val withLength = ExchangeResponse(200, contentLength = 100, bodyBytes = null)
+        val chunked = ExchangeResponse(200, contentLength = null, bodyBytes = null)
+
+        assertEquals(
+            ErrorType.HTTP_RESPONSE_INVALID_EMPTY,
+            mapper.toErrorType(ExchangeStep.RESPONSE, FailureType.CLOSED, response = null)
+        )
+        assertEquals(
+            ErrorType.HTTP_RESPONSE_INVALID_CONTENT_LENGTH_MISMATCH,
+            mapper.toErrorType(ExchangeStep.RESPONSE, FailureType.CLOSED, withLength)
+        )
+        assertEquals(
+            ErrorType.HTTP_RESPONSE_INVALID_INCOMPLETE_CHUNKED_ENCODING,
+            mapper.toErrorType(ExchangeStep.RESPONSE, FailureType.CLOSED, chunked)
+        )
     }
 
     @Test
     fun `a protocol error in the response is an invalid response`() {
         assertEquals(
             ErrorType.HTTP_RESPONSE_INVALID,
-            mapper.toErrorType(ExchangeStep.RESPONSE, FailureType.PROTOCOL_ERROR)
+            toErrorType(ExchangeStep.RESPONSE, FailureType.PROTOCOL_ERROR)
         )
     }
 
     @Test
     fun `a failure without a type is unknown`() {
-        assertEquals(ErrorType.UNKNOWN, mapper.toErrorType(ExchangeStep.TCP, null))
-        assertEquals(ErrorType.UNKNOWN, mapper.toErrorType(null, null))
+        assertEquals(ErrorType.UNKNOWN, toErrorType(ExchangeStep.TCP, null))
+        assertEquals(ErrorType.UNKNOWN, toErrorType(null, null))
     }
 
     @Test
@@ -72,4 +98,7 @@ class ErrorTypeMapperTest {
 
         assertEquals(codes.size, codes.toSet().size)
     }
+
+    private fun toErrorType(step: ExchangeStep?, type: FailureType?) =
+        mapper.toErrorType(step, type, response = null)
 }

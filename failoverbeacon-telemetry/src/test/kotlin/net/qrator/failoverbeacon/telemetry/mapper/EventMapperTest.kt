@@ -94,6 +94,31 @@ class EventMapperTest {
     }
 
     @Test
+    fun `a failure in the response keeps its step and takes the phase of its type`() {
+        val cutBody = ExchangeResponse(200, contentLength = 100, bodyBytes = null)
+
+        val reset = mapper.toEvent(
+            exchange(
+                response = cutBody,
+                outcome = ExchangeOutcome.Failed(ExchangeStep.RESPONSE, FailureType.RESET)
+            )
+        )
+        val closed = mapper.toEvent(
+            exchange(
+                response = cutBody,
+                outcome = ExchangeOutcome.Failed(ExchangeStep.RESPONSE, FailureType.CLOSED)
+            )
+        )
+
+        assertEquals(Step.RESPONSE, reset.step)
+        assertEquals(ErrorType.TCP_RESET to Phase.CONNECTION, reset.type to reset.phase)
+        assertEquals(
+            ErrorType.HTTP_RESPONSE_INVALID_CONTENT_LENGTH_MISMATCH to Phase.APPLICATION,
+            closed.type to closed.phase
+        )
+    }
+
+    @Test
     fun `a failure has its step, phase and type`() {
         val untrusted = ConnectResult.Failed(ExchangeStep.TLS, FailureType.CERT_UNTRUSTED)
         val event = mapper.toEvent(
