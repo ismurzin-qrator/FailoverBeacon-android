@@ -17,7 +17,7 @@ internal class EventMapper {
     private val timingsMapper = TimingsMapper()
     private val tlsMapper = TlsMapper()
 
-    fun toEvent(exchange: Exchange, samplingFraction: Double): TelemetryEvent {
+    fun toEvent(exchange: Exchange): TelemetryEvent {
         val outcome = exchange.outcome
         val failedStep = (outcome as? ExchangeOutcome.Failed)?.step
         val statusCode = exchange.response?.statusCode
@@ -25,7 +25,6 @@ internal class EventMapper {
         return TelemetryEvent(
             callId = exchange.callId,
             resendCount = exchange.resendCount,
-            samplingFraction = samplingFraction,
             host = exchange.request.serverAddress,
             port = exchange.request.serverPort,
             method = exchange.request.method,
@@ -51,7 +50,11 @@ internal class EventMapper {
     private fun toErrorType(outcome: ExchangeOutcome, statusCode: Int?): ErrorType =
         when (outcome) {
             ExchangeOutcome.Ok ->
-                if (statusCode != null && statusCode >= 400) ErrorType.HTTP_ERROR else ErrorType.OK
+                if (statusCode != null && statusCode >= MIN_HTTP_ERROR_STATUS) {
+                    ErrorType.HTTP_ERROR
+                } else {
+                    ErrorType.OK
+                }
 
             ExchangeOutcome.Canceled -> ErrorType.ABANDONED
 
@@ -72,5 +75,9 @@ internal class EventMapper {
             type = failed?.let { errorTypeMapper.toErrorType(it.step, it.type) },
             step = failed?.step?.let(stepMapper::toStep)
         )
+    }
+
+    private companion object {
+        const val MIN_HTTP_ERROR_STATUS = 400
     }
 }

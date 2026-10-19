@@ -4,7 +4,6 @@ import android.util.Log
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
@@ -21,8 +20,8 @@ class TelemetryCollectorTest {
     private val collector = TelemetryCollector(
         consentSource,
         blockedHosts = setOf("blocked.com"),
-        failureSampleRate = 1.0,
-        successSampleRate = 0.0
+        failureSampleRate = 0.7,
+        successSampleRate = 0.3
     )
 
     @BeforeTest
@@ -38,27 +37,37 @@ class TelemetryCollectorTest {
     }
 
     @Test
-    fun `logs the event of a kept exchange with its sampling fraction`() {
+    fun `logs a kept event with the fraction of its class`() {
+        collector.onExchange(exchange(callId = KEPT))
         collector.onExchange(failure())
 
-        val (level, message) = logs.single()
+        val (level, message) = logs.first()
         assertEquals(Log.DEBUG, level)
-        assertTrue(message.startsWith("Telemetry event TelemetryEvent(callId=7"), message)
-        assertContains(message, "samplingFraction=1.0")
+        assertTrue(message.startsWith("Telemetry event TelemetryEvent(callId=$KEPT"), message)
+        assertEquals(
+            listOf("samplingFraction=0.3", "samplingFraction=0.7"),
+            logs.map { it.second.substringAfterLast(", ") }
+        )
     }
 
     @Test
-    fun `drops an exchange the filter or the sampler drops`() {
+    fun `drops what the filter or the sampler drops`() {
         collector.onExchange(failure(host = "blocked.com"))
-        collector.onExchange(exchange())
+        collector.onExchange(exchange(callId = DROPPED))
         consentSource.consent = TrackingConsent.NOT_GRANTED
         collector.onExchange(failure())
 
-        assertTrue(logs.isEmpty())
+        assertEquals(emptyList(), logs)
     }
 
     private fun failure(host: String = "a.com") = exchange(
+        callId = KEPT,
         request = ExchangeRequest(host, 443, "GET", bodyBytes = null),
         response = ExchangeResponse(500, null, 0)
     )
+
+    private companion object {
+        const val KEPT = 0L
+        const val DROPPED = -1L
+    }
 }

@@ -6,6 +6,7 @@ import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.telemetry.TestConsentSource
+import net.qrator.failoverbeacon.telemetry.event
 import net.qrator.failoverbeacon.telemetry.exchange
 
 class EventFilterTest {
@@ -14,22 +15,22 @@ class EventFilterTest {
 
     @Test
     fun `collects with consent granted or pending, never without it`() {
-        assertTrue(filter.accepts(exchange()))
+        assertTrue(filter.accepts(event()))
 
         consentSource.consent = TrackingConsent.PENDING
-        assertTrue(filter.accepts(exchange()))
+        assertTrue(filter.accepts(event()))
 
         consentSource.consent = TrackingConsent.NOT_GRANTED
-        assertFalse(filter.accepts(exchange()))
+        assertFalse(filter.accepts(event()))
     }
 
     @Test
     fun `drops a blocked host only`() {
-        assertFalse(filter.accepts(exchangeTo("blocked.com")))
-        assertTrue(filter.accepts(exchangeTo("sub.blocked.com")))
-        assertTrue(filter.accepts(exchangeTo(null)))
+        assertFalse(filter.accepts(eventTo("blocked.com")))
+        assertTrue(filter.accepts(eventTo("sub.blocked.com")))
+        assertTrue(filter.accepts(eventTo(null)))
     }
 
-    private fun exchangeTo(host: String?) =
-        exchange(request = ExchangeRequest(host, 443, "GET", bodyBytes = null))
+    private fun eventTo(host: String?) =
+        event(exchange(request = ExchangeRequest(host, 443, "GET", bodyBytes = null)))
 }

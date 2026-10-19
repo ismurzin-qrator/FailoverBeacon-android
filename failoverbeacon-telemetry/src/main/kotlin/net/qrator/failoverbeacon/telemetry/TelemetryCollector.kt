@@ -15,13 +15,15 @@ class TelemetryCollector(
     failureSampleRate: Double,
     successSampleRate: Double
 ) : ExchangeSubscriber {
+    private val eventMapper = EventMapper()
     private val filter = EventFilter(consentSource, blockedHosts)
     private val sampler = Sampler(failureSampleRate, successSampleRate)
-    private val eventMapper = EventMapper()
 
     override fun onExchange(exchange: Exchange) {
-        if (!filter.accepts(exchange) || !sampler.keeps(exchange)) return
-        val event = eventMapper.toEvent(exchange, sampler.fraction(exchange))
-        SdkRegistry.logger.debug { "Telemetry event $event" }
+        val event = eventMapper.toEvent(exchange)
+        if (!filter.accepts(event) || !sampler.keeps(event)) return
+        SdkRegistry.logger.debug {
+            "Telemetry event $event, samplingFraction=${sampler.fraction(event)}"
+        }
     }
 }

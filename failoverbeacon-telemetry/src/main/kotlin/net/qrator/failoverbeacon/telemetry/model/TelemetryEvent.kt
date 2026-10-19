@@ -9,7 +9,6 @@ package net.qrator.failoverbeacon.telemetry.model
 internal data class TelemetryEvent(
     val callId: Long,
     val resendCount: Int,
-    val samplingFraction: Double,
     val host: String?,
     val port: Int?,
     val method: String?,

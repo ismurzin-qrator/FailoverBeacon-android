@@ -27,6 +27,7 @@ class TelemetryEndToEndTest {
     private val client = OkHttpClient.Builder().dns {
         listOf(LOOPBACK)
     }.build().withFailoverBeacon()
+    private val previousOutput = SdkRegistry.logger.output
 
     @BeforeTest
     fun setUp() {
@@ -38,6 +39,7 @@ class TelemetryEndToEndTest {
         val config = FailoverBeaconConfig.Builder()
             .beacons(listOf("https://beacon.example"))
             .blockedHosts(listOf("пример.рф"))
+            .failureSampleRate(0.0)
             .successSampleRate(1.0)
             .build()
         FailoverBeacon.initialize(RuntimeEnvironment.getApplication(), config)
@@ -48,30 +50,24 @@ class TelemetryEndToEndTest {
         server.shutdown()
         SdkRegistry.clear()
         FailoverBeacon.setLogLevel(Log.WARN)
-        FailoverBeacon.setLogger(null)
+        SdkRegistry.logger.output = previousOutput
     }
 
     @Test
-    fun `reports a call to a host that is not blocked`() {
+    fun `reports every host but a blocked internationalized one`() {
+        execute("пример.рф")
         execute("a.test")
 
         assertTrue(events.single().contains("host=a.test"), events.single())
     }
 
     @Test
-    fun `does not report a blocked internationalized host`() {
-        execute("пример.рф")
-
-        assertEquals(emptyList(), events)
-    }
-
-    @Test
-    fun `does not report after consent is withdrawn`() {
+    fun `stops reporting once consent is withdrawn`() {
+        execute("a.test")
         FailoverBeacon.setConsent(Consent.NOT_GRANTED)
-
         execute("a.test")
 
-        assertEquals(emptyList(), events)
+        assertEquals(1, events.size)
     }
 
     private fun execute(host: String) {

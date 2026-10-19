@@ -51,7 +51,6 @@ class EventMapperTest {
         val expected = TelemetryEvent(
             callId = 7,
             resendCount = 1,
-            samplingFraction = 0.1,
             host = "a.com",
             port = 443,
             method = "POST",
@@ -74,12 +73,12 @@ class EventMapperTest {
                 EventAttempt("1.1.1.1", ProxyType.HTTP, 20, AttemptResult.CONNECTED, null, null)
             )
         )
-        assertEquals(expected, mapper.toEvent(exchange, samplingFraction = 0.1))
+        assertEquals(expected, mapper.toEvent(exchange))
     }
 
     @Test
     fun `an error status is an HTTP error`() {
-        val event = toEvent(exchange(response = ExchangeResponse(404, null, 0)))
+        val event = mapper.toEvent(exchange(response = ExchangeResponse(404, null, 0)))
 
         assertEquals(ErrorType.HTTP_ERROR, event.type)
         assertEquals(Phase.APPLICATION, event.phase)
@@ -88,7 +87,7 @@ class EventMapperTest {
 
     @Test
     fun `a canceled exchange is abandoned`() {
-        val event = toEvent(exchange(outcome = ExchangeOutcome.Canceled))
+        val event = mapper.toEvent(exchange(outcome = ExchangeOutcome.Canceled))
 
         assertEquals(ErrorType.ABANDONED, event.type)
         assertEquals(Phase.APPLICATION, event.phase)
@@ -97,7 +96,7 @@ class EventMapperTest {
     @Test
     fun `a failure has its step, phase and type`() {
         val untrusted = ConnectResult.Failed(ExchangeStep.TLS, FailureType.CERT_UNTRUSTED)
-        val event = toEvent(
+        val event = mapper.toEvent(
             exchange(
                 response = null,
                 attempts = listOf(attempt("1.1.1.1", untrusted, connectNanos = 40 * MS)),
@@ -123,7 +122,7 @@ class EventMapperTest {
 
     @Test
     fun `a connect the client stopped is canceled, whoever stopped it`() {
-        val event = toEvent(
+        val event = mapper.toEvent(
             exchange(
                 attempts = listOf(
                     attempt("1.1.1.1", ConnectResult.Superseded, connectNanos = 300 * MS),
@@ -143,7 +142,7 @@ class EventMapperTest {
 
     @Test
     fun `a follow-up that failed before the client named its target has none`() {
-        val event = toEvent(
+        val event = mapper.toEvent(
             exchange(
                 request = ExchangeRequest(null, null, null, null),
                 response = null,
@@ -161,8 +160,6 @@ class EventMapperTest {
         assertEquals(ErrorType.DNS_NAME_NOT_RESOLVED, event.type)
         assertEquals(Phase.DNS, event.phase)
     }
-
-    private fun toEvent(exchange: Exchange) = mapper.toEvent(exchange, samplingFraction = 1.0)
 
     private companion object {
         val TLS = ExchangeTls("TLSv1.3", "TLS_AES_128_GCM_SHA256", "CN=Test CA")
