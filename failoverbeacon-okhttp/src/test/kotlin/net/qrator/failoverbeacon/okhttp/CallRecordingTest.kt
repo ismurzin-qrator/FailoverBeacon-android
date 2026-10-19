@@ -12,11 +12,14 @@ import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.nio.file.Files
+import java.security.cert.X509Certificate
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import javax.net.SocketFactory
+import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.X509TrustManager
 import kotlin.concurrent.thread
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -385,6 +388,22 @@ class CallRecordingTest {
         assertNull(second.dnsAddresses)
         assertEquals(first.connection?.tls, second.connection?.tls)
         assertNotNull(second.connection?.tls)
+    }
+
+    @Test
+    fun `the issuer is read without verifying the chain again`() {
+        server.useHttps(serverCertificates.sslSocketFactory(), false)
+        server.enqueue(MockResponse().setBody("secure"))
+        val trustManager = object : X509TrustManager by clientCertificates.trustManager {
+            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+        }
+        val sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(null, arrayOf(trustManager), null)
+        val client = client().sslSocketFactory(sslContext.socketFactory, trustManager).build()
+
+        execute(client, "https://localhost:${server.port}/")
+
+        assertEquals("CN=Test CA", exchanges.single().connection?.tls?.issuer)
     }
 
     @Test

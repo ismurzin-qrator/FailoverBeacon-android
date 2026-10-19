@@ -3,7 +3,8 @@ package net.qrator.failoverbeacon.telemetry.model
 /**
  * [step] is where the exchange failed, null if it did not. Durations are in milliseconds.
  * [protocol], [serverIp] and [proxy] are null without a connection, [tls] also for one without TLS.
- * Through a proxy [serverIp] and [dnsAddresses] are the proxy's.
+ * Through an HTTP proxy [serverIp] and [dnsAddresses] are the proxy's.
+ * Through SOCKS [serverIp] is the server's name and [dnsAddresses] is null.
  */
 internal data class TelemetryEvent(
     val callId: Long,

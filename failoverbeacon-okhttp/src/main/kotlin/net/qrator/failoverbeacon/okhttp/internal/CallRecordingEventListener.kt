@@ -119,7 +119,7 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
             serverPort = route.address.url.port,
             protocol = connection.protocol().toString(),
             proxy = proxyTypeMapper.toProxyType(route.proxy),
-            tls = connection.handshake()?.let(tlsMapper::toTls)
+            tls = connection.handshake()?.let { tlsMapper.toTls(it, connection.socket()) }
         )
     }
 
