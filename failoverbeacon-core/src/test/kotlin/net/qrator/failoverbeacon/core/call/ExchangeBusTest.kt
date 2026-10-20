@@ -13,6 +13,7 @@ import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeTimings
 import net.qrator.failoverbeacon.core.logging.LogOutput
+import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 
 class ExchangeBusTest {
     private val logged = mutableListOf<Pair<Int, Throwable?>>()
@@ -29,7 +30,8 @@ class ExchangeBusTest {
         attempts = emptyList(),
         timings = ExchangeTimings(null, null, null, null, null, null),
         durationNanos = 0,
-        outcome = ExchangeOutcome.Canceled(step = null)
+        outcome = ExchangeOutcome.Canceled(step = null),
+        network = NetworkSnapshot.Unknown
     )
 
     @BeforeTest

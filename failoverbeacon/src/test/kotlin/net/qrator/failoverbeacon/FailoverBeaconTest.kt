@@ -2,6 +2,7 @@ package net.qrator.failoverbeacon
 
 import android.app.Application
 import android.content.ContextWrapper
+import android.net.ConnectivityManager
 import android.util.Log
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
@@ -17,11 +18,11 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
-import net.qrator.failoverbeacon.core.time.NanoTimeClock
 import net.qrator.failoverbeacon.internal.LogcatLogger
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowApplication
 import org.robolectric.shadows.ShadowLog
 
@@ -79,6 +80,7 @@ class FailoverBeaconTest {
 
         assertSame(first, SdkRegistry.instance)
         assertEquals(TrackingConsent.PENDING, SdkRegistry.instance?.consent)
+        assertSame<Any?>(first?.networkSource, networkCallbacks().single())
         assertEquals(listOf(Log.WARN to "Already initialized. Ignored"), logs)
     }
 
@@ -106,6 +108,7 @@ class FailoverBeaconTest {
         repeat(ROUNDS) {
             SdkRegistry.clear()
             logs.clear()
+            val callbacksBefore = networkCallbacks()
             val threads = 8
             val start = CountDownLatch(1)
             val pool = Executors.newFixedThreadPool(threads)
@@ -121,6 +124,10 @@ class FailoverBeaconTest {
 
             assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS))
             assertNotNull(SdkRegistry.instance)
+            assertSame<Any?>(
+                SdkRegistry.instance?.networkSource,
+                (networkCallbacks() - callbacksBefore).single()
+            )
             assertEquals(threads - 1, logs.count { it.second == "Already initialized. Ignored" })
         }
     }
@@ -139,6 +146,9 @@ class FailoverBeaconTest {
         assertTrue(logs.isEmpty())
         assertTrue(ShadowLog.getLogsForTag("FailoverBeacon").isEmpty())
     }
+
+    private fun networkCallbacks() =
+        shadowOf(app.getSystemService(ConnectivityManager::class.java)).networkCallbacks.toSet()
 
     private companion object {
         const val ROUNDS = 20

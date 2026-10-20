@@ -28,6 +28,7 @@ import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.model.FailureType
 import net.qrator.failoverbeacon.core.logging.LogOutput
+import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 import net.qrator.failoverbeacon.core.time.MonotonicClock
 import net.qrator.failoverbeacon.okhttp.internal.mapper.OkHttpFailureMapper
 import okhttp3.Call
@@ -191,8 +192,9 @@ class CallRecordingEventListenerTest {
         assertEquals(ConnectResult.Superseded, loser.result)
     }
 
-    private fun listener(clock: MonotonicClock) =
-        CallRecordingEventListener(CallRecorder(clock, OkHttpFailureMapper(), published::add))
+    private fun listener(clock: MonotonicClock) = CallRecordingEventListener(
+        CallRecorder(clock, { NetworkSnapshot.Unknown }, OkHttpFailureMapper(), published::add)
+    )
 
     private fun call(client: OkHttpClient): Call =
         client.newCall(Request.Builder().url("http://example.test/").build())

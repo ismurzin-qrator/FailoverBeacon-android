@@ -17,7 +17,12 @@ internal class FailoverBeaconEventListenerFactory(private val appFactory: EventL
         val sdk = SdkRegistry.instance ?: return appListener
         if (!sdk.exchangeBus.hasSubscribers) return appListener
         if (CallRecordingEventListener.incompatible) return appListener
-        val callRecorder = CallRecorder(sdk.clock, failureMapper, sdk.exchangeBus)
+        val callRecorder = CallRecorder(
+            clock = sdk.clock,
+            networkSource = sdk.networkSource,
+            failureMapper = failureMapper,
+            publisher = sdk.exchangeBus
+        )
         val sdkListener = CallRecordingEventListener(callRecorder)
         return combine(sdkListener, appListener)
     }

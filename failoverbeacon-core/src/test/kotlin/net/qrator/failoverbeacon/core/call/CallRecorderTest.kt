@@ -22,11 +22,28 @@ import net.qrator.failoverbeacon.core.call.model.FailureType
 import net.qrator.failoverbeacon.core.call.model.ProxyType
 import net.qrator.failoverbeacon.core.call.state.CallStopReason
 import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
+import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
+import net.qrator.failoverbeacon.core.network.model.NetworkTransport
 
 class CallRecorderTest {
     private var time = 0L
+    private var network: NetworkSnapshot = NetworkSnapshot.Unknown
     private val published = mutableListOf<Exchange>()
-    private val recorder = CallRecorder({ time }, TestFailureMapper, published::add)
+    private val recorder = CallRecorder({ time }, { network }, TestFailureMapper, published::add)
+
+    @Test
+    fun `each exchange keeps the network it started on`() {
+        network = WIFI
+        start()
+        acquire()
+        network = CELLULAR
+        respond(302)
+        acquire(host = "b.com")
+        respond(200)
+        recorder.callEnd()
+
+        assertEquals(listOf(WIFI, CELLULAR), published.map { it.network })
+    }
 
     @Test
     fun `a pooled connection to another server ends the exchange the app gave up`() {
@@ -315,7 +332,7 @@ class CallRecorderTest {
             CallStopReason.TIMED_OUT
         )) {
             val published = mutableListOf<Exchange>()
-            val recorder = CallRecorder({ time }, TestFailureMapper, published::add)
+            val recorder = CallRecorder({ time }, { network }, TestFailureMapper, published::add)
             time = 0
             recorder.callStart("https", "a.com", 443, "GET")
             recorder.connectionAcquired(
@@ -445,5 +462,19 @@ class CallRecorderTest {
         val REFUSED = ConnectException("refused")
         val RESET = SocketException("Connection reset")
         val CLOSED = SocketException("Socket closed")
+        val WIFI = connected(NetworkTransport.WIFI)
+        val CELLULAR = connected(NetworkTransport.CELLULAR)
+
+        fun connected(transport: NetworkTransport) = NetworkSnapshot.Connected(
+            transport = transport,
+            vpn = false,
+            validated = true,
+            captivePortal = false,
+            metered = false,
+            roaming = false,
+            downstreamKbps = null,
+            upstreamKbps = null,
+            signalStrength = null
+        )
     }
 }

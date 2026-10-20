@@ -1,5 +1,7 @@
 package net.qrator.failoverbeacon.core.call.model
 
+import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
+
 /**
  * One HTTP request and its response.
  * [callId] is the same for every exchange of one call.
@@ -19,5 +21,6 @@ data class Exchange(
     val attempts: List<ConnectAttempt>,
     val timings: ExchangeTimings,
     val durationNanos: Long,
-    val outcome: ExchangeOutcome
+    val outcome: ExchangeOutcome,
+    val network: NetworkSnapshot
 )

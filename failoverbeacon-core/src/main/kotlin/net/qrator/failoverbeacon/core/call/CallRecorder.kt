@@ -11,11 +11,13 @@ import net.qrator.failoverbeacon.core.call.state.CallStopReason
 import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
 import net.qrator.failoverbeacon.core.call.state.ExchangeState
 import net.qrator.failoverbeacon.core.call.state.Target
+import net.qrator.failoverbeacon.core.network.NetworkSource
 import net.qrator.failoverbeacon.core.time.MonotonicClock
 
 /** Builds the exchanges of one call from its steps and passes each finished one to [publisher]. */
 class CallRecorder(
     private val clock: MonotonicClock,
+    private val networkSource: NetworkSource,
     failureMapper: FailureMapper,
     private val publisher: ExchangePublisher
 ) {
@@ -242,7 +244,8 @@ class CallRecorder(
             method = if (isFirst) callMethod else resent?.method,
             callId = callId,
             resendCount = exchangeCount,
-            startNanos = now
+            startNanos = now,
+            network = networkSource.currentNetwork()
         )
         nextTarget = null
         exchangeCount++

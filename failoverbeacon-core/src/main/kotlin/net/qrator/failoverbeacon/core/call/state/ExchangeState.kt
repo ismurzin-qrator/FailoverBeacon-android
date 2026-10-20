@@ -2,6 +2,7 @@ package net.qrator.failoverbeacon.core.call.state
 
 import net.qrator.failoverbeacon.core.call.model.ExchangeConnection
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 import net.qrator.failoverbeacon.core.util.Interval
 
 /** What happened during one exchange, as reported. */
@@ -10,7 +11,8 @@ internal class ExchangeState(
     var method: String?,
     val callId: Long,
     val resendCount: Int,
-    val startNanos: Long
+    val startNanos: Long,
+    val network: NetworkSnapshot
 ) {
     val dnsInterval = Interval()
     val tlsInterval = Interval()
