@@ -185,6 +185,7 @@ class CallRecordingTest {
         assertEquals(302, redirect.response?.statusCode)
         assertEquals(redirect.callId, followUp.callId)
         assertEquals(1, followUp.resendCount)
+        assertEquals("GET", followUp.request.method)
         assertEquals(200, followUp.response?.statusCode)
         assertTrue(followUp.reusedConnection)
         assertEquals(LOOPBACK_IP, followUp.connection?.peerAddress)

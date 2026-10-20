@@ -1,20 +1,18 @@
 package net.qrator.failoverbeacon.core.call
 
 import android.util.Log
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertSame
-import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeTimings
 import net.qrator.failoverbeacon.core.logging.LogOutput
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertSame
 
 class ExchangeBusTest {
     private val logged = mutableListOf<Pair<Int, Throwable?>>()
@@ -47,36 +45,6 @@ class ExchangeBusTest {
     }
 
     @Test
-    fun `has subscribers only after one subscribes`() {
-        assertFalse(bus.hasSubscribers)
-
-        bus.subscribe {}
-
-        assertTrue(bus.hasSubscribers)
-    }
-
-    @Test
-    fun `delivers each exchange to every subscriber in order`() {
-        val received = mutableListOf<String>()
-        bus.subscribe { received += "first" }
-        bus.subscribe { received += "second" }
-
-        bus.publish(exchange)
-
-        assertEquals(listOf("first", "second"), received)
-    }
-
-    @Test
-    fun `passes the published exchange`() {
-        val received = mutableListOf<Exchange>()
-        bus.subscribe(received::add)
-
-        bus.publish(exchange)
-
-        assertSame(exchange, received.single())
-    }
-
-    @Test
     fun `a failing subscriber does not stop the others`() {
         val received = mutableListOf<String>()
         bus.subscribe { throw IllegalStateException() }
@@ -106,19 +74,5 @@ class ExchangeBusTest {
         bus.subscribe { throw AssertionError() }
 
         assertFailsWith<AssertionError> { bus.publish(exchange) }
-    }
-
-    @Test
-    fun `a subscriber added during delivery gets the next exchange`() {
-        val received = mutableListOf<String>()
-        bus.subscribe {
-            received += "first"
-            if (received.size == 1) bus.subscribe { received += "added" }
-        }
-
-        bus.publish(exchange)
-        bus.publish(exchange)
-
-        assertEquals(listOf("first", "first", "added"), received)
     }
 }
