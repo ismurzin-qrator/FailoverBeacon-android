@@ -39,7 +39,7 @@ class ErrorTypeMapperTest {
     }
 
     @Test
-    fun `other failures are named by their step`() {
+    fun `other and untyped failures are named by their step`() {
         val expected = mapOf(
             ExchangeStep.DNS to ErrorType.DNS_FAILED,
             ExchangeStep.TCP to ErrorType.TCP_FAILED,
@@ -48,10 +48,12 @@ class ErrorTypeMapperTest {
             ExchangeStep.RESPONSE to ErrorType.HTTP_FAILED
         )
 
-        val actual = expected.mapValues { (step, _) -> toErrorType(step, FailureType.OTHER) }
+        listOf(FailureType.OTHER, null).forEach { type ->
+            val actual = expected.mapValues { (step, _) -> toErrorType(step, type) }
 
-        assertEquals(expected, actual)
-        assertEquals(ErrorType.UNKNOWN, toErrorType(null, FailureType.OTHER))
+            assertEquals(expected, actual, "$type")
+            assertEquals(ErrorType.UNKNOWN, toErrorType(null, type), "$type")
+        }
     }
 
     @Test
@@ -84,12 +86,6 @@ class ErrorTypeMapperTest {
             ErrorType.HTTP_RESPONSE_INVALID,
             toErrorType(ExchangeStep.RESPONSE, FailureType.PROTOCOL_ERROR)
         )
-    }
-
-    @Test
-    fun `a failure without a type is unknown`() {
-        assertEquals(ErrorType.UNKNOWN, toErrorType(ExchangeStep.TCP, null))
-        assertEquals(ErrorType.UNKNOWN, toErrorType(null, null))
     }
 
     @Test

@@ -11,7 +11,6 @@ internal class ErrorTypeMapper {
         type: FailureType?,
         response: ExchangeResponse?
     ): ErrorType = when (type) {
-        null -> ErrorType.UNKNOWN
         FailureType.NAME_NOT_RESOLVED -> ErrorType.DNS_NAME_NOT_RESOLVED
         FailureType.TIMED_OUT -> timedOut(step)
         FailureType.CLOSED -> closed(step, response)
@@ -27,7 +26,7 @@ internal class ErrorTypeMapper {
         FailureType.PROTOCOL_ERROR -> protocolError(step)
         FailureType.REDIRECT_LOOP -> ErrorType.HTTP_RESPONSE_REDIRECT_LOOP
         FailureType.STREAM_RESET -> ErrorType.HTTP_PROTOCOL_ERROR
-        FailureType.OTHER -> otherError(step)
+        FailureType.OTHER, null -> otherError(step)
     }
 
     private fun timedOut(step: ExchangeStep?): ErrorType = when (step) {
