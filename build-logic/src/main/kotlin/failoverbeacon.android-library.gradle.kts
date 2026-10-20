@@ -1,3 +1,4 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
@@ -50,6 +51,10 @@ kotlin {
 tasks.withType<JavaCompile>().configureEach {
     // Java 8 bytecode is pinned on purpose; "options" only reports that 8 is obsolete on JDK 21.
     options.compilerArgs.addAll(listOf("-Xlint:all,-options", "-Werror"))
+}
+
+tasks.withType<Test>().configureEach {
+    testLogging.exceptionFormat = TestExceptionFormat.FULL
 }
 
 spotless {
