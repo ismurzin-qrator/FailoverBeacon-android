@@ -32,7 +32,7 @@ class LogcatLoggerTest {
     fun `passes the throwable`() {
         val error = IllegalStateException()
 
-        LogcatLogger.log(Log.WARN, "message", error)
+        LogcatLogger.log(Log.ERROR, "message", error)
 
         assertSame(error, ShadowLog.getLogsForTag("FailoverBeacon").single().throwable)
     }

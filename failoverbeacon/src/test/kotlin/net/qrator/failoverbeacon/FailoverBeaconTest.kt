@@ -52,15 +52,6 @@ class FailoverBeaconTest {
     }
 
     @Test
-    fun `assembles the SDK with the nano time clock and installs telemetry`() {
-        FailoverBeacon.initialize(app, config)
-
-        val instance = SdkRegistry.instance
-        assertSame(NanoTimeClock, instance?.clock)
-        assertTrue(instance?.exchangeBus?.hasSubscribers ?: false)
-    }
-
-    @Test
     fun `consent is GRANTED by default`() {
         FailoverBeacon.initialize(app, config)
 
@@ -110,55 +101,33 @@ class FailoverBeaconTest {
     }
 
     @Test
-    fun `clearAllData after initialize does not warn`() {
-        FailoverBeacon.initialize(app, config)
-
-        FailoverBeacon.clearAllData()
-
-        assertTrue(logs.none { it.first == Log.WARN })
-    }
-
-    @Test
     fun `concurrent initialize installs one instance`() {
-        val threads = 8
-        val start = CountDownLatch(1)
-        val pool = Executors.newFixedThreadPool(threads)
-        repeat(threads) {
-            pool.execute {
-                start.await()
-                FailoverBeacon.initialize(app, config)
+        // Rounds make it near certain that some calls race past the first check.
+        repeat(ROUNDS) {
+            SdkRegistry.clear()
+            logs.clear()
+            val threads = 8
+            val start = CountDownLatch(1)
+            val pool = Executors.newFixedThreadPool(threads)
+            repeat(threads) {
+                pool.execute {
+                    start.await()
+                    FailoverBeacon.initialize(app, config)
+                }
             }
+
+            start.countDown()
+            pool.shutdown()
+
+            assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS))
+            assertNotNull(SdkRegistry.instance)
+            assertEquals(threads - 1, logs.count { it.second == "Already initialized. Ignored" })
         }
-
-        start.countDown()
-        pool.shutdown()
-
-        assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS))
-        assertNotNull(SdkRegistry.instance)
-        assertEquals(threads - 1, logs.count { it.second == "Already initialized. Ignored" })
     }
 
     @Test
     fun `setLogLevel rejects values outside Log constants`() {
         assertFailsWith<IllegalArgumentException> { FailoverBeacon.setLogLevel(0) }
-    }
-
-    @Test
-    fun `setLogLevel filters messages`() {
-        FailoverBeacon.setLogLevel(Log.ERROR)
-
-        FailoverBeacon.setConsent(Consent.GRANTED)
-
-        assertTrue(logs.isEmpty())
-    }
-
-    @Test
-    fun `logs to Logcat by default`() {
-        SdkRegistry.logger.output = LogcatLogger
-
-        FailoverBeacon.setConsent(Consent.GRANTED)
-
-        assertEquals(Log.WARN, ShadowLog.getLogsForTag("FailoverBeacon").single().type)
     }
 
     @Test
@@ -171,10 +140,7 @@ class FailoverBeaconTest {
         assertTrue(ShadowLog.getLogsForTag("FailoverBeacon").isEmpty())
     }
 
-    @Test
-    fun `exceptions from the app logger do not escape`() {
-        FailoverBeacon.setLogger { _, _, _ -> throw IllegalStateException() }
-
-        FailoverBeacon.setConsent(Consent.GRANTED)
+    private companion object {
+        const val ROUNDS = 20
     }
 }

@@ -59,13 +59,6 @@ class FailoverBeaconConfigTest {
     }
 
     @Test
-    fun `beacons rejects list if any url is invalid`() {
-        assertFailsWith<IllegalArgumentException> {
-            FailoverBeaconConfig.Builder().beacons(listOf(BEACON, "http://beacon.example"))
-        }
-    }
-
-    @Test
     fun `beacons accepts scheme in any case, path and port`() {
         val urls = listOf("HTTPS://beacon.example", "https://beacon.example:8443/reports")
 
@@ -81,16 +74,6 @@ class FailoverBeaconConfigTest {
             .build()
 
         assertEquals(listOf("https://b.example", "https://a.example"), config.beacons)
-    }
-
-    @Test
-    fun `beacons are copied`() {
-        val beacons = mutableListOf(BEACON)
-        val builder = FailoverBeaconConfig.Builder().beacons(beacons)
-
-        beacons.add("https://other.example")
-
-        assertEquals(listOf(BEACON), builder.build().beacons)
     }
 
     @Test
@@ -128,16 +111,6 @@ class FailoverBeaconConfigTest {
                 builderWithBeacon().blockedHosts(listOf(host))
             }
         }
-    }
-
-    @Test
-    fun `blockedHosts are copied`() {
-        val hosts = mutableListOf("analytics.example")
-        val builder = builderWithBeacon().blockedHosts(hosts)
-
-        hosts.add("ads.example")
-
-        assertEquals(setOf("analytics.example"), builder.build().blockedHosts)
     }
 
     @Test

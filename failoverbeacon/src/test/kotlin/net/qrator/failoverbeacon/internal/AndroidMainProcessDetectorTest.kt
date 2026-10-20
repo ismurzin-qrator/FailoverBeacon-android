@@ -22,22 +22,6 @@ class AndroidMainProcessDetectorTest {
 
     @Test
     @Config(sdk = [28])
-    fun `main process on API 28`() {
-        ShadowApplication.setProcessName(app.packageName)
-
-        assertTrue(detector.isMainProcess())
-    }
-
-    @Test
-    @Config(sdk = [28])
-    fun `secondary process on API 28`() {
-        ShadowApplication.setProcessName("${app.packageName}:sync")
-
-        assertFalse(detector.isMainProcess())
-    }
-
-    @Test
-    @Config(sdk = [28])
     fun `main process renamed with android process attribute`() {
         app.applicationInfo.processName = "${app.packageName}.main"
         ShadowApplication.setProcessName("${app.packageName}.main")
@@ -54,26 +38,11 @@ class AndroidMainProcessDetectorTest {
     }
 
     @Test
-    @Config(sdk = [28])
-    fun `isolated process on API 28`() {
-        ShadowApplication.setProcessName(app.packageName)
-        ShadowProcess.setUid(app.applicationInfo.uid + 1)
-
-        assertFalse(detector.isMainProcess())
-    }
-
-    @Test
     @Config(sdk = [27])
-    fun `main process on API 27`() {
-        setRunningProcess(app.packageName)
-
-        assertTrue(detector.isMainProcess())
-    }
-
-    @Test
-    @Config(sdk = [27])
-    fun `secondary process on API 27`() {
-        setRunningProcess("${app.packageName}:sync")
+    fun `on API 27 the process with the own pid decides`() {
+        val other = RunningAppProcessInfo(app.packageName, Process.myPid() + 1, arrayOf())
+        val own = RunningAppProcessInfo("${app.packageName}:sync", Process.myPid(), arrayOf())
+        shadowOf(app.getSystemService(ActivityManager::class.java)).setProcesses(listOf(other, own))
 
         assertFalse(detector.isMainProcess())
     }

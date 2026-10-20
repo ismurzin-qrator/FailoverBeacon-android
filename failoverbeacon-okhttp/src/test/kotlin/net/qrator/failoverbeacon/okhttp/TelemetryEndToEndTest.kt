@@ -62,6 +62,14 @@ class TelemetryEndToEndTest {
     }
 
     @Test
+    fun `samples failures and successes at the configured rates`() {
+        execute("a.test", status = 500)
+        execute("a.test")
+
+        assertTrue(events.single().contains("statusCode=200"), events.single())
+    }
+
+    @Test
     fun `stops reporting once consent is withdrawn`() {
         execute("a.test")
         FailoverBeacon.setConsent(Consent.NOT_GRANTED)
@@ -70,8 +78,8 @@ class TelemetryEndToEndTest {
         assertEquals(1, events.size)
     }
 
-    private fun execute(host: String) {
-        server.enqueue(MockResponse().setBody("ok"))
+    private fun execute(host: String, status: Int = 200) {
+        server.enqueue(MockResponse().setResponseCode(status).setBody("ok"))
         val request = Request.Builder().url("http://$host:${server.port}/").build()
         client.newCall(request).execute().use { it.body.string() }
     }
