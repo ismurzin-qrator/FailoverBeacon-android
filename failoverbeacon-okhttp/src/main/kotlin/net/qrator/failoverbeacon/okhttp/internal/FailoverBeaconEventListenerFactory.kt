@@ -22,18 +22,20 @@ internal class FailoverBeaconEventListenerFactory(private val appFactory: EventL
         return combine(sdkListener, appListener)
     }
 
-    @SuppressSignatureCheck(since = "5.3")
     private fun combine(first: EventListener, second: EventListener): EventListener {
         if (second === EventListener.NONE) return first
         if (plusAvailable) {
             try {
-                return first + second
+                return plus(first, second)
             } catch (_: NoSuchMethodError) {
                 plusAvailable = false
             }
         }
         return CompositeEventListener(first, second)
     }
+
+    @SuppressSignatureCheck(since = "5.3")
+    private fun plus(first: EventListener, second: EventListener): EventListener = first + second
 
     private companion object {
         @Volatile

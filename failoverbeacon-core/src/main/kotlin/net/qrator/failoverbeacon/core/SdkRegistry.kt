@@ -2,9 +2,7 @@ package net.qrator.failoverbeacon.core
 
 import net.qrator.failoverbeacon.core.logging.InternalLogger
 
-/** Process-wide state of the SDK. */
 object SdkRegistry {
-    /** Logger for all SDK code. */
     val logger: InternalLogger = InternalLogger()
 
     /** The running SDK; null until it is installed. */

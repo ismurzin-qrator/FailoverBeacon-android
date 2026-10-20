@@ -4,7 +4,6 @@ import android.content.Context
 import net.qrator.failoverbeacon.core.call.ExchangeBus
 import net.qrator.failoverbeacon.core.time.MonotonicClock
 
-/** The running SDK. */
 class SdkInstance(
     val appContext: Context,
     @Volatile override var consent: TrackingConsent,

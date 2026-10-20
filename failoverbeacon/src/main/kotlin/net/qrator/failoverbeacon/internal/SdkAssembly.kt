@@ -6,7 +6,6 @@ import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.call.ExchangeBus
 import net.qrator.failoverbeacon.core.time.NanoTimeClock
 
-/** Builds the SDK. */
 internal object SdkAssembly {
     fun createInstance(appContext: Context, consent: TrackingConsent): SdkInstance = SdkInstance(
         appContext = appContext,

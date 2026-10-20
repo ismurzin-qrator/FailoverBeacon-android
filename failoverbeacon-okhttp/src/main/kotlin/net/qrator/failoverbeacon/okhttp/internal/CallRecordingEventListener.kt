@@ -25,7 +25,6 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 
-/** Records one call into [recorder]. */
 internal class CallRecordingEventListener(private val recorder: CallRecorder) : EventListener() {
     private val proxyTypeMapper = OkHttpProxyTypeMapper()
     private val tlsMapper = OkHttpTlsMapper()
