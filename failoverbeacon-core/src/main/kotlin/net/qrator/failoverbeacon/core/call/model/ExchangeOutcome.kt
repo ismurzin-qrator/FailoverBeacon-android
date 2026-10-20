@@ -6,6 +6,6 @@ sealed interface ExchangeOutcome {
     /** [step] is the step that failed, [type] is null if no failure was reported. */
     data class Failed(val step: ExchangeStep?, val type: FailureType?) : ExchangeOutcome
 
-    /** The app canceled the call. */
-    data object Canceled : ExchangeOutcome
+    /** The app canceled the call during [step]. */
+    data class Canceled(val step: ExchangeStep?) : ExchangeOutcome
 }

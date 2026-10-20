@@ -29,7 +29,10 @@ class SamplerTest {
             0.9,
             sampler.fraction(event(exchange(response = ExchangeResponse(404, null, 0))))
         )
-        assertEquals(0.9, sampler.fraction(event(exchange(outcome = ExchangeOutcome.Canceled))))
+        assertEquals(
+            0.9,
+            sampler.fraction(event(exchange(outcome = ExchangeOutcome.Canceled(step = null))))
+        )
     }
 
     @Test

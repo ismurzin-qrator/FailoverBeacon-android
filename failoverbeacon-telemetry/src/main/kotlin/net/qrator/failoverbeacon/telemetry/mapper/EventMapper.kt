@@ -19,7 +19,11 @@ internal class EventMapper {
 
     fun toEvent(exchange: Exchange): TelemetryEvent {
         val outcome = exchange.outcome
-        val failedStep = (outcome as? ExchangeOutcome.Failed)?.step
+        val failedStep = when (outcome) {
+            ExchangeOutcome.Ok -> null
+            is ExchangeOutcome.Canceled -> outcome.step
+            is ExchangeOutcome.Failed -> outcome.step
+        }
         val statusCode = exchange.response?.statusCode
         val connection = exchange.connection
         val type = toErrorType(outcome, exchange.response)
@@ -57,7 +61,7 @@ internal class EventMapper {
                     ErrorType.OK
                 }
 
-            ExchangeOutcome.Canceled -> ErrorType.ABANDONED
+            is ExchangeOutcome.Canceled -> ErrorType.ABANDONED
 
             is ExchangeOutcome.Failed ->
                 errorTypeMapper.toErrorType(outcome.step, outcome.type, response)

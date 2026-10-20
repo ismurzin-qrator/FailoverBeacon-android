@@ -31,7 +31,7 @@ class ExchangeBusTest {
         attempts = emptyList(),
         timings = ExchangeTimings(null, null, null, null, null, null),
         durationNanos = 0,
-        outcome = ExchangeOutcome.Canceled
+        outcome = ExchangeOutcome.Canceled(step = null)
     )
 
     @Test

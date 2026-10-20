@@ -118,7 +118,7 @@ class CallRecordingEventListenerTest {
         call.cancel()
         listener.callFailed(call, IOException("Canceled"))
 
-        assertEquals(ExchangeOutcome.Canceled, published.single().outcome)
+        assertEquals(ExchangeOutcome.Canceled(ExchangeStep.DNS), published.single().outcome)
     }
 
     @Test

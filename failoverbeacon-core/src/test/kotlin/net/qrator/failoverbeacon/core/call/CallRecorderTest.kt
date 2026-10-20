@@ -586,7 +586,46 @@ class CallRecorderTest {
             ),
             exchange.attempts.map { it.result }
         )
-        assertEquals(ExchangeOutcome.Canceled, exchange.outcome)
+        assertEquals(ExchangeOutcome.Canceled(ExchangeStep.TCP), exchange.outcome)
+    }
+
+    @Test
+    fun `a cancel during the handshake is canceled at TLS`() {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.connectStart("1.1.1.1", 443, ProxyType.DIRECT)
+        recorder.tlsStart()
+        recorder.connectFailed(
+            "1.1.1.1",
+            443,
+            SocketException("Socket closed"),
+            ExchangeStep.TLS,
+            ConnectStopReason.CALL
+        )
+        recorder.callFailed(IOException("Canceled"), CallStopReason.CANCELED)
+
+        assertEquals(ExchangeOutcome.Canceled(ExchangeStep.TLS), published.single().outcome)
+    }
+
+    @Test
+    fun `a cancel while waiting for the response is canceled at RESPONSE`() {
+        recorder.callStart("a.com", 443, "GET")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
+        recorder.requestHeadersStart()
+        recorder.requestHeadersEnd("a.com", 443, "GET")
+        recorder.responseFailed(IOException("Canceled"))
+        recorder.callFailed(IOException("Canceled"), CallStopReason.CANCELED)
+
+        assertEquals(ExchangeOutcome.Canceled(ExchangeStep.RESPONSE), published.single().outcome)
+    }
+
+    @Test
+    fun `a cancel between the connect and the request is canceled at no step`() {
+        recorder.callStart("a.com", 443, "GET")
+        connect("1.1.1.1")
+        recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
+        recorder.callFailed(IOException("Canceled"), CallStopReason.CANCELED)
+
+        assertEquals(ExchangeOutcome.Canceled(step = null), published.single().outcome)
     }
 
     @Test

@@ -86,11 +86,12 @@ class EventMapperTest {
     }
 
     @Test
-    fun `a canceled exchange is abandoned`() {
-        val event = mapper.toEvent(exchange(outcome = ExchangeOutcome.Canceled))
+    fun `a canceled exchange is abandoned at its step`() {
+        val event = mapper.toEvent(exchange(outcome = ExchangeOutcome.Canceled(ExchangeStep.TLS)))
 
         assertEquals(ErrorType.ABANDONED, event.type)
         assertEquals(Phase.APPLICATION, event.phase)
+        assertEquals(Step.TLS, event.step)
     }
 
     @Test

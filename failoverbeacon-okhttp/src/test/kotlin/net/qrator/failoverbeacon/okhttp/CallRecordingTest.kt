@@ -364,7 +364,7 @@ class CallRecordingTest {
         assertFailsWith<IOException> { call.execute() }
         canceler.join()
 
-        assertEquals(ExchangeOutcome.Canceled, exchanges.single().outcome)
+        assertEquals(ExchangeOutcome.Canceled(ExchangeStep.RESPONSE), exchanges.single().outcome)
     }
 
     @Test
@@ -601,7 +601,7 @@ class CallRecordingTest {
 
         val exchange = exchanges.single()
         assertEquals(ConnectResult.Canceled, exchange.attempts.single().result)
-        assertEquals(ExchangeOutcome.Canceled, exchange.outcome)
+        assertEquals(ExchangeOutcome.Canceled(ExchangeStep.TCP), exchange.outcome)
     }
 
     private fun client(): OkHttpClient.Builder = OkHttpClient.Builder().dns {

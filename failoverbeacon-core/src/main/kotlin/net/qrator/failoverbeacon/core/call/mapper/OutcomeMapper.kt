@@ -15,7 +15,7 @@ internal class OutcomeMapper(private val failureMapper: FailureMapper) {
                 (cause == null || attempts.any { it.failure === cause })
             val connectFailure = if (failedConnecting) furthestFailure(results) else null
             when {
-                stopReason == CallStopReason.CANCELED -> ExchangeOutcome.Canceled
+                stopReason == CallStopReason.CANCELED -> ExchangeOutcome.Canceled(lastStep)
 
                 connectFailure != null ->
                     ExchangeOutcome.Failed(connectFailure.step, connectFailure.type)
