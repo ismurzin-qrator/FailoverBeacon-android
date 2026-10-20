@@ -6,8 +6,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import net.qrator.failoverbeacon.core.call.model.ProxyType
 
-class ProxyTypeMapperTest {
-    private val mapper = ProxyTypeMapper()
+class OkHttpProxyTypeMapperTest {
+    private val mapper = OkHttpProxyTypeMapper()
     private val address = InetSocketAddress.createUnresolved("proxy.test", 3128)
 
     @Test

@@ -7,7 +7,7 @@ import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.telemetry.filter.EventFilter
 import net.qrator.failoverbeacon.telemetry.filter.Sampler
-import net.qrator.failoverbeacon.telemetry.mapper.EventMapper
+import net.qrator.failoverbeacon.telemetry.mapper.TelemetryEventMapper
 
 class TelemetryCollector(
     consentSource: ConsentSource,
@@ -15,7 +15,7 @@ class TelemetryCollector(
     failureSampleRate: Double,
     successSampleRate: Double
 ) : ExchangeSubscriber {
-    private val eventMapper = EventMapper()
+    private val eventMapper = TelemetryEventMapper()
     private val filter = EventFilter(consentSource, blockedHosts)
     private val sampler = Sampler(failureSampleRate, successSampleRate)
 

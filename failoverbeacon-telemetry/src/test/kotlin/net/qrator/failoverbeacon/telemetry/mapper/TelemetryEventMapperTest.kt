@@ -13,36 +13,36 @@ import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.model.ExchangeTimings
 import net.qrator.failoverbeacon.core.call.model.ExchangeTls
 import net.qrator.failoverbeacon.core.call.model.FailureType
-import net.qrator.failoverbeacon.core.call.model.ProxyType as ExchangeProxyType
+import net.qrator.failoverbeacon.core.call.model.ProxyType
 import net.qrator.failoverbeacon.telemetry.MS
 import net.qrator.failoverbeacon.telemetry.attempt
 import net.qrator.failoverbeacon.telemetry.exchange
-import net.qrator.failoverbeacon.telemetry.model.AttemptResult
-import net.qrator.failoverbeacon.telemetry.model.ErrorType
-import net.qrator.failoverbeacon.telemetry.model.EventAttempt
-import net.qrator.failoverbeacon.telemetry.model.EventTimings
-import net.qrator.failoverbeacon.telemetry.model.EventTls
-import net.qrator.failoverbeacon.telemetry.model.Phase
-import net.qrator.failoverbeacon.telemetry.model.ProxyType
-import net.qrator.failoverbeacon.telemetry.model.Step
+import net.qrator.failoverbeacon.telemetry.model.TelemetryAttempt
+import net.qrator.failoverbeacon.telemetry.model.TelemetryAttemptResult
+import net.qrator.failoverbeacon.telemetry.model.TelemetryErrorType
 import net.qrator.failoverbeacon.telemetry.model.TelemetryEvent
+import net.qrator.failoverbeacon.telemetry.model.TelemetryPhase
+import net.qrator.failoverbeacon.telemetry.model.TelemetryProxyType
+import net.qrator.failoverbeacon.telemetry.model.TelemetryStep
+import net.qrator.failoverbeacon.telemetry.model.TelemetryTimings
+import net.qrator.failoverbeacon.telemetry.model.TelemetryTls
 
-class EventMapperTest {
-    private val mapper = EventMapper()
+class TelemetryEventMapperTest {
+    private val mapper = TelemetryEventMapper()
 
     @Test
     fun `maps every field of a response`() {
         val exchange = exchange(
             request = ExchangeRequest("a.com", 443, "POST", bodyBytes = 3),
             response = ExchangeResponse(200, contentLength = 5, bodyBytes = 5),
-            connection = ExchangeConnection("1.1.1.1", "h2", ExchangeProxyType.HTTP, TLS),
+            connection = ExchangeConnection("1.1.1.1", "h2", ProxyType.HTTP, TLS),
             dnsAddresses = listOf("1.1.1.1", "1.1.1.2"),
             attempts = listOf(
                 attempt(
                     "1.1.1.1",
                     ConnectResult.Connected,
                     connectNanos = 20 * MS,
-                    ExchangeProxyType.HTTP
+                    ProxyType.HTTP
                 )
             ),
             timings = ExchangeTimings(1 * MS, 20 * MS, 12 * MS, 2 * MS, 30 * MS, 4 * MS)
@@ -54,23 +54,30 @@ class EventMapperTest {
             host = "a.com",
             port = 443,
             method = "POST",
-            phase = Phase.APPLICATION,
-            type = ErrorType.OK,
+            phase = TelemetryPhase.APPLICATION,
+            type = TelemetryErrorType.OK,
             step = null,
             statusCode = 200,
             protocol = "h2",
             serverIp = "1.1.1.1",
-            proxy = ProxyType.HTTP,
-            tls = EventTls("TLSv1.3", "TLS_AES_128_GCM_SHA256", "CN=Test CA"),
+            proxy = TelemetryProxyType.HTTP,
+            tls = TelemetryTls("TLSv1.3", "TLS_AES_128_GCM_SHA256", "CN=Test CA"),
             reusedConnection = false,
             dnsAddresses = listOf("1.1.1.1", "1.1.1.2"),
             elapsedMs = 60,
-            timings = EventTimings(1, 20, 12, 2, 30, 4),
+            timings = TelemetryTimings(1, 20, 12, 2, 30, 4),
             requestBodyBytes = 3,
             responseContentLength = 5,
             responseBodyBytes = 5,
             attempts = listOf(
-                EventAttempt("1.1.1.1", ProxyType.HTTP, 20, AttemptResult.CONNECTED, null, null)
+                TelemetryAttempt(
+                    "1.1.1.1",
+                    TelemetryProxyType.HTTP,
+                    20,
+                    TelemetryAttemptResult.CONNECTED,
+                    null,
+                    null
+                )
             )
         )
         assertEquals(expected, mapper.toEvent(exchange))
@@ -80,8 +87,8 @@ class EventMapperTest {
     fun `an error status is an HTTP error`() {
         val event = mapper.toEvent(exchange(response = ExchangeResponse(404, null, 0)))
 
-        assertEquals(ErrorType.HTTP_ERROR, event.type)
-        assertEquals(Phase.APPLICATION, event.phase)
+        assertEquals(TelemetryErrorType.HTTP_ERROR, event.type)
+        assertEquals(TelemetryPhase.APPLICATION, event.phase)
         assertNull(event.step)
     }
 
@@ -89,9 +96,9 @@ class EventMapperTest {
     fun `a canceled exchange is abandoned at its step`() {
         val event = mapper.toEvent(exchange(outcome = ExchangeOutcome.Canceled(ExchangeStep.TLS)))
 
-        assertEquals(ErrorType.ABANDONED, event.type)
-        assertEquals(Phase.APPLICATION, event.phase)
-        assertEquals(Step.TLS, event.step)
+        assertEquals(TelemetryErrorType.ABANDONED, event.type)
+        assertEquals(TelemetryPhase.APPLICATION, event.phase)
+        assertEquals(TelemetryStep.TLS, event.step)
     }
 
     @Test
@@ -111,10 +118,14 @@ class EventMapperTest {
             )
         )
 
-        assertEquals(Step.RESPONSE, reset.step)
-        assertEquals(ErrorType.TCP_RESET to Phase.CONNECTION, reset.type to reset.phase)
+        assertEquals(TelemetryStep.RESPONSE, reset.step)
         assertEquals(
-            ErrorType.HTTP_RESPONSE_INVALID_CONTENT_LENGTH_MISMATCH to Phase.APPLICATION,
+            TelemetryErrorType.TCP_RESET to TelemetryPhase.CONNECTION,
+            reset.type to reset.phase
+        )
+        assertEquals(
+            TelemetryErrorType.HTTP_RESPONSE_INVALID_CONTENT_LENGTH_MISMATCH to
+                TelemetryPhase.APPLICATION,
             closed.type to closed.phase
         )
     }
@@ -130,17 +141,17 @@ class EventMapperTest {
             )
         )
 
-        assertEquals(Step.TLS, event.step)
-        assertEquals(Phase.CONNECTION, event.phase)
-        assertEquals(ErrorType.TLS_CERT_AUTHORITY_INVALID, event.type)
+        assertEquals(TelemetryStep.TLS, event.step)
+        assertEquals(TelemetryPhase.CONNECTION, event.phase)
+        assertEquals(TelemetryErrorType.TLS_CERT_AUTHORITY_INVALID, event.type)
         assertEquals(
-            EventAttempt(
+            TelemetryAttempt(
                 "1.1.1.1",
-                ProxyType.DIRECT,
+                TelemetryProxyType.DIRECT,
                 40,
-                AttemptResult.FAILED,
-                ErrorType.TLS_CERT_AUTHORITY_INVALID,
-                Step.TLS
+                TelemetryAttemptResult.FAILED,
+                TelemetryErrorType.TLS_CERT_AUTHORITY_INVALID,
+                TelemetryStep.TLS
             ),
             event.attempts.single()
         )
@@ -159,8 +170,22 @@ class EventMapperTest {
 
         assertEquals(
             listOf(
-                EventAttempt("1.1.1.1", ProxyType.DIRECT, 300, AttemptResult.CANCELED, null, null),
-                EventAttempt("1.1.1.2", ProxyType.DIRECT, null, AttemptResult.CANCELED, null, null)
+                TelemetryAttempt(
+                    "1.1.1.1",
+                    TelemetryProxyType.DIRECT,
+                    300,
+                    TelemetryAttemptResult.CANCELED,
+                    null,
+                    null
+                ),
+                TelemetryAttempt(
+                    "1.1.1.2",
+                    TelemetryProxyType.DIRECT,
+                    null,
+                    TelemetryAttemptResult.CANCELED,
+                    null,
+                    null
+                )
             ),
             event.attempts
         )
@@ -183,8 +208,8 @@ class EventMapperTest {
         assertNull(event.serverIp)
         assertNull(event.proxy)
         assertNull(event.tls)
-        assertEquals(ErrorType.DNS_NAME_NOT_RESOLVED, event.type)
-        assertEquals(Phase.DNS, event.phase)
+        assertEquals(TelemetryErrorType.DNS_NAME_NOT_RESOLVED, event.type)
+        assertEquals(TelemetryPhase.DNS, event.phase)
     }
 
     private companion object {

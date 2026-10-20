@@ -3,14 +3,14 @@ package net.qrator.failoverbeacon.telemetry.model
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class ErrorTypeTest {
+class TelemetryErrorTypeTest {
     @Test
     fun `every error type has the phase NEL groups it under`() {
-        ErrorType.entries.forEach { type ->
+        TelemetryErrorType.entries.forEach { type ->
             val expected = when (type.code.substringBefore('.')) {
-                "dns" -> Phase.DNS
-                "tcp", "tls" -> Phase.CONNECTION
-                else -> Phase.APPLICATION
+                "dns" -> TelemetryPhase.DNS
+                "tcp", "tls" -> TelemetryPhase.CONNECTION
+                else -> TelemetryPhase.APPLICATION
             }
             assertEquals(expected, type.phase, type.code)
         }

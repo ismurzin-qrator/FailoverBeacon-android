@@ -10,8 +10,8 @@ import okhttp3.Handshake
 import okhttp3.TlsVersion
 
 /** The issuer of a real handshake is checked in CallRecordingTest. */
-class TlsMapperTest {
-    private val mapper = TlsMapper()
+class OkHttpTlsMapperTest {
+    private val mapper = OkHttpTlsMapper()
 
     @Test
     fun `maps the version and the cipher, a socket without TLS has no issuer`() {

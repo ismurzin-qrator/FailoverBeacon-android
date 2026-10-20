@@ -8,7 +8,7 @@ import javax.net.ssl.SSLSocket
 import net.qrator.failoverbeacon.core.call.model.ExchangeTls
 import okhttp3.Handshake
 
-internal class TlsMapper {
+internal class OkHttpTlsMapper {
     fun toTls(handshake: Handshake, socket: Socket): ExchangeTls = ExchangeTls(
         version = handshake.tlsVersion.javaName,
         cipher = handshake.cipherSuite.javaName,

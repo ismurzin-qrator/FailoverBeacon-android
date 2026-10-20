@@ -1,6 +1,6 @@
 package net.qrator.failoverbeacon.telemetry.model
 
-internal enum class ProxyType {
+internal enum class TelemetryProxyType {
     DIRECT,
     HTTP,
     SOCKS

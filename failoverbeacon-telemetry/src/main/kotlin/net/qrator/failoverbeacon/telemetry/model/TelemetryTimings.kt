@@ -1,7 +1,7 @@
 package net.qrator.failoverbeacon.telemetry.model
 
 /** Phase durations in milliseconds, null for a phase that did not happen. Connect includes TLS. */
-internal data class EventTimings(
+internal data class TelemetryTimings(
     val dnsMs: Long?,
     val connectMs: Long?,
     val tlsMs: Long?,

@@ -1,6 +1,6 @@
 package net.qrator.failoverbeacon.telemetry.model
 
-internal enum class AttemptResult {
+internal enum class TelemetryAttemptResult {
     CONNECTED,
     FAILED,
 

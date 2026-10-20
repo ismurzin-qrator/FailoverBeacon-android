@@ -14,8 +14,8 @@ import net.qrator.failoverbeacon.core.call.state.CallStopReason
 import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
 import net.qrator.failoverbeacon.core.logging.error
 import net.qrator.failoverbeacon.core.util.catchSdkFailure
-import net.qrator.failoverbeacon.okhttp.internal.mapper.ProxyTypeMapper
-import net.qrator.failoverbeacon.okhttp.internal.mapper.TlsMapper
+import net.qrator.failoverbeacon.okhttp.internal.mapper.OkHttpProxyTypeMapper
+import net.qrator.failoverbeacon.okhttp.internal.mapper.OkHttpTlsMapper
 import okhttp3.Call
 import okhttp3.Connection
 import okhttp3.EventListener
@@ -27,8 +27,8 @@ import okhttp3.Response
 
 /** Records one call into [recorder]. */
 internal class CallRecordingEventListener(private val recorder: CallRecorder) : EventListener() {
-    private val proxyTypeMapper = ProxyTypeMapper()
-    private val tlsMapper = TlsMapper()
+    private val proxyTypeMapper = OkHttpProxyTypeMapper()
+    private val tlsMapper = OkHttpTlsMapper()
 
     @Volatile
     private var failed = false

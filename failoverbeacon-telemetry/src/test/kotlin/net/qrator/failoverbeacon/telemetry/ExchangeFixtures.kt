@@ -9,7 +9,7 @@ import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
 import net.qrator.failoverbeacon.core.call.model.ExchangeTimings
 import net.qrator.failoverbeacon.core.call.model.ProxyType
-import net.qrator.failoverbeacon.telemetry.mapper.EventMapper
+import net.qrator.failoverbeacon.telemetry.mapper.TelemetryEventMapper
 import net.qrator.failoverbeacon.telemetry.model.TelemetryEvent
 
 const val MS = 1_000_000L
@@ -47,4 +47,4 @@ fun attempt(
 ) = ConnectAttempt(ip, proxy, connectNanos, result)
 
 internal fun event(exchange: Exchange = exchange()): TelemetryEvent =
-    EventMapper().toEvent(exchange)
+    TelemetryEventMapper().toEvent(exchange)
