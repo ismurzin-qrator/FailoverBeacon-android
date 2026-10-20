@@ -1,18 +1,18 @@
 package net.qrator.failoverbeacon.core.call
 
 import android.util.Log
-import net.qrator.failoverbeacon.core.SdkRegistry
-import net.qrator.failoverbeacon.core.call.model.Exchange
-import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
-import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
-import net.qrator.failoverbeacon.core.call.model.ExchangeTimings
-import net.qrator.failoverbeacon.core.logging.LogOutput
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
+import net.qrator.failoverbeacon.core.SdkRegistry
+import net.qrator.failoverbeacon.core.call.model.Exchange
+import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
+import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
+import net.qrator.failoverbeacon.core.call.model.ExchangeTimings
+import net.qrator.failoverbeacon.core.logging.LogOutput
 
 class ExchangeBusTest {
     private val logged = mutableListOf<Pair<Int, Throwable?>>()

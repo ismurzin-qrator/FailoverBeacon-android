@@ -1,15 +1,5 @@
 package net.qrator.failoverbeacon.core.call
 
-import net.qrator.failoverbeacon.core.call.mapper.TestFailureMapper
-import net.qrator.failoverbeacon.core.call.model.ConnectResult
-import net.qrator.failoverbeacon.core.call.model.Exchange
-import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
-import net.qrator.failoverbeacon.core.call.model.ExchangeStep
-import net.qrator.failoverbeacon.core.call.model.ExchangeTls
-import net.qrator.failoverbeacon.core.call.model.FailureType
-import net.qrator.failoverbeacon.core.call.model.ProxyType
-import net.qrator.failoverbeacon.core.call.state.CallStopReason
-import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.ConnectException
@@ -22,6 +12,16 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import net.qrator.failoverbeacon.core.call.mapper.TestFailureMapper
+import net.qrator.failoverbeacon.core.call.model.ConnectResult
+import net.qrator.failoverbeacon.core.call.model.Exchange
+import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
+import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.core.call.model.ExchangeTls
+import net.qrator.failoverbeacon.core.call.model.FailureType
+import net.qrator.failoverbeacon.core.call.model.ProxyType
+import net.qrator.failoverbeacon.core.call.state.CallStopReason
+import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
 
 class CallRecorderTest {
     private var time = 0L

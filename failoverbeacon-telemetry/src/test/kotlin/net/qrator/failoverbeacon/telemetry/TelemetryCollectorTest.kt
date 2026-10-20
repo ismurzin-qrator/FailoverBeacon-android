@@ -51,16 +51,33 @@ class TelemetryCollectorTest {
     }
 
     @Test
-    fun `drops what the filter or the sampler drops`() {
-        collector.onExchange(failure(host = "blocked.com"))
-        collector.onExchange(exchange(callId = DROPPED))
+    fun `collects with consent granted or pending, never without it`() {
+        collector.onExchange(failure())
+        consentSource.consent = TrackingConsent.PENDING
+        collector.onExchange(failure())
         consentSource.consent = TrackingConsent.NOT_GRANTED
         collector.onExchange(failure())
+
+        assertEquals(2, logs.size)
+    }
+
+    @Test
+    fun `drops a blocked host only, subdomains and unnamed follow-ups pass`() {
+        collector.onExchange(failure(host = "blocked.com"))
+        collector.onExchange(failure(host = "sub.blocked.com"))
+        collector.onExchange(failure(host = null))
+
+        assertEquals(2, logs.size)
+    }
+
+    @Test
+    fun `drops what the sampler drops`() {
+        collector.onExchange(exchange(callId = DROPPED))
 
         assertEquals(emptyList(), logs)
     }
 
-    private fun failure(host: String = "a.com") = exchange(
+    private fun failure(host: String? = "a.com") = exchange(
         callId = KEPT,
         request = ExchangeRequest(host, 443, "GET", bodyBytes = null),
         response = ExchangeResponse(500, null, 0)

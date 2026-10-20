@@ -20,6 +20,7 @@ fun exchange(
     response: ExchangeResponse? = ExchangeResponse(200, contentLength = null, bodyBytes = 0),
     connection: ExchangeConnection? =
         ExchangeConnection("1.1.1.1", "h2", ProxyType.DIRECT, tls = null),
+    reusedConnection: Boolean = false,
     dnsAddresses: List<String>? = null,
     attempts: List<ConnectAttempt> = emptyList(),
     timings: ExchangeTimings = ExchangeTimings(null, null, null, null, null, null),
@@ -31,7 +32,7 @@ fun exchange(
     response = response,
     resendCount = 1,
     connection = connection,
-    reusedConnection = false,
+    reusedConnection = reusedConnection,
     dnsAddresses = dnsAddresses,
     attempts = attempts,
     timings = timings,
