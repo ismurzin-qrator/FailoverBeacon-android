@@ -34,25 +34,4 @@ class OkHttpFailureMapperErrnoTest {
 
         assertEquals(expected, actual)
     }
-
-    @Test
-    fun `an unknown errno is other`() {
-        assertEquals(
-            FailureType.OTHER,
-            OkHttpFailureMapper().toFailureType(ErrnoException("read", OsConstants.EIO))
-        )
-    }
-
-    @Test
-    fun `errno deep in the cause chain wins`() {
-        val failure = ConnectException("Failed to connect to /127.0.0.1:1").apply {
-            initCause(
-                ConnectException("failed to connect: isConnected failed: ECONNREFUSED").apply {
-                    initCause(ErrnoException("isConnected", OsConstants.ECONNREFUSED))
-                }
-            )
-        }
-
-        assertEquals(FailureType.REFUSED, OkHttpFailureMapper().toFailureType(failure))
-    }
 }

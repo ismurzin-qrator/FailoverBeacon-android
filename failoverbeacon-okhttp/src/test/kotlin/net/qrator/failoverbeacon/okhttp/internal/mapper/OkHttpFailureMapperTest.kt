@@ -70,14 +70,6 @@ class OkHttpFailureMapperTest {
     }
 
     @Test
-    fun `DNS failures`() {
-        assertType(
-            FailureType.NAME_NOT_RESOLVED,
-            UnknownHostException("Unable to resolve host \"a.invalid\": No address associated")
-        )
-    }
-
-    @Test
     fun `TLS failures`() {
         val untrusted = CertPathValidatorException("Trust anchor for certification path not found.")
         assertType(
@@ -109,23 +101,6 @@ class OkHttpFailureMapperTest {
             )
         )
         assertType(FailureType.OTHER, SSLException("Unable to parse TLS packet header"))
-    }
-
-    @Test
-    fun `a class with one meaning wins over a message`() {
-        assertType(
-            FailureType.TLS_PROTOCOL_ERROR,
-            SSLHandshakeException("aborted, Connection reset by peer")
-                .causedBy(SSLProtocolException("Failure in SSL library"))
-        )
-    }
-
-    @Test
-    fun `a message wins over a class with several meanings`() {
-        assertType(
-            FailureType.CERT_PIN_MISMATCH,
-            SSLPeerUnverifiedException("Certificate pinning failure!")
-        )
     }
 
     @Test

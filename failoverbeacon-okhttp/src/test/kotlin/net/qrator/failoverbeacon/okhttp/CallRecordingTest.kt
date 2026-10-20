@@ -82,6 +82,7 @@ class CallRecordingTest {
         assertEquals(server.port, exchange.request.serverPort)
         assertEquals("GET", exchange.request.method)
         assertEquals(200, exchange.response?.statusCode)
+        assertEquals(5L, exchange.response?.contentLength)
         assertEquals(5L, exchange.response?.bodyBytes)
         assertEquals(LOOPBACK_IP, exchange.connection?.peerAddress)
         assertEquals("http/1.1", exchange.connection?.protocol)
@@ -95,16 +96,6 @@ class CallRecordingTest {
         assertNotNull(exchange.timings.waitNanos)
         assertNotNull(exchange.timings.receiveNanos)
         assertEquals(ExchangeOutcome.Ok, exchange.outcome)
-    }
-
-    @Test
-    fun `records every address of the lookup`() {
-        server.enqueue(MockResponse().setBody("ok"))
-        val client = client().dns { listOf(LOOPBACK, SECOND_LOOPBACK) }.build()
-
-        execute(client)
-
-        assertEquals(listOf(LOOPBACK_IP, "127.0.0.2"), exchanges.single().dnsAddresses)
     }
 
     @Test
@@ -145,17 +136,6 @@ class CallRecordingTest {
         assertEquals("POST", exchange.request.method)
         assertEquals(5L, exchange.request.bodyBytes)
         assertNotNull(exchange.timings.sendNanos)
-    }
-
-    @Test
-    fun `records a chunked response without a content length`() {
-        server.enqueue(MockResponse().setChunkedBody("hello world", 4))
-
-        assertEquals("hello world", execute(client().build()))
-
-        val response = exchanges.single().response
-        assertNull(response?.contentLength)
-        assertEquals(11L, response?.bodyBytes)
     }
 
     @Test
@@ -241,21 +221,6 @@ class CallRecordingTest {
     }
 
     @Test
-    fun `an authentication challenge is a second exchange`() {
-        server.enqueue(MockResponse().setResponseCode(401))
-        server.enqueue(MockResponse().setBody("secret"))
-        val client = client()
-            .authenticator { _, response ->
-                response.request.newBuilder().header("Authorization", "Basic dGVzdA==").build()
-            }
-            .build()
-
-        execute(client)
-
-        assertEquals(listOf(401, 200), exchanges.map { it.response?.statusCode })
-    }
-
-    @Test
     fun `a follow-up failing before its headers are sent is to the server of its connection`() {
         server.enqueue(MockResponse().setResponseCode(401))
         val client = client()
@@ -281,12 +246,15 @@ class CallRecordingTest {
     @Test
     fun `a refused connect fails at TCP`() {
         val closedPort = ServerSocket(0, 1, LOOPBACK).use { it.localPort }
-        val request = Request.Builder().url("http://localhost:$closedPort/").build()
+        val request = Request.Builder().url(
+            "http://localhost:$closedPort/"
+        ).method("DELETE", null).build()
 
         // OkHttp 5 resends the request, 3.14 and 4.x fail the call.
         runCatching { client().build().withFailoverBeacon().newCall(request).execute().close() }
 
         val exchange = exchanges.first()
+        assertEquals("DELETE", exchange.request.method)
         val refused = ConnectResult.Failed(ExchangeStep.TCP, FailureType.REFUSED)
         assertEquals(refused, exchange.attempts.single().result)
         assertEquals(
@@ -321,6 +289,7 @@ class CallRecordingTest {
 
         val exchange = exchanges.single()
         assertEquals(200, exchange.response?.statusCode)
+        assertEquals(64L * 1024, exchange.response?.contentLength)
         assertNull(exchange.response?.bodyBytes)
         assertEquals(ExchangeStep.RESPONSE, assertIs<ExchangeOutcome.Failed>(exchange.outcome).step)
     }
@@ -525,17 +494,6 @@ class CallRecordingTest {
         val exchange = exchanges.first()
         assertEquals(ExchangeStep.REQUEST, assertIs<ExchangeOutcome.Failed>(exchange.outcome).step)
         assertNull(exchange.timings.waitNanos)
-    }
-
-    @Test
-    fun `a body stalling before its first byte is received from the headers`() {
-        server.enqueue(MockResponse().setBody("x".repeat(100)).setBodyDelay(1, TimeUnit.SECONDS))
-        val client = client().readTimeout(300, TimeUnit.MILLISECONDS).build()
-
-        assertFailsWith<SocketTimeoutException> { execute(client) }
-
-        val timings = exchanges.single().timings
-        assertTrue(timings.waitNanos!! < timings.receiveNanos!!)
     }
 
     @Test

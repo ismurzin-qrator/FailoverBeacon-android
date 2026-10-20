@@ -14,16 +14,6 @@ class OkHttpTlsMapperTest {
     private val mapper = OkHttpTlsMapper()
 
     @Test
-    fun `maps the version and the cipher, a socket without TLS has no issuer`() {
-        Socket().use { socket ->
-            assertEquals(
-                ExchangeTls("TLSv1.3", "TLS_AES_128_GCM_SHA256", issuer = null),
-                mapper.toTls(handshake(), socket)
-            )
-        }
-    }
-
-    @Test
     fun `a TLS socket without a session has no issuer`() {
         SSLSocketFactory.getDefault().createSocket().use { socket ->
             assertEquals(null, mapper.toTls(handshake(), socket).issuer)

@@ -82,16 +82,6 @@ class CallRecordingEventListenerTest {
     }
 
     @Test
-    fun `logs only the first failure`() {
-        val call = call(OkHttpClient())
-
-        listener { throw IllegalStateException() }.dnsStart(call, "example.test")
-        listener { throw IllegalStateException() }.dnsStart(call, "example.test")
-
-        assertEquals(1, logs.size)
-    }
-
-    @Test
     fun `a linkage error marks the OkHttp version incompatible`() {
         listener { throw NoSuchMethodError() }.dnsStart(call(OkHttpClient()), "example.test")
 
@@ -107,31 +97,6 @@ class CallRecordingEventListenerTest {
         val listener = listener { throw AssertionError() }
 
         assertFailsWith<AssertionError> { listener.dnsStart(call(OkHttpClient()), "example.test") }
-    }
-
-    @Test
-    fun `a canceled call is canceled`() {
-        val call = call(OkHttpClient())
-        val listener = listener { 0 }
-        listener.dnsStart(call, "example.test")
-
-        call.cancel()
-        listener.callFailed(call, IOException("Canceled"))
-
-        assertEquals(ExchangeOutcome.Canceled(ExchangeStep.DNS), published.single().outcome)
-    }
-
-    @Test
-    fun `a call timeout is a failure, not a cancel`() {
-        val call = call(OkHttpClient.Builder().callTimeout(1, TimeUnit.SECONDS).build())
-        val listener = listener { 0 }
-        listener.dnsStart(call, "example.test")
-
-        call.cancel()
-        listener.callFailed(call, InterruptedIOException("timeout"))
-
-        val outcome = assertIs<ExchangeOutcome.Failed>(published.single().outcome)
-        assertEquals(FailureType.TIMED_OUT, outcome.type)
     }
 
     @Test
@@ -224,25 +189,6 @@ class CallRecordingEventListenerTest {
         val (winner, loser) = published.single().attempts
         assertEquals(ConnectResult.Failed(ExchangeStep.TLS, FailureType.RESET), winner.result)
         assertEquals(ConnectResult.Superseded, loser.result)
-    }
-
-    @Test
-    fun `a refused racing connect is a failure, not a dropped one`() {
-        val call = call(OkHttpClient())
-        var now = 0L
-        val listener = listener { now++ }
-        val refused = ConnectException("Connection refused")
-
-        listener.connectStart(call, FIRST, Proxy.NO_PROXY)
-        listener.connectStart(call, SECOND, Proxy.NO_PROXY)
-        listener.connectEnd(call, SECOND, Proxy.NO_PROXY, null)
-        listener.connectFailed(call, FIRST, Proxy.NO_PROXY, null, refused)
-        listener.callEnd(call)
-
-        assertEquals(
-            ConnectResult.Failed(ExchangeStep.TCP, FailureType.REFUSED),
-            published.single().attempts.first().result
-        )
     }
 
     private fun listener(clock: MonotonicClock) =

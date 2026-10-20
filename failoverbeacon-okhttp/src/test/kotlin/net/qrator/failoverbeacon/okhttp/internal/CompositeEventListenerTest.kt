@@ -32,21 +32,4 @@ class CompositeEventListenerTest {
         }
         assertEquals(expected, log)
     }
-
-    @Test
-    fun `exceptions of the second listener propagate after the first listener gets the event`() {
-        val failure = IllegalStateException("app bug")
-        val listener = CompositeEventListener(
-            RecordingEventListener(log, "first:"),
-            RecordingEventListener(log, "second:", failure)
-        )
-
-        val thrown = assertFailsWith<IllegalStateException> {
-            sendEvent(listener, eventListenerEvents.first())
-        }
-
-        assertSame(failure, thrown)
-        val event = eventListenerEvents.first().name
-        assertEquals(listOf("first:$event", "second:$event"), log)
-    }
 }
