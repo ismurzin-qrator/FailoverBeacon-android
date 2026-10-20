@@ -39,7 +39,7 @@ public object FailoverBeacon {
             return
         }
         val appContext = context.applicationContext ?: context
-        val processDetector = AndroidMainProcessDetector(appContext, SdkRegistry.logger)
+        val processDetector = AndroidMainProcessDetector(appContext)
         if (!processDetector.isMainProcess()) {
             SdkRegistry.logger.warn { "Not the main process. SDK is inactive" }
             return

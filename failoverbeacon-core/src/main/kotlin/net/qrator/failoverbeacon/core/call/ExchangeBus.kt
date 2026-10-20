@@ -1,13 +1,13 @@
 package net.qrator.failoverbeacon.core.call
 
 import java.util.concurrent.CopyOnWriteArrayList
+import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.call.model.Exchange
-import net.qrator.failoverbeacon.core.logging.InternalLogger
 import net.qrator.failoverbeacon.core.logging.error
 import net.qrator.failoverbeacon.core.util.catchSdkFailure
 
 /** Delivers each finished exchange to every subscriber. */
-class ExchangeBus(private val logger: InternalLogger) : ExchangePublisher {
+class ExchangeBus : ExchangePublisher {
     private val subscribers = CopyOnWriteArrayList<ExchangeSubscriber>()
 
     val hasSubscribers: Boolean get() = subscribers.isNotEmpty()
@@ -23,7 +23,7 @@ class ExchangeBus(private val logger: InternalLogger) : ExchangePublisher {
     }
 
     private fun logFailure(failure: Throwable) {
-        logger.error(failure, onlyOnce = true) {
+        SdkRegistry.logger.error(failure, onlyOnce = true) {
             "Exchange subscriber failed. Further failures are not logged"
         }
     }

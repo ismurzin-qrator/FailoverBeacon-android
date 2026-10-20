@@ -5,7 +5,7 @@ import android.app.Application
 import android.content.Context
 import android.os.Build
 import android.os.Process
-import net.qrator.failoverbeacon.core.logging.InternalLogger
+import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.debug
 
 /**
@@ -13,16 +13,13 @@ import net.qrator.failoverbeacon.core.logging.debug
  * `android:process` on `<application>`, the package name by default. An unknown process name
  * counts as the main process.
  */
-internal class AndroidMainProcessDetector(
-    private val context: Context,
-    private val logger: InternalLogger
-) {
+internal class AndroidMainProcessDetector(private val context: Context) {
     fun isMainProcess(): Boolean {
         // An isolated process has its own UID and cannot query ActivityManager below API 28.
         if (Process.myUid() != context.applicationInfo.uid) return false
         val current = currentProcessName()
         if (current == null) {
-            logger.debug { "Process name is unknown. Assuming the main process" }
+            SdkRegistry.logger.debug { "Process name is unknown. Assuming the main process" }
             return true
         }
         return current == context.applicationInfo.processName
@@ -37,7 +34,7 @@ internal class AndroidMainProcessDetector(
                 ?.firstOrNull { it.pid == pid }
                 ?.processName
         } catch (e: Exception) {
-            logger.debug(e) { "Cannot read running app processes" }
+            SdkRegistry.logger.debug(e) { "Cannot read running app processes" }
             null
         }
     }

@@ -105,6 +105,7 @@ class CallRecorder(
         val attempt = when (step) {
             // The handshake runs on the latest connect to the address.
             ExchangeStep.TLS -> connecting.lastOrNull()
+
             // TCP failure is the earliest.
             else -> connecting.firstOrNull()
         }

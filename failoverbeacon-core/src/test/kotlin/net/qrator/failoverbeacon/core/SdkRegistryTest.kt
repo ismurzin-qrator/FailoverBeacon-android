@@ -48,6 +48,6 @@ class SdkRegistryTest {
         appContext = ContextWrapper(null),
         consent = TrackingConsent.GRANTED,
         clock = { 0 },
-        exchangeBus = ExchangeBus(SdkRegistry.logger)
+        exchangeBus = ExchangeBus()
     )
 }

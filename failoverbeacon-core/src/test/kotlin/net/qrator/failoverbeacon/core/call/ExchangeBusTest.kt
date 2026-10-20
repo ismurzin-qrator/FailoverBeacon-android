@@ -1,25 +1,25 @@
 package net.qrator.failoverbeacon.core.call
 
 import android.util.Log
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeTimings
-import net.qrator.failoverbeacon.core.logging.InternalLogger
 import net.qrator.failoverbeacon.core.logging.LogOutput
 
 class ExchangeBusTest {
     private val logged = mutableListOf<Pair<Int, Throwable?>>()
-    private val logger = InternalLogger().apply {
-        output = LogOutput { level, _, throwable -> logged += level to throwable }
-    }
-    private val bus = ExchangeBus(logger)
+    private val previousOutput = SdkRegistry.logger.output
+    private val bus = ExchangeBus()
     private val exchange = Exchange(
         callId = 0,
         request = ExchangeRequest("a.com", 443, "GET", bodyBytes = null),
@@ -33,6 +33,18 @@ class ExchangeBusTest {
         durationNanos = 0,
         outcome = ExchangeOutcome.Canceled(step = null)
     )
+
+    @BeforeTest
+    fun setUp() {
+        SdkRegistry.logger.output =
+            LogOutput { level, _, throwable -> logged += level to throwable }
+    }
+
+    @AfterTest
+    fun tearDown() {
+        SdkRegistry.logger.output = previousOutput
+        SdkRegistry.clear()
+    }
 
     @Test
     fun `has subscribers only after one subscribes`() {

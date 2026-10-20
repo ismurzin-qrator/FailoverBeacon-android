@@ -9,7 +9,7 @@ import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
 
 /** Installs an SDK whose exchanges go to [subscribers]; without one, calls are not recorded. */
 fun installSdk(vararg subscribers: ExchangeSubscriber) {
-    val bus = ExchangeBus(SdkRegistry.logger)
+    val bus = ExchangeBus()
     subscribers.forEach(bus::subscribe)
     SdkRegistry.install(
         SdkInstance(

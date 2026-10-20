@@ -7,7 +7,6 @@ import android.os.Process
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import net.qrator.failoverbeacon.core.logging.InternalLogger
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -19,7 +18,7 @@ import org.robolectric.shadows.ShadowProcess
 @RunWith(RobolectricTestRunner::class)
 class AndroidMainProcessDetectorTest {
     private val app: Application = RuntimeEnvironment.getApplication()
-    private val detector = AndroidMainProcessDetector(app, InternalLogger())
+    private val detector = AndroidMainProcessDetector(app)
 
     @Test
     @Config(sdk = [28])
