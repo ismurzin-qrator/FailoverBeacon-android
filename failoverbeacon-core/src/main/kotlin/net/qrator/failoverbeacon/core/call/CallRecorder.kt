@@ -136,7 +136,7 @@ class CallRecorder(
             closeCurrent(now)
         }
         currentOrNextExchange(now)?.apply {
-            this.target = target
+            if (this.target == null) this.target = target
             this.connection = connection
             // Connecting is over: a failure before the request is not a network step's.
             lastStep = null

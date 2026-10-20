@@ -382,6 +382,18 @@ class CallRecorderTest {
     }
 
     @Test
+    fun `steps a racing connect reports after the call ended make no exchange`() {
+        start()
+        acquire()
+        respond(200)
+        recorder.callEnd()
+        respond(200)
+        recorder.connectStart("1.1.1.2", 443, ProxyType.DIRECT)
+
+        assertEquals(1, published.size)
+    }
+
+    @Test
     fun `a call publishes its first 20 exchanges and its last one`() {
         start()
         acquire()

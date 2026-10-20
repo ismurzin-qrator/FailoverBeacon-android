@@ -34,7 +34,6 @@ internal class AttemptMapper(private val failureMapper: FailureMapper) {
     }
 
     private fun isSuperseded(attempt: AttemptState, attempts: List<AttemptState>): Boolean {
-        if (attempt.failedStep == ExchangeStep.TLS) return false
         val interval = attempt.connectInterval
         return attempts.any { other ->
             when {

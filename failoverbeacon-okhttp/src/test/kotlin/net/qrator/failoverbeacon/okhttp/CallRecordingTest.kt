@@ -46,6 +46,7 @@ import okhttp3.Cache
 import okhttp3.EventListener
 import okhttp3.MediaType
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.mockwebserver.MockResponse
@@ -405,6 +406,77 @@ class CallRecordingTest {
     }
 
     @Test
+    fun `a call coalesced onto another host's HTTP 2 connection is recorded under its own host`() {
+        server.useHttps(serverCertificates.sslSocketFactory(), false)
+        server.protocols = listOf(Protocol.HTTP_2, Protocol.HTTP_1_1)
+        server.enqueue(MockResponse().setBody("a"))
+        server.enqueue(MockResponse().setBody("b"))
+        val client = client()
+            .sslSocketFactory(
+                clientCertificates.sslSocketFactory(),
+                clientCertificates.trustManager
+            )
+            .build()
+
+        execute(client, "https://a.test:${server.port}/")
+        execute(client, "https://b.test:${server.port}/")
+
+        val (first, coalesced) = exchanges
+        assertEquals("h2", first.connection?.protocol)
+        assertEquals("b.test", coalesced.request.serverAddress)
+        assertTrue(coalesced.reusedConnection)
+        assertTrue(coalesced.attempts.isEmpty())
+    }
+
+    @Test
+    fun `a redirect coalesced onto the connection of another host is recorded under its own`() {
+        server.useHttps(serverCertificates.sslSocketFactory(), false)
+        server.protocols = listOf(Protocol.HTTP_2, Protocol.HTTP_1_1)
+        server.enqueue(
+            MockResponse().setResponseCode(
+                302
+            ).setHeader("Location", "https://b.test:${server.port}/")
+        )
+        server.enqueue(MockResponse().setBody("b"))
+        val client = client()
+            .sslSocketFactory(
+                clientCertificates.sslSocketFactory(),
+                clientCertificates.trustManager
+            )
+            .build()
+
+        execute(client, "https://a.test:${server.port}/")
+
+        val (redirect, followUp) = exchanges
+        assertEquals("a.test", redirect.request.serverAddress)
+        assertEquals("b.test", followUp.request.serverAddress)
+    }
+
+    @Test
+    fun `a coalesced call failing before its headers keeps its own host`() {
+        server.useHttps(serverCertificates.sslSocketFactory(), false)
+        server.protocols = listOf(Protocol.HTTP_2, Protocol.HTTP_1_1)
+        server.enqueue(MockResponse().setBody("a"))
+        val client = client()
+            .sslSocketFactory(
+                clientCertificates.sslSocketFactory(),
+                clientCertificates.trustManager
+            )
+            .addNetworkInterceptor { chain ->
+                if (chain.request().url.host == "b.test") throw IOException("no token")
+                chain.proceed(chain.request())
+            }
+            .build()
+
+        execute(client, "https://a.test:${server.port}/")
+        assertFailsWith<IOException> { execute(client, "https://b.test:${server.port}/") }
+
+        val coalesced = exchanges.last()
+        assertTrue(coalesced.reusedConnection)
+        assertEquals("b.test", coalesced.request.serverAddress)
+    }
+
+    @Test
     fun `the issuer is read without verifying the chain again`() {
         server.useHttps(serverCertificates.sslSocketFactory(), false)
         server.enqueue(MockResponse().setBody("secure"))
@@ -650,6 +722,8 @@ class CallRecordingTest {
             .build()
         val certificate: HeldCertificate = HeldCertificate.Builder()
             .addSubjectAlternativeName("localhost")
+            .addSubjectAlternativeName("a.test")
+            .addSubjectAlternativeName("b.test")
             .signedBy(root)
             .build()
         val serverCertificates: HandshakeCertificates = HandshakeCertificates.Builder()
