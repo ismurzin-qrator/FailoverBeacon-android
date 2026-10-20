@@ -457,6 +457,39 @@ class CallRecorderTest {
     }
 
     @Test
+    fun `a TCP failure is the earliest connect's, a handshake failure the latest's`() {
+        recorder.callStart("a.com", 443, "GET")
+        at(0) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }
+        at(10) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }
+        at(20) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }
+        at(30) {
+            connectFailed(
+                "1.1.1.1",
+                443,
+                ConnectException("refused"),
+                ExchangeStep.TCP,
+                ConnectStopReason.NETWORK
+            )
+        }
+        at(40) {
+            connectFailed(
+                "1.1.1.1",
+                443,
+                SocketException("reset"),
+                ExchangeStep.TLS,
+                ConnectStopReason.NETWORK
+            )
+        }
+        recorder.callFailed(SocketException("reset"), CallStopReason.FAILED)
+
+        val (earliest, _, latest) = published.single().attempts
+        assertEquals(30L, earliest.connectNanos)
+        assertEquals(ExchangeStep.TCP, (earliest.result as ConnectResult.Failed).step)
+        assertEquals(20L, latest.connectNanos)
+        assertEquals(ExchangeStep.TLS, (latest.result as ConnectResult.Failed).step)
+    }
+
+    @Test
     fun `a connect finishing its handshake is the latest to its address`() {
         recorder.callStart("a.com", 443, "GET")
         at(0) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }

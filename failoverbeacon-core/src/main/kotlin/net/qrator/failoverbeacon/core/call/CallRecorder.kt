@@ -87,7 +87,8 @@ class CallRecorder(
 
     @Synchronized
     fun connectEnd(peerAddress: String, peerPort: Int) {
-        val attempt = current?.getConnectingAttempt(peerAddress, peerPort, ExchangeStep.TLS)
+        // The handshake runs on the latest connect to the address.
+        val attempt = current?.connectingAttempts(peerAddress, peerPort)?.lastOrNull()
         attempt?.connectInterval?.endNanos = clock.nanoTime()
     }
 
@@ -100,7 +101,14 @@ class CallRecorder(
         step: ExchangeStep,
         stop: ConnectStopReason
     ) {
-        current?.getConnectingAttempt(peerAddress, peerPort, step)?.apply {
+        val connecting = current?.connectingAttempts(peerAddress, peerPort) ?: return
+        val attempt = when (step) {
+            // The handshake runs on the latest connect to the address.
+            ExchangeStep.TLS -> connecting.lastOrNull()
+            // TCP failure is the earliest.
+            else -> connecting.firstOrNull()
+        }
+        attempt?.apply {
             connectInterval.endNanos = clock.nanoTime()
             this.failure = failure
             failedStep = step

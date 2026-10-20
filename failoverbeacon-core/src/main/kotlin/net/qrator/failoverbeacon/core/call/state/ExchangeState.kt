@@ -50,14 +50,8 @@ internal class ExchangeState(
         this.failure = failure
     }
 
-    fun getConnectingAttempt(
-        peerAddress: String,
-        peerPort: Int,
-        step: ExchangeStep
-    ): AttemptState? {
-        val connecting = attempts.filter {
+    fun connectingAttempts(peerAddress: String, peerPort: Int): List<AttemptState> =
+        attempts.filter {
             it.isConnecting && it.peerAddress == peerAddress && it.peerPort == peerPort
         }
-        return if (step == ExchangeStep.TLS) connecting.lastOrNull() else connecting.firstOrNull()
-    }
 }
