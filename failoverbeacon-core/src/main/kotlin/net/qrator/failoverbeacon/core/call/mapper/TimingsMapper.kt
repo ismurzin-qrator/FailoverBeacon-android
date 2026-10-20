@@ -8,9 +8,7 @@ internal class TimingsMapper {
     fun toTimings(state: ExchangeState): ExchangeTimings = with(state) {
         ExchangeTimings(
             dnsNanos = dnsInterval.durationNanos,
-            connectNanos = attempts
-                .lastOrNull { it.isConnected && it.peerAddress == connection?.peerAddress }
-                ?.connectInterval?.durationNanos,
+            connectNanos = connectedAttempt?.connectInterval?.durationNanos,
             tlsNanos = tlsInterval.durationNanos,
             sendNanos = sendInterval.durationNanos,
             waitNanos = waitInterval.durationNanos.takeUnless { requestUnsent },

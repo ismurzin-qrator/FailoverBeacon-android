@@ -38,6 +38,7 @@ class ExchangeMapperTest {
             receiveInterval.startNanos = 51
             receiveInterval.endNanos = 60
             connection = CONNECTION
+            connectedAttempt = attempts.single()
             statusCode = 200
             contentLength = 5
             requestBodyBytes = 3
@@ -61,19 +62,6 @@ class ExchangeMapperTest {
         assertEquals(ExchangeTimings(5, 20, 13, 4, 15, 9), exchange.timings)
         assertEquals(60, exchange.durationNanos)
         assertEquals(ExchangeOutcome.Ok, exchange.outcome)
-    }
-
-    @Test
-    fun `the connect time is the one of the attempt to the server IP`() {
-        state.attempts += AttemptState("1.1.1.1", 443, ProxyType.DIRECT, startNanos = 0).also {
-            it.connectInterval.endNanos = 10
-        }
-        state.attempts += AttemptState("1.1.1.2", 443, ProxyType.DIRECT, startNanos = 20).also {
-            it.connectInterval.endNanos = 35
-        }
-        state.connection = CONNECTION.copy(peerAddress = "1.1.1.2")
-
-        assertEquals(15L, ExchangeMapper(TestFailureMapper).toExchange(state).timings.connectNanos)
     }
 
     private companion object {

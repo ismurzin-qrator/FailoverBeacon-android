@@ -223,13 +223,37 @@ class CallRecorderTest {
     }
 
     @Test
+    fun `the connect time is the one of the attempt that made the connection`() {
+        recorder.callStart("a.com", 443, "GET")
+        connect("1.1.1.1", start = 0, end = 10)
+        connect("1.1.1.2", start = 20, end = 35)
+        recorder.connectionAcquired("1.1.1.2", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
+        recorder.callEnd()
+
+        val exchange = published.single()
+        assertFalse(exchange.reusedConnection)
+        assertEquals(15L, exchange.timings.connectNanos)
+    }
+
+    @Test
+    fun `an exchange without a connection reuses none`() {
+        recorder.callStart("a.com", 443, "GET")
+        connect("1.1.1.1", failure = ConnectException("refused"))
+        recorder.callFailed(ConnectException("refused"), CallStopReason.FAILED)
+
+        assertFalse(published.single().reusedConnection)
+    }
+
+    @Test
     fun `a connect to another port of the same IP is not this connection`() {
         recorder.callStart("a.com", 443, "GET")
         connect("1.1.1.1", port = 443)
         recorder.connectionAcquired("1.1.1.1", 8443, "a.com", 8443, "h2", ProxyType.DIRECT, TLS)
         recorder.callEnd()
 
-        assertTrue(published.single().reusedConnection)
+        val exchange = published.single()
+        assertTrue(exchange.reusedConnection)
+        assertNull(exchange.timings.connectNanos)
     }
 
     @Test

@@ -20,7 +20,7 @@ internal class ExchangeState(
     val attempts = ArrayList<AttemptState>()
     var dnsAddresses: List<String>? = null
     var connection: ExchangeConnection? = null
-    var reusedConnection = false
+    var connectedAttempt: AttemptState? = null
     var statusCode: Int? = null
     var contentLength: Long? = null
     var requestBodyBytes: Long? = null
@@ -36,8 +36,7 @@ internal class ExchangeState(
     val responded: Boolean get() = statusCode != null
     val ended: Boolean get() = responded || failure != null
     val completed: Boolean get() = responded && failure == null
-
-    /** Why the call stopped this exchange; a call stopped after a complete response did not. */
+    val reusedConnection: Boolean get() = connection != null && connectedAttempt == null
     val stopReason: CallStopReason? get() = callStopReason.takeUnless { completed }
     val allAttemptsFailed: Boolean
         get() = attempts.isNotEmpty() && attempts.all { it.failure != null }
