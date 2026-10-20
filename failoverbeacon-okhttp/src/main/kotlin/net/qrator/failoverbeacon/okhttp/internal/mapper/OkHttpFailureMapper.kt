@@ -58,18 +58,9 @@ internal class OkHttpFailureMapper : FailureMapper {
         is EOFException -> FailureType.CLOSED
         is CertificateException -> FailureType.CERT_UNTRUSTED
         is SSLProtocolException -> FailureType.TLS_PROTOCOL_ERROR
-        else -> byOkHttpClass(failure)
-    }
-
-    private fun byOkHttpClass(failure: Throwable): FailureType? = try {
-        when (failure) {
-            is StreamResetException -> FailureType.STREAM_RESET
-            is ConnectionShutdownException -> FailureType.CLOSED
-            else -> null
-        }
-    } catch (_: LinkageError) {
-        // OkHttp internal classes may vary across versions.
-        null
+        is StreamResetException -> FailureType.STREAM_RESET
+        is ConnectionShutdownException -> FailureType.CLOSED
+        else -> null
     }
 
     private fun byMessage(failure: Throwable): FailureType? {
