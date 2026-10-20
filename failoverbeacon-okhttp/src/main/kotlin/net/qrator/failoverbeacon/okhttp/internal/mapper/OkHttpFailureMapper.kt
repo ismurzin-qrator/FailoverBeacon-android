@@ -75,27 +75,27 @@ internal class OkHttpFailureMapper : FailureMapper {
     private fun byMessage(failure: Throwable): FailureType? {
         val message = failure.message ?: return null
         return when {
-            failure is SocketException && message == "Connection reset" -> FailureType.RESET
+            failure is SocketException && message == CONNECTION_RESET -> FailureType.RESET
 
-            failure is ConnectException && message == "Connection refused" -> FailureType.REFUSED
+            failure is ConnectException && message == CONNECTION_REFUSED -> FailureType.REFUSED
 
-            failure is ConnectException && message == "Network is unreachable" ->
+            failure is ConnectException && message == NETWORK_UNREACHABLE ->
                 FailureType.ADDRESS_UNREACHABLE
 
-            failure is SSLException && message.endsWith(", Connection reset by peer") ->
+            failure is SSLException && message.endsWith(RESET_BY_PEER_SUFFIX) ->
                 FailureType.RESET
 
-            failure is SSLHandshakeException && message == "Connection closed by peer" ->
+            failure is SSLHandshakeException && message == CLOSED_BY_PEER ->
                 FailureType.CLOSED
 
             failure is SSLPeerUnverifiedException &&
-                message.startsWith("Certificate pinning failure!") ->
+                message.startsWith(PINNING_FAILURE_PREFIX) ->
                 FailureType.CERT_PIN_MISMATCH
 
-            failure is ProtocolException && message == "unexpected end of stream" ->
+            failure is ProtocolException && message == UNEXPECTED_END_OF_STREAM ->
                 FailureType.CLOSED
 
-            failure is ProtocolException && message.startsWith("Too many follow-up requests") ->
+            failure is ProtocolException && message.startsWith(TOO_MANY_FOLLOW_UPS_PREFIX) ->
                 FailureType.REDIRECT_LOOP
 
             else -> null
@@ -110,5 +110,19 @@ internal class OkHttpFailureMapper : FailureMapper {
 
     private companion object {
         const val MAX_CAUSES = 8
+
+        // Messages without errno on Android: every API level.
+        const val CONNECTION_RESET = "Connection reset"
+        const val CONNECTION_REFUSED = "Connection refused"
+        const val NETWORK_UNREACHABLE = "Network is unreachable"
+
+        // Conscrypt: strerror suffix ("%s, %s", jniutil.cc) - a FIN in the handshake on Android 24.
+        const val RESET_BY_PEER_SUFFIX = ", Connection reset by peer"
+        const val CLOSED_BY_PEER = "Connection closed by peer"
+
+        // OkHttp: CertificatePinner, Http1ExchangeCodec, RetryAndFollowUpInterceptor.
+        const val PINNING_FAILURE_PREFIX = "Certificate pinning failure!"
+        const val UNEXPECTED_END_OF_STREAM = "unexpected end of stream"
+        const val TOO_MANY_FOLLOW_UPS_PREFIX = "Too many follow-up requests"
     }
 }

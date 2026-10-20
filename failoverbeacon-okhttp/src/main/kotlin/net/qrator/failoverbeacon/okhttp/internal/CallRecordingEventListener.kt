@@ -141,7 +141,7 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
     override fun responseHeadersEnd(call: Call, response: Response) = safely {
         recorder.responseHeadersEnd(
             response.code,
-            response.headers["Content-Length"]?.toLongOrNull()
+            response.headers[CONTENT_LENGTH]?.toLongOrNull()
         )
     }
 
@@ -214,5 +214,7 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
         /** Whether the SDK does not fit this OkHttp version. */
         @Volatile
         var incompatible = false
+
+        private const val CONTENT_LENGTH = "Content-Length"
     }
 }

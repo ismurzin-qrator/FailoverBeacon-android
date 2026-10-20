@@ -35,7 +35,7 @@ public object FailoverBeacon {
         consent: Consent = Consent.GRANTED
     ) {
         if (SdkRegistry.instance != null) {
-            SdkRegistry.logger.warn { "Already initialized. Ignored" }
+            SdkRegistry.logger.warn { ALREADY_INITIALIZED }
             return
         }
         val appContext = context.applicationContext ?: context
@@ -46,7 +46,7 @@ public object FailoverBeacon {
         }
         val sdkInstance = SdkAssembly.createInstance(appContext, toTrackingConsent(consent))
         if (!SdkRegistry.install(sdkInstance)) {
-            SdkRegistry.logger.warn { "Already initialized. Ignored" }
+            SdkRegistry.logger.warn { ALREADY_INITIALIZED }
             return
         }
         installFeatures(sdkInstance, config)
@@ -103,4 +103,6 @@ public object FailoverBeacon {
         Consent.PENDING -> TrackingConsent.PENDING
         Consent.NOT_GRANTED -> TrackingConsent.NOT_GRANTED
     }
+
+    private const val ALREADY_INITIALIZED = "Already initialized. Ignored"
 }
