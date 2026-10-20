@@ -29,14 +29,14 @@ class CallRecorder(
     private var finished = false
 
     @Synchronized
-    fun callStart(serverAddress: String, serverPort: Int, method: String) {
-        callTarget = Target(serverAddress, serverPort)
+    fun callStart(scheme: String, serverAddress: String, serverPort: Int, method: String) {
+        callTarget = Target(scheme, serverAddress, serverPort)
         callMethod = method
     }
 
     @Synchronized
-    fun targetSelected(serverAddress: String, serverPort: Int) {
-        val target = Target(serverAddress, serverPort)
+    fun targetSelected(scheme: String, serverAddress: String, serverPort: Int) {
+        val target = Target(scheme, serverAddress, serverPort)
         val exchange = current
         if (exchange != null && !exchange.ended) {
             if (exchange.target == null) exchange.target = target
@@ -121,6 +121,7 @@ class CallRecorder(
     fun connectionAcquired(
         peerAddress: String,
         peerPort: Int,
+        scheme: String,
         serverAddress: String,
         serverPort: Int,
         protocol: String,
@@ -128,7 +129,7 @@ class CallRecorder(
         tls: ExchangeTls?
     ) {
         val connection = ExchangeConnection(peerAddress, protocol, proxy, tls)
-        val target = Target(serverAddress, serverPort)
+        val target = Target(scheme, serverAddress, serverPort)
         val now = clock.nanoTime()
         val exchange = current
         if (exchange != null && exchange.allAttemptsFailed && exchange.isOtherServer(target)) {
@@ -156,10 +157,10 @@ class CallRecorder(
     }
 
     @Synchronized
-    fun requestHeadersEnd(serverAddress: String, serverPort: Int, method: String) {
+    fun requestHeadersEnd(scheme: String, serverAddress: String, serverPort: Int, method: String) {
         current?.apply {
             val now = clock.nanoTime()
-            target = Target(serverAddress, serverPort)
+            target = Target(scheme, serverAddress, serverPort)
             this.method = method
             sendInterval.endNanos = now
             waitInterval.startNanos = now

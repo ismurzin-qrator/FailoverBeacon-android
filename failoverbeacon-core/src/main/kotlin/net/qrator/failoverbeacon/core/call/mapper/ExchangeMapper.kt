@@ -16,6 +16,7 @@ internal class ExchangeMapper(failureMapper: FailureMapper) {
         Exchange(
             callId = callId,
             request = ExchangeRequest(
+                scheme = target?.scheme,
                 serverAddress = target?.address,
                 serverPort = target?.port,
                 method = method,

@@ -31,7 +31,7 @@ class CallRecorderTest {
     @Test
     fun `a pooled connection to another server ends the exchange the app gave up`() {
         start(host = "primary.com")
-        recorder.targetSelected("primary.com", 443)
+        recorder.targetSelected("https", "primary.com", 443)
         connect("1.1.1.1", failure = REFUSED)
         acquire("2.2.2.2", host = "backup.com")
         respond(200)
@@ -64,7 +64,7 @@ class CallRecorderTest {
         acquire()
         respond(302)
         recorder.connectStart("2.2.2.2", 443, ProxyType.DIRECT)
-        recorder.targetSelected("b.com", 443)
+        recorder.targetSelected("https", "b.com", 443)
         recorder.callFailed(REFUSED, CallStopReason.FAILED)
 
         assertEquals("b.com", published.last().request.serverAddress)
@@ -234,7 +234,7 @@ class CallRecorderTest {
         start(method = "POST")
         acquire()
         recorder.requestHeadersStart()
-        recorder.requestHeadersEnd("a.com", 443, "POST")
+        recorder.requestHeadersEnd("https", "a.com", 443, "POST")
         recorder.callFailed(IOException("file is gone"), CallStopReason.FAILED)
 
         assertEquals(
@@ -262,7 +262,7 @@ class CallRecorderTest {
         start(method = "POST")
         acquire()
         at(0) { requestHeadersStart() }
-        at(1) { requestHeadersEnd("a.com", 443, "POST") }
+        at(1) { requestHeadersEnd("https", "a.com", 443, "POST") }
         at(5) { responseHeadersEnd(200, null) }
         at(9) { requestBodyEnd(10) }
         recorder.callEnd()
@@ -276,7 +276,7 @@ class CallRecorderTest {
         start()
         acquire()
         at(0) { requestHeadersStart() }
-        at(1) { requestHeadersEnd("a.com", 443, "GET") }
+        at(1) { requestHeadersEnd("https", "a.com", 443, "GET") }
         at(51) { responseHeadersEnd(200, 200_000) }
         at(451) { responseFailed(timeout) }
         recorder.callFailed(timeout, CallStopReason.FAILED)
@@ -317,8 +317,17 @@ class CallRecorderTest {
             val published = mutableListOf<Exchange>()
             val recorder = CallRecorder({ time }, TestFailureMapper, published::add)
             time = 0
-            recorder.callStart("a.com", 443, "GET")
-            recorder.connectionAcquired("1.1.1.1", 443, "a.com", 443, "h2", ProxyType.DIRECT, TLS)
+            recorder.callStart("https", "a.com", 443, "GET")
+            recorder.connectionAcquired(
+                "1.1.1.1",
+                443,
+                "https",
+                "a.com",
+                443,
+                "h2",
+                ProxyType.DIRECT,
+                TLS
+            )
             time = 1
             recorder.requestHeadersStart()
             time = 10
@@ -383,10 +392,10 @@ class CallRecorderTest {
     }
 
     private fun start(method: String = "GET", host: String = "a.com") =
-        recorder.callStart(host, 443, method)
+        recorder.callStart("https", host, 443, method)
 
     private fun acquire(ip: String = "1.1.1.1", port: Int = 443, host: String = "a.com") =
-        recorder.connectionAcquired(ip, port, host, port, "h2", ProxyType.DIRECT, TLS)
+        recorder.connectionAcquired(ip, port, "https", host, port, "h2", ProxyType.DIRECT, TLS)
 
     private fun respond(statusCode: Int) {
         recorder.requestHeadersStart()

@@ -79,7 +79,7 @@ class TelemetryCollectorTest {
 
     private fun failure(host: String? = "a.com") = exchange(
         callId = KEPT,
-        request = ExchangeRequest(host, 443, "GET", bodyBytes = null),
+        request = ExchangeRequest("https", host, 443, "GET", bodyBytes = null),
         response = ExchangeResponse(500, null, 0)
     )
 

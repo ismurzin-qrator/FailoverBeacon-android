@@ -49,11 +49,11 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
 
     override fun callStart(call: Call) = safely {
         val request = call.request()
-        recorder.callStart(request.url.host, request.url.port, request.method)
+        recorder.callStart(request.url.scheme, request.url.host, request.url.port, request.method)
     }
 
     override fun proxySelectStart(call: Call, url: HttpUrl) =
-        safely { recorder.targetSelected(url.host, url.port) }
+        safely { recorder.targetSelected(url.scheme, url.host, url.port) }
 
     override fun dnsStart(call: Call, domainName: String) = safely { recorder.dnsStart() }
 
@@ -128,7 +128,12 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
     }
 
     override fun requestHeadersEnd(call: Call, request: Request) = safely {
-        recorder.requestHeadersEnd(request.url.host, request.url.port, request.method)
+        recorder.requestHeadersEnd(
+            request.url.scheme,
+            request.url.host,
+            request.url.port,
+            request.method
+        )
     }
 
     override fun requestBodyEnd(call: Call, byteCount: Long) =
@@ -175,6 +180,7 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
         recorder.connectionAcquired(
             peerAddress = route.socketAddress.peerAddress(),
             peerPort = route.socketAddress.port,
+            scheme = route.address.url.scheme,
             serverAddress = route.address.url.host,
             serverPort = route.address.url.port,
             protocol = connection.protocol().toString(),

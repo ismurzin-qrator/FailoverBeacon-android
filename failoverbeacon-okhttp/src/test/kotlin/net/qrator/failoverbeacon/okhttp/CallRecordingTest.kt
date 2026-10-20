@@ -79,6 +79,7 @@ class CallRecordingTest {
         assertEquals("hello", execute(client().build()))
 
         val exchange = exchanges.single()
+        assertEquals("http", exchange.request.scheme)
         assertEquals(server.port, exchange.request.serverPort)
         assertEquals("GET", exchange.request.method)
         assertEquals(200, exchange.response?.statusCode)
@@ -238,6 +239,7 @@ class CallRecordingTest {
 
         val (challenge, followUp) = exchanges
         assertEquals(401, challenge.response?.statusCode)
+        assertEquals("http", followUp.request.scheme)
         assertEquals("a.test", followUp.request.serverAddress)
         assertEquals(server.port, followUp.request.serverPort)
         assertTrue(followUp.reusedConnection)
@@ -254,6 +256,7 @@ class CallRecordingTest {
         runCatching { client().build().withFailoverBeacon().newCall(request).execute().close() }
 
         val exchange = exchanges.first()
+        assertEquals("http", exchange.request.scheme)
         assertEquals("DELETE", exchange.request.method)
         val refused = ConnectResult.Failed(ExchangeStep.TCP, FailureType.REFUSED)
         assertEquals(refused, exchange.attempts.single().result)
@@ -369,6 +372,7 @@ class CallRecordingTest {
         execute(client, "https://localhost:${server.port}/")
 
         val exchange = exchanges.single()
+        assertEquals("https", exchange.request.scheme)
         assertNotNull(exchange.timings.tlsNanos)
         assertEquals(ConnectResult.Connected, exchange.attempts.single().result)
         assertEquals(ExchangeOutcome.Ok, exchange.outcome)

@@ -30,6 +30,7 @@ internal class TelemetryEventMapper {
         return TelemetryEvent(
             callId = exchange.callId,
             resendCount = exchange.resendCount,
+            scheme = exchange.request.scheme,
             host = exchange.request.serverAddress,
             port = exchange.request.serverPort,
             method = exchange.request.method,

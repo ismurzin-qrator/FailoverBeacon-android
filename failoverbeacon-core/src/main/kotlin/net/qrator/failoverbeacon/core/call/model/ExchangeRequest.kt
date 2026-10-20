@@ -1,7 +1,8 @@
 package net.qrator.failoverbeacon.core.call.model
 
-/** Target and method are null for a follow-up that failed before the client named them. */
+/** Server and method are null for a follow-up that failed before the client named them. */
 data class ExchangeRequest(
+    val scheme: String?,
     val serverAddress: String?,
     val serverPort: Int?,
     val method: String?,

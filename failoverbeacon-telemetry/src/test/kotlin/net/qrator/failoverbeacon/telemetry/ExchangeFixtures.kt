@@ -16,7 +16,7 @@ const val MS = 1_000_000L
 
 fun exchange(
     callId: Long = 7,
-    request: ExchangeRequest = ExchangeRequest("a.com", 443, "GET", bodyBytes = null),
+    request: ExchangeRequest = ExchangeRequest("https", "a.com", 443, "GET", bodyBytes = null),
     response: ExchangeResponse? = ExchangeResponse(200, contentLength = null, bodyBytes = 0),
     connection: ExchangeConnection? =
         ExchangeConnection("1.1.1.1", "h2", ProxyType.DIRECT, tls = null),

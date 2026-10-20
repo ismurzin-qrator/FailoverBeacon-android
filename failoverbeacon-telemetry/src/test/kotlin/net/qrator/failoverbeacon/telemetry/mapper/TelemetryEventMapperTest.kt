@@ -48,7 +48,7 @@ class TelemetryEventMapperTest {
     fun `maps every field of an exchange, durations in whole milliseconds`() {
         val untrusted = ConnectResult.Failed(ExchangeStep.TLS, CERT_UNTRUSTED)
         val exchange = exchange(
-            request = ExchangeRequest("a.com", 443, "POST", bodyBytes = 3),
+            request = ExchangeRequest("https", "a.com", 443, "POST", bodyBytes = 3),
             response = ExchangeResponse(200, contentLength = 5, bodyBytes = 5),
             connection = ExchangeConnection("1.1.1.1", "h2", ProxyType.HTTP, HANDSHAKE),
             reusedConnection = true,
@@ -64,6 +64,7 @@ class TelemetryEventMapperTest {
         val expected = TelemetryEvent(
             callId = 7,
             resendCount = 1,
+            scheme = "https",
             host = "a.com",
             port = 443,
             method = "POST",

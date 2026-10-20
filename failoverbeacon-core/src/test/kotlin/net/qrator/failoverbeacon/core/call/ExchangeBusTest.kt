@@ -20,7 +20,7 @@ class ExchangeBusTest {
     private val bus = ExchangeBus()
     private val exchange = Exchange(
         callId = 0,
-        request = ExchangeRequest("a.com", 443, "GET", bodyBytes = null),
+        request = ExchangeRequest("https", "a.com", 443, "GET", bodyBytes = null),
         response = null,
         resendCount = 0,
         connection = null,
