@@ -23,7 +23,6 @@ import net.qrator.failoverbeacon.core.call.model.ProxyType
 import net.qrator.failoverbeacon.core.call.state.CallStopReason
 import net.qrator.failoverbeacon.core.call.state.ConnectStopReason
 import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
-import net.qrator.failoverbeacon.core.network.model.NetworkTransport
 
 class CallRecorderTest {
     private var time = 0L
@@ -34,30 +33,23 @@ class CallRecorderTest {
         CallRecorder({ time }, { network }, { foreground }, TestFailureMapper, published::add)
 
     @Test
-    fun `each exchange keeps the network it started on`() {
-        network = WIFI
-        start()
-        acquire()
-        network = CELLULAR
-        respond(302)
-        acquire(host = "b.com")
-        respond(200)
-        recorder.callEnd()
-
-        assertEquals(listOf(WIFI, CELLULAR), published.map { it.network })
-    }
-
-    @Test
-    fun `each exchange keeps whether the app was in the foreground when it started`() {
+    fun `each exchange keeps the network and foreground state it started with`() {
         foreground = true
         start()
         acquire()
+        network = NetworkSnapshot.None
         foreground = false
         respond(302)
         acquire(host = "b.com")
         respond(200)
         recorder.callEnd()
 
+        assertEquals(
+            listOf(NetworkSnapshot.Unknown, NetworkSnapshot.None),
+            published.map {
+                it.network
+            }
+        )
         assertEquals(listOf(true, false), published.map { it.foreground })
     }
 
@@ -349,9 +341,13 @@ class CallRecorderTest {
         )) {
             val published = mutableListOf<Exchange>()
             val recorder =
-                CallRecorder({
-                    time
-                }, { network }, { foreground }, TestFailureMapper, published::add)
+                CallRecorder(
+                    clock = { time },
+                    networkSource = { network },
+                    foregroundSource = { foreground },
+                    failureMapper = TestFailureMapper,
+                    publisher = published::add
+                )
             time = 0
             recorder.callStart("https", "a.com", 443, "GET")
             recorder.connectionAcquired(
@@ -481,21 +477,5 @@ class CallRecorderTest {
         val REFUSED = ConnectException("refused")
         val RESET = SocketException("Connection reset")
         val CLOSED = SocketException("Socket closed")
-        val WIFI = connected(NetworkTransport.WIFI)
-        val CELLULAR = connected(NetworkTransport.CELLULAR)
-
-        fun connected(transport: NetworkTransport) = NetworkSnapshot.Connected(
-            transport = transport,
-            vpn = false,
-            validated = true,
-            captivePortal = false,
-            metered = false,
-            roaming = false,
-            downstreamKbps = null,
-            upstreamKbps = null,
-            signalStrength = null,
-            carrier = null,
-            blocked = null
-        )
     }
 }

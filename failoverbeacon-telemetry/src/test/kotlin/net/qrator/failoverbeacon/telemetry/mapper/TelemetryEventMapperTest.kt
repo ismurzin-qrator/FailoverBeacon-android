@@ -128,7 +128,7 @@ class TelemetryEventMapperTest {
                 downstreamKbps = 30_000,
                 upstreamKbps = 10_000,
                 signalStrength = -90,
-                carrier = TelemetryCarrier("Beeline", "250", "99", 2, 13),
+                carrier = TelemetryCarrier("Carrier B", "001", "02", 2, 13),
                 blocked = false
             ),
             foreground = true
@@ -151,13 +151,10 @@ class TelemetryEventMapperTest {
     @Test
     fun `names each network transport as core does`() {
         for (transport in NetworkTransport.entries) {
-            val network = mapper.toEvent(exchange(network = CONNECTED.copy(transport = transport)))
-                .network
+            val event = mapper.toEvent(exchange(network = CONNECTED.copy(transport = transport)))
+            val network = assertIs<TelemetryNetwork.Connected>(event.network)
 
-            assertEquals(
-                transport.name,
-                assertIs<TelemetryNetwork.Connected>(network).transport.name
-            )
+            assertEquals(transport.name, network.transport.name)
         }
     }
 
@@ -236,7 +233,7 @@ class TelemetryEventMapperTest {
             downstreamKbps = 30_000,
             upstreamKbps = 10_000,
             signalStrength = -90,
-            carrier = NetworkCarrier("Beeline", "250", "99", 2, 13),
+            carrier = NetworkCarrier("Carrier B", "001", "02", 2, 13),
             blocked = false
         )
         val HANDSHAKE = ExchangeTls("TLSv1.3", "TLS_AES_128_GCM_SHA256", "CN=Test CA")

@@ -41,6 +41,7 @@ import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.model.FailureType
 import net.qrator.failoverbeacon.core.call.model.ProxyType
+import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 import net.qrator.failoverbeacon.okhttp.fakes.installSdk
 import okhttp3.Cache
 import okhttp3.EventListener
@@ -64,7 +65,7 @@ class CallRecordingTest {
     @BeforeTest
     fun setUp() {
         server.start(LOOPBACK, 0)
-        installSdk(ExchangeSubscriber(exchanges::add))
+        installSdk(ExchangeSubscriber(exchanges::add), network = NETWORK, foreground = true)
     }
 
     @AfterTest
@@ -98,6 +99,8 @@ class CallRecordingTest {
         assertNotNull(exchange.timings.waitNanos)
         assertNotNull(exchange.timings.receiveNanos)
         assertEquals(ExchangeOutcome.Ok, exchange.outcome)
+        assertEquals(NETWORK, exchange.network)
+        assertEquals(true, exchange.foreground)
     }
 
     @Test
@@ -709,6 +712,7 @@ class CallRecordingTest {
 
     private companion object {
         const val LOOPBACK_IP = "127.0.0.1"
+        val NETWORK = NetworkSnapshot.None
         const val MAX_FOLLOW_UPS = 20
         const val LARGE_HEADER = 64 * 1024
         val LOOPBACK: InetAddress = InetAddress.getByName(LOOPBACK_IP)

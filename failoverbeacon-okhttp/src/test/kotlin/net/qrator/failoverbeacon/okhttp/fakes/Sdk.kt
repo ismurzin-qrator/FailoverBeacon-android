@@ -9,7 +9,11 @@ import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
 import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 
 /** Installs an SDK whose exchanges go to [subscribers]; without one, calls are not recorded. */
-fun installSdk(vararg subscribers: ExchangeSubscriber) {
+fun installSdk(
+    vararg subscribers: ExchangeSubscriber,
+    network: NetworkSnapshot = NetworkSnapshot.Unknown,
+    foreground: Boolean? = null
+) {
     val bus = ExchangeBus()
     subscribers.forEach(bus::subscribe)
     SdkRegistry.install(
@@ -18,8 +22,8 @@ fun installSdk(vararg subscribers: ExchangeSubscriber) {
             consent = TrackingConsent.GRANTED,
             clock = { System.nanoTime() },
             exchangeBus = bus,
-            networkSource = { NetworkSnapshot.Unknown },
-            foregroundSource = { null }
+            networkSource = { network },
+            foregroundSource = { foreground }
         )
     )
 }

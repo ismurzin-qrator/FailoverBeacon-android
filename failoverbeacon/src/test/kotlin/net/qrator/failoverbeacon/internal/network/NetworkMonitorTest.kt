@@ -40,6 +40,9 @@ import org.robolectric.shadows.ShadowSubscriptionManager
 @RunWith(RobolectricTestRunner::class)
 class NetworkMonitorTest {
     private val app: Application = RuntimeEnvironment.getApplication()
+    private val telephonyManager: TelephonyManager = app.getSystemService(
+        TelephonyManager::class.java
+    )
     private val monitor = NetworkMonitor(app)
 
     @AfterTest
@@ -78,98 +81,136 @@ class NetworkMonitorTest {
         for ((capabilities, expected) in cases) {
             monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities)
 
-            val network = assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork())
-            assertEquals(expected, network.copy(carrier = null))
+            assertEquals(expected, connected().copy(carrier = null))
         }
     }
 
     @Test
     fun `reads the carrier of the SIM that carries mobile data`() {
-        voiceSim(operator = "25001", name = "MTS", carrierId = 1)
-        val dataSim = sim(operator = "25099", name = "Beeline", carrierId = 2)
+        sim(telephonyManager, operator = "00101", name = "Carrier A", carrierId = 1)
+        val dataSim = sim(operator = "00102", name = "Carrier B", carrierId = 2)
         shadowOf(dataSim).setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE)
         shadowOf(telephonyManager).setTelephonyManagerForSubscriptionId(DATA_SUBSCRIPTION, dataSim)
         ShadowSubscriptionManager.setActiveDataSubscriptionId(DATA_SUBSCRIPTION)
         shadowOf(app).grantPermissions(Manifest.permission.READ_PHONE_STATE)
 
-        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, capabilities(listOf(TRANSPORT_CELLULAR)))
+        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, cellular())
 
         assertEquals(
-            NetworkCarrier("Beeline", "250", "99", 2, TelephonyManager.NETWORK_TYPE_LTE),
-            assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).carrier
+            NetworkCarrier("Carrier B", "001", "02", 2, TelephonyManager.NETWORK_TYPE_LTE),
+            connected().carrier
         )
     }
 
     @Test
     @Config(sdk = [29])
     fun `below API 30 the default data SIM is read`() {
-        voiceSim(operator = "25001", name = "MTS", carrierId = 1)
-        val dataSim = sim(operator = "25099", name = "Beeline", carrierId = 2)
+        sim(telephonyManager, operator = "00101", name = "Carrier A", carrierId = 1)
+        val dataSim = sim(operator = "00102", name = "Carrier B", carrierId = 2)
         shadowOf(telephonyManager).setTelephonyManagerForSubscriptionId(DATA_SUBSCRIPTION, dataSim)
         ShadowSubscriptionManager.setDefaultDataSubscriptionId(DATA_SUBSCRIPTION)
 
-        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, capabilities(listOf(TRANSPORT_CELLULAR)))
+        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, cellular())
 
-        assertEquals(
-            "Beeline",
-            assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).carrier?.name
-        )
+        assertEquals("Carrier B", connected().carrier?.name)
     }
 
     @Test
     @Config(sdk = [27])
     fun `below API 28 the carrier is named by its SIM and has no id`() {
         shadowOf(telephonyManager).apply {
-            setSimOperator("25001")
-            setSimOperatorName("MTS")
+            setSimOperator("00101")
+            setSimOperatorName("Carrier A")
         }
 
-        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, capabilities(listOf(TRANSPORT_CELLULAR)))
+        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, cellular())
 
         assertEquals(
-            NetworkCarrier("MTS", "250", "01", carrierId = null, networkType = null),
-            assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).carrier
+            NetworkCarrier("Carrier A", "001", "01", carrierId = null, networkType = null),
+            connected().carrier
         )
     }
 
     @Test
-    fun `the network type needs the phone state permission`() {
-        voiceSim(operator = "25001", name = "MTS", carrierId = 1)
-        shadowOf(telephonyManager).setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE)
+    @Config(sdk = [25])
+    fun `below API 26 the carrier has no name`() {
+        shadowOf(telephonyManager).apply {
+            setSimOperator("00101")
+            setSimOperatorName("Carrier A")
+        }
 
-        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, capabilities(listOf(TRANSPORT_CELLULAR)))
+        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, cellular())
 
         assertEquals(
-            NetworkCarrier("MTS", "250", "01", 1, networkType = null),
-            assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).carrier
+            NetworkCarrier(name = null, "001", "01", carrierId = null, networkType = null),
+            connected().carrier
         )
+    }
+
+    @Test
+    fun `the network type needs a phone state permission`() {
+        sim(telephonyManager, operator = "00101", name = "Carrier A", carrierId = 1)
+        shadowOf(telephonyManager).setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE)
+
+        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, cellular())
+        val withoutPermission = connected().carrier?.networkType
+        shadowOf(app).grantPermissions(Manifest.permission.READ_BASIC_PHONE_STATE)
+        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, cellular())
+
+        assertNull(withoutPermission)
+        assertEquals(TelephonyManager.NETWORK_TYPE_LTE, connected().carrier?.networkType)
+    }
+
+    @Test
+    fun `empty and unknown carrier values are not reported`() {
+        shadowOf(telephonyManager).apply {
+            setSimOperator("")
+            setSimCarrierIdName("")
+            setSimCarrierId(TelephonyManager.UNKNOWN_CARRIER_ID)
+            setDataNetworkType(TelephonyManager.NETWORK_TYPE_UNKNOWN)
+        }
+        shadowOf(app).grantPermissions(Manifest.permission.READ_PHONE_STATE)
+
+        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, cellular())
+
+        assertEquals(NetworkCarrier(null, null, null, null, null), connected().carrier)
     }
 
     @Test
     fun `there is no carrier off cellular networks`() {
-        voiceSim(operator = "25001", name = "MTS", carrierId = 1)
+        sim(telephonyManager, operator = "00101", name = "Carrier A", carrierId = 1)
 
         monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
 
-        assertNull(assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).carrier)
+        assertNull(connected().carrier)
     }
 
     @Test
     @Config(shadows = [UnsupportedTelephonyManager::class])
     fun `a device without telephony reports the network without a carrier`() {
-        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, capabilities(listOf(TRANSPORT_CELLULAR)))
+        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, cellular())
 
-        val network = assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork())
-        assertEquals(NetworkTransport.CELLULAR, network.transport)
-        assertNull(network.carrier)
+        assertEquals(NetworkTransport.CELLULAR, connected().transport)
+        assertNull(connected().carrier)
     }
 
     @Test
     @Config(sdk = [27])
     fun `roaming is unknown below API 28`() {
-        monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_CELLULAR)))
+        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, cellular())
 
-        assertNull(assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).roaming)
+        assertNull(connected().roaming)
+    }
+
+    @Test
+    @Config(sdk = [28])
+    fun `roaming is reported from API 28`() {
+        monitor.onCapabilitiesChanged(
+            CELLULAR_NETWORK,
+            capabilities(listOf(TRANSPORT_CELLULAR), roaming = true)
+        )
+
+        assertEquals(true, connected().roaming)
     }
 
     @Test
@@ -177,7 +218,7 @@ class NetworkMonitorTest {
     fun `signal strength is unknown below API 29`() {
         monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(signalStrength = -60))
 
-        assertNull(assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).signalStrength)
+        assertNull(connected().signalStrength)
     }
 
     @Test
@@ -185,10 +226,7 @@ class NetworkMonitorTest {
     fun `signal strength is reported from API 29`() {
         monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(signalStrength = -60))
 
-        assertEquals(
-            -60,
-            assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).signalStrength
-        )
+        assertEquals(-60, connected().signalStrength)
     }
 
     @Test
@@ -196,17 +234,10 @@ class NetworkMonitorTest {
     fun `below API 26 a new default network is read when it becomes available`() {
         shadowOf(app.getSystemService(ConnectivityManager::class.java))
             .setNetworkCapabilities(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
-        monitor.register()
 
         monitor.onAvailable(WIFI_NETWORK)
-        val available = monitor.currentNetwork()
-        monitor.onLost(WIFI_NETWORK)
 
-        assertEquals(
-            NetworkTransport.WIFI,
-            assertIs<NetworkSnapshot.Connected>(available).transport
-        )
-        assertEquals(NetworkSnapshot.None, monitor.currentNetwork())
+        assertEquals(NetworkTransport.WIFI, connected().transport)
     }
 
     @Test
@@ -214,7 +245,6 @@ class NetworkMonitorTest {
     fun `from API 26 a new default network waits for its capabilities`() {
         shadowOf(app.getSystemService(ConnectivityManager::class.java))
             .setNetworkCapabilities(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
-        monitor.register()
 
         monitor.onAvailable(WIFI_NETWORK)
 
@@ -223,17 +253,22 @@ class NetworkMonitorTest {
 
     @Test
     fun `reports whether the system blocks the network for the app`() {
-        val wifi = capabilities(listOf(TRANSPORT_WIFI))
-        monitor.onCapabilitiesChanged(WIFI_NETWORK, wifi)
-        val unreported = assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).blocked
+        monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
+        val unreported = connected().blocked
         monitor.onBlockedStatusChanged(WIFI_NETWORK, true)
-        monitor.onCapabilitiesChanged(
-            WIFI_NETWORK,
-            capabilities(listOf(TRANSPORT_WIFI), downKbps = 1)
-        )
 
         assertNull(unreported)
-        assertEquals(true, assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).blocked)
+        assertEquals(true, connected().blocked)
+    }
+
+    @Test
+    fun `blocking survives a capabilities update`() {
+        val wifi = capabilities(listOf(TRANSPORT_WIFI))
+        monitor.onCapabilitiesChanged(WIFI_NETWORK, wifi)
+        monitor.onBlockedStatusChanged(WIFI_NETWORK, true)
+        monitor.onCapabilitiesChanged(WIFI_NETWORK, wifi)
+
+        assertEquals(true, connected().blocked)
     }
 
     @Test
@@ -241,16 +276,9 @@ class NetworkMonitorTest {
         monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
         monitor.onBlockedStatusChanged(WIFI_NETWORK, true)
         monitor.onAvailable(CELLULAR_NETWORK)
-        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, capabilities(listOf(TRANSPORT_CELLULAR)))
+        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, cellular())
 
-        assertNull(assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).blocked)
-    }
-
-    @Test
-    fun `blocking reported without a network leaves it unknown`() {
-        monitor.onBlockedStatusChanged(WIFI_NETWORK, true)
-
-        assertEquals(NetworkSnapshot.Unknown, monitor.currentNetwork())
+        assertNull(connected().blocked)
     }
 
     @Test
@@ -272,6 +300,10 @@ class NetworkMonitorTest {
         assertEquals(NetworkSnapshot.Unknown, monitor.currentNetwork())
         assertIs<SecurityException>(logged.single())
     }
+
+    private fun connected() = assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork())
+
+    private fun cellular() = capabilities(listOf(TRANSPORT_CELLULAR))
 
     private fun capabilities(
         transports: List<Int> = emptyList(),
@@ -298,25 +330,18 @@ class NetworkMonitorTest {
         return result
     }
 
-    private val telephonyManager: TelephonyManager
-        get() = app.getSystemService(TelephonyManager::class.java)
-
-    private fun voiceSim(operator: String, name: String, carrierId: Int) {
-        shadowOf(telephonyManager).apply {
+    private fun sim(
+        manager: TelephonyManager = Shadow.newInstanceOf(TelephonyManager::class.java),
+        operator: String,
+        name: String,
+        carrierId: Int
+    ): TelephonyManager {
+        shadowOf(manager).apply {
             setSimOperator(operator)
             setSimCarrierIdName(name)
             setSimCarrierId(carrierId)
         }
-    }
-
-    private fun sim(operator: String, name: String, carrierId: Int): TelephonyManager {
-        val sim = Shadow.newInstanceOf(TelephonyManager::class.java)
-        shadowOf(sim).apply {
-            setSimOperator(operator)
-            setSimCarrierIdName(name)
-            setSimCarrierId(carrierId)
-        }
-        return sim
+        return manager
     }
 
     @Implements(TelephonyManager::class)

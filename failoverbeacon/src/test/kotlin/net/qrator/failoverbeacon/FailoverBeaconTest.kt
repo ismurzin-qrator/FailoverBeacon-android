@@ -2,6 +2,7 @@ package net.qrator.failoverbeacon
 
 import android.app.Activity
 import android.app.Application
+import android.content.Context
 import android.content.ContextWrapper
 import android.net.ConnectivityManager
 import android.util.Log
@@ -158,6 +159,18 @@ class FailoverBeaconTest {
         Robolectric.buildActivity(Activity::class.java).setup()
 
         assertEquals(true, SdkRegistry.instance?.foregroundSource?.isForeground())
+    }
+
+    @Test
+    fun `without an application the foreground state is unknown`() {
+        val context = object : ContextWrapper(app) {
+            override fun getApplicationContext(): Context? = null
+        }
+
+        FailoverBeacon.initialize(context, config)
+
+        assertNotNull(SdkRegistry.instance)
+        assertNull(SdkRegistry.instance?.foregroundSource?.isForeground())
     }
 
     @Test
