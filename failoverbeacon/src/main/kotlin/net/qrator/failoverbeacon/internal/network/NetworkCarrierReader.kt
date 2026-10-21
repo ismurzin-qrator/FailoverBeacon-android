@@ -16,10 +16,9 @@ internal class NetworkCarrierReader(private val context: Context) {
         context.getSystemService(TelephonyManager::class.java)
 
     fun read(): NetworkCarrier? {
-        val telephonyManager = telephonyManager ?: return null
-        val manager = dataSimManager(telephonyManager)
+        val manager = telephonyManager?.let(::dataSimManager) ?: return null
         return try {
-            val simOperator = manager.simOperator?.takeIf { it.length in MCC_MNC_LENGTH }
+            val simOperator = manager.simOperator?.takeIf { it.length in MCC_MNC_LENGTHS }
             NetworkCarrier(
                 name = name(manager),
                 mcc = simOperator?.take(MCC_LENGTH),
@@ -27,7 +26,7 @@ internal class NetworkCarrierReader(private val context: Context) {
                 carrierId = carrierId(manager),
                 networkType = networkType(manager)
             )
-        } catch (e: RuntimeException) {
+        } catch (e: Exception) {
             SdkRegistry.logger.debug(e) { "Cannot read the carrier" }
             null
         }
@@ -44,6 +43,8 @@ internal class NetworkCarrierReader(private val context: Context) {
     }
 
     private fun name(manager: TelephonyManager): String? {
+        // Bug: below API 26 the SIM name is the default SIM's, whichever SIM the manager is for.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
         val name = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             manager.simCarrierIdName?.toString()
         } else {
@@ -59,23 +60,17 @@ internal class NetworkCarrierReader(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     private fun networkType(manager: TelephonyManager): Int? {
-        val phoneState = context.checkSelfPermission(Manifest.permission.READ_PHONE_STATE)
-        val basicPhoneState = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.checkSelfPermission(Manifest.permission.READ_BASIC_PHONE_STATE)
-        } else {
-            PackageManager.PERMISSION_DENIED
-        }
-
-        if (phoneState != PackageManager.PERMISSION_GRANTED &&
-            basicPhoneState != PackageManager.PERMISSION_GRANTED
-        ) {
-            return null
-        }
+        val granted = PackageManager.PERMISSION_GRANTED
+        val phoneState =
+            context.checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == granted
+        val basicPhoneState = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.READ_BASIC_PHONE_STATE) == granted
+        if (!phoneState && !basicPhoneState) return null
         return manager.dataNetworkType.takeIf { it != TelephonyManager.NETWORK_TYPE_UNKNOWN }
     }
 
     private companion object {
         const val MCC_LENGTH = 3
-        val MCC_MNC_LENGTH = 5..6
+        val MCC_MNC_LENGTHS = 5..6
     }
 }

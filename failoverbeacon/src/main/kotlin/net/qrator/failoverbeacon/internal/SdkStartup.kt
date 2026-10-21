@@ -19,8 +19,8 @@ internal object SdkStartup {
         consent: TrackingConsent,
         config: FailoverBeaconConfig
     ): Boolean {
-        val networkMonitor = NetworkMonitor(appContext)
         val application = appContext as? Application
+        val networkMonitor = NetworkMonitor(appContext)
         val foregroundMonitor = ForegroundMonitor()
         val foregroundSource =
             if (application != null) foregroundMonitor else ForegroundSource { null }

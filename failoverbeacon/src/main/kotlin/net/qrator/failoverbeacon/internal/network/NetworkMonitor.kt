@@ -8,7 +8,6 @@ import android.os.Build
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.warn
 import net.qrator.failoverbeacon.core.network.NetworkSource
-import net.qrator.failoverbeacon.core.network.model.NetworkCarrier
 import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 import net.qrator.failoverbeacon.internal.network.mapper.NetworkSnapshotMapper
 import net.qrator.failoverbeacon.internal.network.state.NetworkState
@@ -30,13 +29,13 @@ internal class NetworkMonitor(context: Context) :
     fun register() {
         val manager = connectivityManager
         if (manager == null) {
-            SdkRegistry.logger.warn { "Cannot watch the network. ConnectivityManager is null." }
+            SdkRegistry.logger.warn { "Cannot watch the network. ConnectivityManager is null" }
             return
         }
         try {
             manager.registerDefaultNetworkCallback(this)
         } catch (e: Exception) {
-            SdkRegistry.logger.warn(e) { "Cannot watch the network. Network is unknown." }
+            SdkRegistry.logger.warn(e) { "Cannot watch the network. Network is unknown" }
         }
     }
 
@@ -50,7 +49,8 @@ internal class NetworkMonitor(context: Context) :
 
     override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
         state.capabilities = capabilities
-        state.carrier = getCarrier(capabilities)
+        val cellular = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+        state.carrier = if (cellular) carrierReader.read() else null
         snapshot = snapshotMapper.toSnapshot(state)
     }
 
@@ -62,10 +62,5 @@ internal class NetworkMonitor(context: Context) :
     override fun onLost(network: Network) {
         state = NetworkState()
         snapshot = NetworkSnapshot.None
-    }
-
-    private fun getCarrier(capabilities: NetworkCapabilities): NetworkCarrier? {
-        val cellular = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
-        return if (cellular) carrierReader.read() else null
     }
 }
