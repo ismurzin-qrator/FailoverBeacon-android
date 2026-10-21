@@ -2,6 +2,7 @@ package net.qrator.failoverbeacon.telemetry.mapper
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import net.qrator.failoverbeacon.core.call.model.ConnectResult
 import net.qrator.failoverbeacon.core.call.model.ExchangeConnection
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
@@ -28,6 +29,8 @@ import net.qrator.failoverbeacon.core.call.model.FailureType.STREAM_RESET
 import net.qrator.failoverbeacon.core.call.model.FailureType.TIMED_OUT
 import net.qrator.failoverbeacon.core.call.model.FailureType.TLS_PROTOCOL_ERROR
 import net.qrator.failoverbeacon.core.call.model.ProxyType
+import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
+import net.qrator.failoverbeacon.core.network.model.NetworkTransport
 import net.qrator.failoverbeacon.telemetry.MS
 import net.qrator.failoverbeacon.telemetry.attempt
 import net.qrator.failoverbeacon.telemetry.exchange
@@ -35,6 +38,8 @@ import net.qrator.failoverbeacon.telemetry.model.TelemetryAttempt
 import net.qrator.failoverbeacon.telemetry.model.TelemetryAttemptResult
 import net.qrator.failoverbeacon.telemetry.model.TelemetryErrorType
 import net.qrator.failoverbeacon.telemetry.model.TelemetryEvent
+import net.qrator.failoverbeacon.telemetry.model.TelemetryNetwork
+import net.qrator.failoverbeacon.telemetry.model.TelemetryNetworkTransport
 import net.qrator.failoverbeacon.telemetry.model.TelemetryPhase
 import net.qrator.failoverbeacon.telemetry.model.TelemetryProxyType
 import net.qrator.failoverbeacon.telemetry.model.TelemetryStep
@@ -58,7 +63,8 @@ class TelemetryEventMapperTest {
                 attempt("1.1.1.2", ConnectResult.Superseded, connectNanos = null, ProxyType.SOCKS),
                 attempt("1.1.1.3", untrusted, 40 * MS + 999_999)
             ),
-            timings = ExchangeTimings(MS + 999_999, 20 * MS, 12 * MS, 2 * MS, 30 * MS, 4 * MS)
+            timings = ExchangeTimings(MS + 999_999, 20 * MS, 12 * MS, 2 * MS, 30 * MS, 4 * MS),
+            network = CONNECTED
         )
 
         val expected = TelemetryEvent(
@@ -108,9 +114,45 @@ class TelemetryEventMapperTest {
                     TelemetryErrorType.TLS_CERT_AUTHORITY_INVALID,
                     TelemetryStep.TLS
                 )
+            ),
+            network = TelemetryNetwork.Connected(
+                transport = TelemetryNetworkTransport.CELLULAR,
+                vpn = true,
+                validated = true,
+                captivePortal = false,
+                metered = true,
+                roaming = false,
+                downstreamKbps = 30_000,
+                upstreamKbps = 10_000,
+                signalStrength = -90
             )
         )
         assertEquals(expected, mapper.toEvent(exchange))
+    }
+
+    @Test
+    fun `keeps an unknown network apart from no network`() {
+        assertEquals(
+            TelemetryNetwork.Unknown,
+            mapper.toEvent(exchange(network = NetworkSnapshot.Unknown)).network
+        )
+        assertEquals(
+            TelemetryNetwork.None,
+            mapper.toEvent(exchange(network = NetworkSnapshot.None)).network
+        )
+    }
+
+    @Test
+    fun `names each network transport as core does`() {
+        for (transport in NetworkTransport.entries) {
+            val network = mapper.toEvent(exchange(network = CONNECTED.copy(transport = transport)))
+                .network
+
+            assertEquals(
+                transport.name,
+                assertIs<TelemetryNetwork.Connected>(network).transport.name
+            )
+        }
     }
 
     // Codes of the NEL dictionary (§6); the codes of a response cut short and of a redirect loop
@@ -178,6 +220,17 @@ class TelemetryEventMapperTest {
     ) = exchange(response = response, outcome = ExchangeOutcome.Failed(step, type))
 
     private companion object {
+        val CONNECTED = NetworkSnapshot.Connected(
+            transport = NetworkTransport.CELLULAR,
+            vpn = true,
+            validated = true,
+            captivePortal = false,
+            metered = true,
+            roaming = false,
+            downstreamKbps = 30_000,
+            upstreamKbps = 10_000,
+            signalStrength = -90
+        )
         val HANDSHAKE = ExchangeTls("TLSv1.3", "TLS_AES_128_GCM_SHA256", "CN=Test CA")
         val CUT_BODY = ExchangeResponse(200, contentLength = 100, bodyBytes = null)
         val DNS = ExchangeStep.DNS

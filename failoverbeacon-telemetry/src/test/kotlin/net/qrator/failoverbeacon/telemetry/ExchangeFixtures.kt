@@ -26,7 +26,8 @@ fun exchange(
     attempts: List<ConnectAttempt> = emptyList(),
     timings: ExchangeTimings = ExchangeTimings(null, null, null, null, null, null),
     durationNanos: Long = 60 * MS,
-    outcome: ExchangeOutcome = ExchangeOutcome.Ok
+    outcome: ExchangeOutcome = ExchangeOutcome.Ok,
+    network: NetworkSnapshot = NetworkSnapshot.Unknown
 ) = Exchange(
     callId = callId,
     request = request,
@@ -39,7 +40,7 @@ fun exchange(
     timings = timings,
     durationNanos = durationNanos,
     outcome = outcome,
-    network = NetworkSnapshot.Unknown
+    network = network
 )
 
 fun attempt(
