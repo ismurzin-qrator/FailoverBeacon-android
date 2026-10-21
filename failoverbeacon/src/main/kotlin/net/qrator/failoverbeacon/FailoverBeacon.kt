@@ -75,6 +75,20 @@ public object FailoverBeacon {
     }
 
     /**
+     * Stops the SDK until the next [initialize]: calls are no longer recorded and the SDK stops
+     * watching the network and the app's activities. Stored events are kept. Ignored while the
+     * SDK is not running.
+     */
+    @JvmStatic
+    public fun stop() {
+        if (SdkRegistry.instance == null) {
+            SdkRegistry.logger.warn { "SDK is not running. stop ignored" }
+            return
+        }
+        SdkRegistry.clear()
+    }
+
+    /**
      * Sets the minimum priority of SDK log messages, one of the [android.util.Log] constants from
      * [android.util.Log.VERBOSE] to [android.util.Log.ASSERT]. The default value is
      * [android.util.Log.WARN]. Works before [initialize].

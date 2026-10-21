@@ -1,6 +1,7 @@
 package net.qrator.failoverbeacon.core
 
 import android.content.Context
+import java.io.Closeable
 import net.qrator.failoverbeacon.core.app.ForegroundSource
 import net.qrator.failoverbeacon.core.call.ExchangeBus
 import net.qrator.failoverbeacon.core.network.NetworkSource
@@ -13,4 +14,11 @@ class SdkInstance(
     val exchangeBus: ExchangeBus,
     val networkSource: NetworkSource,
     val foregroundSource: ForegroundSource
-) : ConsentSource
+) : ConsentSource,
+    Closeable {
+    override fun close() {
+        exchangeBus.close()
+        networkSource.close()
+        foregroundSource.close()
+    }
+}

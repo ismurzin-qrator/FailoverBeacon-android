@@ -63,4 +63,12 @@ internal class NetworkMonitor(context: Context) :
         state = NetworkState()
         snapshot = NetworkSnapshot.None
     }
+
+    override fun close() {
+        try {
+            connectivityManager?.unregisterNetworkCallback(this)
+        } catch (e: Exception) {
+            SdkRegistry.logger.warn(e) { "Cannot stop watching the network" }
+        }
+    }
 }

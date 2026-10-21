@@ -5,7 +5,7 @@ import android.app.Application
 import android.os.Bundle
 import net.qrator.failoverbeacon.core.app.ForegroundSource
 
-internal class ForegroundMonitor :
+internal class ForegroundMonitor(private val application: Application) :
     Application.ActivityLifecycleCallbacks,
     ForegroundSource {
     // Written only on the main thread, read on any.
@@ -13,6 +13,14 @@ internal class ForegroundMonitor :
     private var startedActivities = 0
 
     override fun isForeground(): Boolean = startedActivities > 0
+
+    fun register() {
+        application.registerActivityLifecycleCallbacks(this)
+    }
+
+    override fun close() {
+        application.unregisterActivityLifecycleCallbacks(this)
+    }
 
     override fun onActivityStarted(activity: Activity) {
         startedActivities++

@@ -301,6 +301,19 @@ class NetworkMonitorTest {
         assertIs<SecurityException>(logged.single())
     }
 
+    @Test
+    fun `closing a monitor that never registered is logged`() {
+        shadowOf(
+            app.getSystemService(ConnectivityManager::class.java)
+        ).setStrictUnregistration(true)
+        val logged = mutableListOf<Throwable?>()
+        SdkRegistry.logger.output = LogOutput { _, _, throwable -> logged += throwable }
+
+        monitor.close()
+
+        assertIs<IllegalArgumentException>(logged.single())
+    }
+
     private fun connected() = assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork())
 
     private fun cellular() = capabilities(listOf(TRANSPORT_CELLULAR))

@@ -21,21 +21,19 @@ internal object SdkStartup {
     ): Boolean {
         val application = appContext as? Application
         val networkMonitor = NetworkMonitor(appContext)
-        val foregroundMonitor = ForegroundMonitor()
-        val foregroundSource =
-            if (application != null) foregroundMonitor else ForegroundSource { null }
+        val foregroundMonitor = application?.let(::ForegroundMonitor)
         val sdk = SdkInstance(
             appContext = appContext,
             consent = consent,
             clock = NanoTimeClock,
             exchangeBus = ExchangeBus(),
             networkSource = networkMonitor,
-            foregroundSource = foregroundSource
+            foregroundSource = foregroundMonitor ?: ForegroundSource { null }
         )
         installFeatures(sdk, config)
         if (!SdkRegistry.install(sdk)) return false
         networkMonitor.register()
-        application?.registerActivityLifecycleCallbacks(foregroundMonitor)
+        foregroundMonitor?.register()
         return true
     }
 

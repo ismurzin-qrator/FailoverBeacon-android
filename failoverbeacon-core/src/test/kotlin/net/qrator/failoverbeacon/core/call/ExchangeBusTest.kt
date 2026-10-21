@@ -48,6 +48,17 @@ class ExchangeBusTest {
     }
 
     @Test
+    fun `a closed bus delivers nothing`() {
+        val received = mutableListOf<Exchange>()
+        bus.subscribe(received::add)
+
+        bus.close()
+        bus.publish(exchange)
+
+        assertEquals(emptyList(), received)
+    }
+
+    @Test
     fun `a failing subscriber does not stop the others`() {
         val received = mutableListOf<String>()
         bus.subscribe { throw IllegalStateException() }

@@ -98,11 +98,17 @@ class FailoverBeaconTest {
     }
 
     @Test
-    fun `setConsent and clearAllData warn while the SDK is not running`() {
+    fun `setConsent, clearAllData and stop warn while the SDK is not running`() {
         FailoverBeacon.setConsent(Consent.GRANTED)
         FailoverBeacon.clearAllData()
+        FailoverBeacon.stop()
 
-        assertEquals(listOf(Log.WARN, Log.WARN), logs.map { it.first })
+        assertEquals(
+            listOf("setConsent", "clearAllData", "stop").map {
+                Log.WARN to "SDK is not running. $it ignored"
+            },
+            logs
+        )
     }
 
     @Test
@@ -111,7 +117,6 @@ class FailoverBeaconTest {
         repeat(ROUNDS) {
             SdkRegistry.clear()
             logs.clear()
-            val callbacksBefore = networkCallbacks()
             val threads = 8
             val start = CountDownLatch(1)
             val pool = Executors.newFixedThreadPool(threads)
@@ -129,7 +134,7 @@ class FailoverBeaconTest {
             assertNotNull(SdkRegistry.instance)
             assertSame<Any?>(
                 SdkRegistry.instance?.networkSource,
-                (networkCallbacks() - callbacksBefore).single()
+                networkCallbacks().single()
             )
             assertEquals(threads - 1, logs.count { it.second == "Already initialized. Ignored" })
         }
@@ -159,6 +164,24 @@ class FailoverBeaconTest {
         Robolectric.buildActivity(Activity::class.java).setup()
 
         assertEquals(true, SdkRegistry.instance?.foregroundSource?.isForeground())
+    }
+
+    @Test
+    fun `stop stops watching the network and the activities until the next initialize`() {
+        FailoverBeacon.initialize(app, config)
+        val foreground = SdkRegistry.instance?.foregroundSource
+
+        FailoverBeacon.stop()
+        Robolectric.buildActivity(Activity::class.java).setup()
+        val stopped = SdkRegistry.instance
+        val callbacksAfterStop = networkCallbacks()
+        FailoverBeacon.initialize(app, config)
+
+        assertNull(stopped)
+        assertEquals(emptySet(), callbacksAfterStop)
+        assertEquals(false, foreground?.isForeground())
+        assertNotNull(SdkRegistry.instance)
+        assertEquals(1, networkCallbacks().size)
     }
 
     @Test

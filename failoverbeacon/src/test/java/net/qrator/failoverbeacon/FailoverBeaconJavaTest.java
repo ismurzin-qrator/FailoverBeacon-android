@@ -36,6 +36,7 @@ public final class FailoverBeaconJavaTest {
         FailoverBeacon.initialize(app, config, Consent.PENDING);
         FailoverBeacon.setConsent(Consent.GRANTED);
         FailoverBeacon.clearAllData();
+        FailoverBeacon.stop();
     }
 
     @Test

@@ -18,9 +18,10 @@ object SdkRegistry {
         return true
     }
 
-    /** Forgets the running SDK and the messages logged once. */
+    /** Stops and forgets the running SDK, forgets the messages logged once. */
     @Synchronized
     fun clear() {
+        instance?.close()
         instance = null
         logger.forgetLoggedOnce()
     }
