@@ -8,9 +8,7 @@ import net.qrator.failoverbeacon.core.logging.info
 import net.qrator.failoverbeacon.core.logging.warn
 import net.qrator.failoverbeacon.internal.AndroidMainProcessDetector
 import net.qrator.failoverbeacon.internal.LogcatLogger
-import net.qrator.failoverbeacon.internal.SdkAssembly
-import net.qrator.failoverbeacon.internal.installFeatures
-import net.qrator.failoverbeacon.internal.network.NetworkMonitor
+import net.qrator.failoverbeacon.internal.SdkStartup
 
 /**
  * Entry point of the FailoverBeacon SDK. Until [initialize], the SDK captures nothing. All
@@ -45,18 +43,10 @@ public object FailoverBeacon {
             SdkRegistry.logger.warn { "Not the main process. SDK is inactive" }
             return
         }
-        val networkMonitor = NetworkMonitor(appContext)
-        val sdkInstance = SdkAssembly.createInstance(
-            appContext = appContext,
-            consent = toTrackingConsent(consent),
-            networkSource = networkMonitor
-        )
-        if (!SdkRegistry.install(sdkInstance)) {
+        if (!SdkStartup.start(appContext, toTrackingConsent(consent), config)) {
             SdkRegistry.logger.warn { ALREADY_INITIALIZED }
             return
         }
-        networkMonitor.register()
-        installFeatures(sdkInstance, config)
         SdkRegistry.logger.info { "SDK initialized" }
     }
 
