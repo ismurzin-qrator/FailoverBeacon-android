@@ -1,5 +1,6 @@
 package net.qrator.failoverbeacon
 
+import android.app.Activity
 import android.app.Application
 import android.content.ContextWrapper
 import android.net.ConnectivityManager
@@ -20,6 +21,7 @@ import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.internal.LogcatLogger
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
@@ -130,6 +132,32 @@ class FailoverBeaconTest {
             )
             assertEquals(threads - 1, logs.count { it.second == "Already initialized. Ignored" })
         }
+    }
+
+    @Test
+    fun `tracks whether the app has a started activity`() {
+        FailoverBeacon.initialize(app, config)
+        val foreground = { SdkRegistry.instance?.foregroundSource?.isForeground() }
+        val before = foreground()
+        val first = Robolectric.buildActivity(Activity::class.java).setup()
+        val second = Robolectric.buildActivity(Activity::class.java).setup()
+        first.pause().stop()
+        val oneStarted = foreground()
+        second.pause().stop()
+
+        assertEquals(false, before)
+        assertEquals(true, oneStarted)
+        assertEquals(false, foreground())
+    }
+
+    @Test
+    fun `an activity started before initialize does not hide later ones`() {
+        val early = Robolectric.buildActivity(Activity::class.java).setup()
+        FailoverBeacon.initialize(app, config)
+        early.pause().stop()
+        Robolectric.buildActivity(Activity::class.java).setup()
+
+        assertEquals(true, SdkRegistry.instance?.foregroundSource?.isForeground())
     }
 
     @Test

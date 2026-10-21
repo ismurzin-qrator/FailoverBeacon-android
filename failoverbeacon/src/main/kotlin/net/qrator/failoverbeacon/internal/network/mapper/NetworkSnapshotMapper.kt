@@ -2,13 +2,14 @@ package net.qrator.failoverbeacon.internal.network.mapper
 
 import android.net.NetworkCapabilities
 import android.os.Build
-import net.qrator.failoverbeacon.core.network.model.NetworkCarrier
 import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
+import net.qrator.failoverbeacon.internal.network.state.NetworkState
 
 internal class NetworkSnapshotMapper {
     private val transportMapper = NetworkTransportMapper()
 
-    fun toSnapshot(capabilities: NetworkCapabilities, carrier: NetworkCarrier?) =
+    fun toSnapshot(state: NetworkState): NetworkSnapshot = with(state) {
+        val capabilities = capabilities ?: return NetworkSnapshot.Unknown
         NetworkSnapshot.Connected(
             transport = transportMapper.toTransport(capabilities),
             vpn = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN),
@@ -29,6 +30,8 @@ internal class NetworkSnapshotMapper {
             } else {
                 null
             },
-            carrier = carrier
+            carrier = carrier,
+            blocked = blocked
         )
+    }
 }

@@ -51,7 +51,8 @@ internal class TelemetryEventMapper {
             responseContentLength = exchange.response?.contentLength,
             responseBodyBytes = exchange.response?.bodyBytes,
             attempts = exchange.attempts.map(::toAttempt),
-            network = networkMapper.toNetwork(exchange.network)
+            network = networkMapper.toNetwork(exchange.network),
+            foreground = exchange.foreground
         )
     }
 

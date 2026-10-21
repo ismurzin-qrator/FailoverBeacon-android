@@ -1,5 +1,6 @@
 package net.qrator.failoverbeacon.core.call
 
+import net.qrator.failoverbeacon.core.app.ForegroundSource
 import net.qrator.failoverbeacon.core.call.mapper.ExchangeMapper
 import net.qrator.failoverbeacon.core.call.mapper.FailureMapper
 import net.qrator.failoverbeacon.core.call.model.ExchangeConnection
@@ -18,6 +19,7 @@ import net.qrator.failoverbeacon.core.time.MonotonicClock
 class CallRecorder(
     private val clock: MonotonicClock,
     private val networkSource: NetworkSource,
+    private val foregroundSource: ForegroundSource,
     failureMapper: FailureMapper,
     private val publisher: ExchangePublisher
 ) {
@@ -245,7 +247,8 @@ class CallRecorder(
             callId = callId,
             resendCount = exchangeCount,
             startNanos = now,
-            network = networkSource.currentNetwork()
+            network = networkSource.currentNetwork(),
+            foreground = foregroundSource.isForeground()
         )
         nextTarget = null
         exchangeCount++

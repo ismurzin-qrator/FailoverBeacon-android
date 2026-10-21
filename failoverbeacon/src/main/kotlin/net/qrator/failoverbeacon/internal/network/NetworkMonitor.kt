@@ -11,6 +11,7 @@ import net.qrator.failoverbeacon.core.network.NetworkSource
 import net.qrator.failoverbeacon.core.network.model.NetworkCarrier
 import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 import net.qrator.failoverbeacon.internal.network.mapper.NetworkSnapshotMapper
+import net.qrator.failoverbeacon.internal.network.state.NetworkState
 
 internal class NetworkMonitor(context: Context) :
     ConnectivityManager.NetworkCallback(),
@@ -22,6 +23,7 @@ internal class NetworkMonitor(context: Context) :
 
     @Volatile
     private var snapshot: NetworkSnapshot = NetworkSnapshot.Unknown
+    private var state = NetworkState()
 
     override fun currentNetwork(): NetworkSnapshot = snapshot
 
@@ -39,6 +41,7 @@ internal class NetworkMonitor(context: Context) :
     }
 
     override fun onAvailable(network: Network) {
+        state = NetworkState()
         // Below API 26 onCapabilitiesChanged does not follow onAvailable.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) return
         val capabilities = connectivityManager?.getNetworkCapabilities(network) ?: return
@@ -46,11 +49,18 @@ internal class NetworkMonitor(context: Context) :
     }
 
     override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-        val carrier = getCarrier(capabilities)
-        snapshot = snapshotMapper.toSnapshot(capabilities, carrier)
+        state.capabilities = capabilities
+        state.carrier = getCarrier(capabilities)
+        snapshot = snapshotMapper.toSnapshot(state)
+    }
+
+    override fun onBlockedStatusChanged(network: Network, blocked: Boolean) {
+        state.blocked = blocked
+        snapshot = snapshotMapper.toSnapshot(state)
     }
 
     override fun onLost(network: Network) {
+        state = NetworkState()
         snapshot = NetworkSnapshot.None
     }
 

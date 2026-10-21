@@ -222,6 +222,38 @@ class NetworkMonitorTest {
     }
 
     @Test
+    fun `reports whether the system blocks the network for the app`() {
+        val wifi = capabilities(listOf(TRANSPORT_WIFI))
+        monitor.onCapabilitiesChanged(WIFI_NETWORK, wifi)
+        val unreported = assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).blocked
+        monitor.onBlockedStatusChanged(WIFI_NETWORK, true)
+        monitor.onCapabilitiesChanged(
+            WIFI_NETWORK,
+            capabilities(listOf(TRANSPORT_WIFI), downKbps = 1)
+        )
+
+        assertNull(unreported)
+        assertEquals(true, assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).blocked)
+    }
+
+    @Test
+    fun `a new default network does not keep the blocking of the previous one`() {
+        monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
+        monitor.onBlockedStatusChanged(WIFI_NETWORK, true)
+        monitor.onAvailable(CELLULAR_NETWORK)
+        monitor.onCapabilitiesChanged(CELLULAR_NETWORK, capabilities(listOf(TRANSPORT_CELLULAR)))
+
+        assertNull(assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork()).blocked)
+    }
+
+    @Test
+    fun `blocking reported without a network leaves it unknown`() {
+        monitor.onBlockedStatusChanged(WIFI_NETWORK, true)
+
+        assertEquals(NetworkSnapshot.Unknown, monitor.currentNetwork())
+    }
+
+    @Test
     fun `losing the default network leaves none`() {
         monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
         monitor.onLost(WIFI_NETWORK)
@@ -311,7 +343,8 @@ class NetworkMonitorTest {
             downstreamKbps = null,
             upstreamKbps = null,
             signalStrength = null,
-            carrier = null
+            carrier = null,
+            blocked = null
         )
         const val DATA_SUBSCRIPTION = 2
         val WIFI_NETWORK = ShadowNetwork.newInstance(100)

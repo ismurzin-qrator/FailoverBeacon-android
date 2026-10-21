@@ -12,7 +12,8 @@ internal class ExchangeState(
     val callId: Long,
     val resendCount: Int,
     val startNanos: Long,
-    val network: NetworkSnapshot
+    val network: NetworkSnapshot,
+    val foreground: Boolean?
 ) {
     val dnsInterval = Interval()
     val tlsInterval = Interval()

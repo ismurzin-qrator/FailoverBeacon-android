@@ -29,5 +29,6 @@ internal data class TelemetryEvent(
     val responseContentLength: Long?,
     val responseBodyBytes: Long?,
     val attempts: List<TelemetryAttempt>,
-    val network: TelemetryNetwork
+    val network: TelemetryNetwork,
+    val foreground: Boolean?
 )

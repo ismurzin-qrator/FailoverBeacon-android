@@ -18,7 +18,8 @@ fun installSdk(vararg subscribers: ExchangeSubscriber) {
             consent = TrackingConsent.GRANTED,
             clock = { System.nanoTime() },
             exchangeBus = bus,
-            networkSource = { NetworkSnapshot.Unknown }
+            networkSource = { NetworkSnapshot.Unknown },
+            foregroundSource = { null }
         )
     )
 }

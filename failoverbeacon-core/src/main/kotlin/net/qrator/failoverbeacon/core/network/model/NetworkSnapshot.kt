@@ -5,7 +5,7 @@ sealed interface NetworkSnapshot {
 
     data object None : NetworkSnapshot
 
-    /** [roaming] is null below API 28, [signalStrength] below API 29. */
+    /** [roaming] is null below API 28, [signalStrength] and [blocked] below API 29. */
     data class Connected(
         val transport: NetworkTransport,
         val vpn: Boolean,
@@ -16,6 +16,7 @@ sealed interface NetworkSnapshot {
         val downstreamKbps: Int?,
         val upstreamKbps: Int?,
         val signalStrength: Int?,
-        val carrier: NetworkCarrier?
+        val carrier: NetworkCarrier?,
+        val blocked: Boolean?
     ) : NetworkSnapshot
 }

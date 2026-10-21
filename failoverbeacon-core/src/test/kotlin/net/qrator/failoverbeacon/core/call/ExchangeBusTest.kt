@@ -31,7 +31,8 @@ class ExchangeBusTest {
         timings = ExchangeTimings(null, null, null, null, null, null),
         durationNanos = 0,
         outcome = ExchangeOutcome.Canceled(step = null),
-        network = NetworkSnapshot.Unknown
+        network = NetworkSnapshot.Unknown,
+        foreground = null
     )
 
     @BeforeTest

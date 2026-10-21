@@ -15,6 +15,7 @@ internal sealed interface TelemetryNetwork {
         val downstreamKbps: Int?,
         val upstreamKbps: Int?,
         val signalStrength: Int?,
-        val carrier: TelemetryCarrier?
+        val carrier: TelemetryCarrier?,
+        val blocked: Boolean?
     ) : TelemetryNetwork
 }

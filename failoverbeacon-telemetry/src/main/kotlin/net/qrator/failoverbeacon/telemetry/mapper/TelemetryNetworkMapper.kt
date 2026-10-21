@@ -22,7 +22,8 @@ internal class TelemetryNetworkMapper {
             downstreamKbps = snapshot.downstreamKbps,
             upstreamKbps = snapshot.upstreamKbps,
             signalStrength = snapshot.signalStrength,
-            carrier = snapshot.carrier?.let(carrierMapper::toCarrier)
+            carrier = snapshot.carrier?.let(carrierMapper::toCarrier),
+            blocked = snapshot.blocked
         )
     }
 }

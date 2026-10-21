@@ -193,7 +193,9 @@ class CallRecordingEventListenerTest {
     }
 
     private fun listener(clock: MonotonicClock) = CallRecordingEventListener(
-        CallRecorder(clock, { NetworkSnapshot.Unknown }, OkHttpFailureMapper(), published::add)
+        CallRecorder(clock, {
+            NetworkSnapshot.Unknown
+        }, { null }, OkHttpFailureMapper(), published::add)
     )
 
     private fun call(client: OkHttpClient): Call =

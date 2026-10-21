@@ -28,8 +28,10 @@ import net.qrator.failoverbeacon.core.network.model.NetworkTransport
 class CallRecorderTest {
     private var time = 0L
     private var network: NetworkSnapshot = NetworkSnapshot.Unknown
+    private var foreground: Boolean? = null
     private val published = mutableListOf<Exchange>()
-    private val recorder = CallRecorder({ time }, { network }, TestFailureMapper, published::add)
+    private val recorder =
+        CallRecorder({ time }, { network }, { foreground }, TestFailureMapper, published::add)
 
     @Test
     fun `each exchange keeps the network it started on`() {
@@ -43,6 +45,20 @@ class CallRecorderTest {
         recorder.callEnd()
 
         assertEquals(listOf(WIFI, CELLULAR), published.map { it.network })
+    }
+
+    @Test
+    fun `each exchange keeps whether the app was in the foreground when it started`() {
+        foreground = true
+        start()
+        acquire()
+        foreground = false
+        respond(302)
+        acquire(host = "b.com")
+        respond(200)
+        recorder.callEnd()
+
+        assertEquals(listOf(true, false), published.map { it.foreground })
     }
 
     @Test
@@ -332,7 +348,10 @@ class CallRecorderTest {
             CallStopReason.TIMED_OUT
         )) {
             val published = mutableListOf<Exchange>()
-            val recorder = CallRecorder({ time }, { network }, TestFailureMapper, published::add)
+            val recorder =
+                CallRecorder({
+                    time
+                }, { network }, { foreground }, TestFailureMapper, published::add)
             time = 0
             recorder.callStart("https", "a.com", 443, "GET")
             recorder.connectionAcquired(
@@ -475,7 +494,8 @@ class CallRecorderTest {
             downstreamKbps = null,
             upstreamKbps = null,
             signalStrength = null,
-            carrier = null
+            carrier = null,
+            blocked = null
         )
     }
 }

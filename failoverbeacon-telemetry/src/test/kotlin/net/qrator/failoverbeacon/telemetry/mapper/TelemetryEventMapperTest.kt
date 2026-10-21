@@ -66,7 +66,8 @@ class TelemetryEventMapperTest {
                 attempt("1.1.1.3", untrusted, 40 * MS + 999_999)
             ),
             timings = ExchangeTimings(MS + 999_999, 20 * MS, 12 * MS, 2 * MS, 30 * MS, 4 * MS),
-            network = CONNECTED
+            network = CONNECTED,
+            foreground = true
         )
 
         val expected = TelemetryEvent(
@@ -127,8 +128,10 @@ class TelemetryEventMapperTest {
                 downstreamKbps = 30_000,
                 upstreamKbps = 10_000,
                 signalStrength = -90,
-                carrier = TelemetryCarrier("Beeline", "250", "99", 2, 13)
-            )
+                carrier = TelemetryCarrier("Beeline", "250", "99", 2, 13),
+                blocked = false
+            ),
+            foreground = true
         )
         assertEquals(expected, mapper.toEvent(exchange))
     }
@@ -233,7 +236,8 @@ class TelemetryEventMapperTest {
             downstreamKbps = 30_000,
             upstreamKbps = 10_000,
             signalStrength = -90,
-            carrier = NetworkCarrier("Beeline", "250", "99", 2, 13)
+            carrier = NetworkCarrier("Beeline", "250", "99", 2, 13),
+            blocked = false
         )
         val HANDSHAKE = ExchangeTls("TLSv1.3", "TLS_AES_128_GCM_SHA256", "CN=Test CA")
         val CUT_BODY = ExchangeResponse(200, contentLength = 100, bodyBytes = null)

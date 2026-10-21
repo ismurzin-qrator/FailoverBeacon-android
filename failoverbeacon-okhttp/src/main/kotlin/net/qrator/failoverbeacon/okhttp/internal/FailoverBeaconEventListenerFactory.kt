@@ -20,6 +20,7 @@ internal class FailoverBeaconEventListenerFactory(private val appFactory: EventL
         val callRecorder = CallRecorder(
             clock = sdk.clock,
             networkSource = sdk.networkSource,
+            foregroundSource = sdk.foregroundSource,
             failureMapper = failureMapper,
             publisher = sdk.exchangeBus
         )

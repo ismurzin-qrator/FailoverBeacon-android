@@ -22,5 +22,6 @@ data class Exchange(
     val timings: ExchangeTimings,
     val durationNanos: Long,
     val outcome: ExchangeOutcome,
-    val network: NetworkSnapshot
+    val network: NetworkSnapshot,
+    val foreground: Boolean?
 )
