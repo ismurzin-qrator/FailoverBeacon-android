@@ -5,6 +5,7 @@ import net.qrator.failoverbeacon.telemetry.model.TelemetryNetwork
 
 internal class TelemetryNetworkMapper {
     private val transportMapper = TelemetryNetworkTransportMapper()
+    private val carrierMapper = TelemetryCarrierMapper()
 
     fun toNetwork(snapshot: NetworkSnapshot): TelemetryNetwork = when (snapshot) {
         NetworkSnapshot.Unknown -> TelemetryNetwork.Unknown
@@ -20,7 +21,8 @@ internal class TelemetryNetworkMapper {
             roaming = snapshot.roaming,
             downstreamKbps = snapshot.downstreamKbps,
             upstreamKbps = snapshot.upstreamKbps,
-            signalStrength = snapshot.signalStrength
+            signalStrength = snapshot.signalStrength,
+            carrier = snapshot.carrier?.let(carrierMapper::toCarrier)
         )
     }
 }

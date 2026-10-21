@@ -8,6 +8,7 @@ import android.os.Build
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.warn
 import net.qrator.failoverbeacon.core.network.NetworkSource
+import net.qrator.failoverbeacon.core.network.model.NetworkCarrier
 import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 import net.qrator.failoverbeacon.internal.network.mapper.NetworkSnapshotMapper
 
@@ -16,6 +17,7 @@ internal class NetworkMonitor(context: Context) :
     NetworkSource {
     private val connectivityManager: ConnectivityManager? =
         context.getSystemService(ConnectivityManager::class.java)
+    private val carrierReader = NetworkCarrierReader(context)
     private val snapshotMapper = NetworkSnapshotMapper()
 
     @Volatile
@@ -40,14 +42,20 @@ internal class NetworkMonitor(context: Context) :
         // Below API 26 onCapabilitiesChanged does not follow onAvailable.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) return
         val capabilities = connectivityManager?.getNetworkCapabilities(network) ?: return
-        snapshot = snapshotMapper.toSnapshot(capabilities)
+        onCapabilitiesChanged(network, capabilities)
     }
 
     override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-        snapshot = snapshotMapper.toSnapshot(capabilities)
+        val carrier = getCarrier(capabilities)
+        snapshot = snapshotMapper.toSnapshot(capabilities, carrier)
     }
 
     override fun onLost(network: Network) {
         snapshot = NetworkSnapshot.None
+    }
+
+    private fun getCarrier(capabilities: NetworkCapabilities): NetworkCarrier? {
+        val cellular = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+        return if (cellular) carrierReader.read() else null
     }
 }

@@ -474,7 +474,8 @@ class CallRecorderTest {
             roaming = false,
             downstreamKbps = null,
             upstreamKbps = null,
-            signalStrength = null
+            signalStrength = null,
+            carrier = null
         )
     }
 }

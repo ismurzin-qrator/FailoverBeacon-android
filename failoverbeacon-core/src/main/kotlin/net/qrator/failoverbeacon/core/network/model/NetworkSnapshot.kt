@@ -15,6 +15,7 @@ sealed interface NetworkSnapshot {
         val roaming: Boolean?,
         val downstreamKbps: Int?,
         val upstreamKbps: Int?,
-        val signalStrength: Int?
+        val signalStrength: Int?,
+        val carrier: NetworkCarrier?
     ) : NetworkSnapshot
 }

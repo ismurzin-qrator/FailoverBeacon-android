@@ -29,6 +29,7 @@ import net.qrator.failoverbeacon.core.call.model.FailureType.STREAM_RESET
 import net.qrator.failoverbeacon.core.call.model.FailureType.TIMED_OUT
 import net.qrator.failoverbeacon.core.call.model.FailureType.TLS_PROTOCOL_ERROR
 import net.qrator.failoverbeacon.core.call.model.ProxyType
+import net.qrator.failoverbeacon.core.network.model.NetworkCarrier
 import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 import net.qrator.failoverbeacon.core.network.model.NetworkTransport
 import net.qrator.failoverbeacon.telemetry.MS
@@ -36,6 +37,7 @@ import net.qrator.failoverbeacon.telemetry.attempt
 import net.qrator.failoverbeacon.telemetry.exchange
 import net.qrator.failoverbeacon.telemetry.model.TelemetryAttempt
 import net.qrator.failoverbeacon.telemetry.model.TelemetryAttemptResult
+import net.qrator.failoverbeacon.telemetry.model.TelemetryCarrier
 import net.qrator.failoverbeacon.telemetry.model.TelemetryErrorType
 import net.qrator.failoverbeacon.telemetry.model.TelemetryEvent
 import net.qrator.failoverbeacon.telemetry.model.TelemetryNetwork
@@ -124,7 +126,8 @@ class TelemetryEventMapperTest {
                 roaming = false,
                 downstreamKbps = 30_000,
                 upstreamKbps = 10_000,
-                signalStrength = -90
+                signalStrength = -90,
+                carrier = TelemetryCarrier("Beeline", "250", "99", 2, 13)
             )
         )
         assertEquals(expected, mapper.toEvent(exchange))
@@ -229,7 +232,8 @@ class TelemetryEventMapperTest {
             roaming = false,
             downstreamKbps = 30_000,
             upstreamKbps = 10_000,
-            signalStrength = -90
+            signalStrength = -90,
+            carrier = NetworkCarrier("Beeline", "250", "99", 2, 13)
         )
         val HANDSHAKE = ExchangeTls("TLSv1.3", "TLS_AES_128_GCM_SHA256", "CN=Test CA")
         val CUT_BODY = ExchangeResponse(200, contentLength = 100, bodyBytes = null)
