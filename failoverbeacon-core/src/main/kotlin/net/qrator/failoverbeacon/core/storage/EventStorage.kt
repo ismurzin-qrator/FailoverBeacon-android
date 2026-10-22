@@ -17,8 +17,8 @@ class EventStorage(
     maxBytes: Long
 ) {
     private val writeWindowMillis = batchWindowMillis * WRITE_PERCENT / 100
-    private val beaconDirNames = beacons.associateWith(::dirName)
-    private val beaconMaxBytes = maxBytes / beaconDirNames.size.coerceAtLeast(1)
+    private val beaconDirNames by lazy { beacons.associateWith(::dirName) }
+    private val beaconMaxBytes = maxBytes / beacons.size.coerceAtLeast(1)
     private val maxBatchBytes = minOf(MAX_BATCH_BYTES, beaconMaxBytes)
     private val rootDir by lazy { File(cacheDir(), ROOT_DIR_NAME).also(::deleteRemovedBeacons) }
     private val openBatches = HashMap<String, OpenBatch>()
