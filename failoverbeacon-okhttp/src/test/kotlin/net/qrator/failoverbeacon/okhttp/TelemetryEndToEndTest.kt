@@ -79,21 +79,13 @@ class TelemetryEndToEndTest {
     fun `stores the event for the beacon on disk`() {
         execute("a.test")
 
-        val beaconDir = File(app.cacheDir, "failoverbeacon/2f7cbe9a31e83f24")
-        val line = beaconDir.listFiles()!!.single().readText().trimEnd('\n')
+        val line = beaconDir().listFiles()!!.single().readText().trimEnd('\n')
         assertEquals(events.single().removePrefix("$EVENT_PREFIX "), line)
     }
 
     @Test
     fun `keeps at most memoryQueueSize events waiting for the SDK thread`() {
-        FailoverBeacon.stop()
-        val options = FailoverBeaconOptions.Builder().memoryQueueSize(1).build()
-        val config = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
-            .successSampleRate(1.0)
-            .options(options)
-            .build()
-        FailoverBeacon.initialize(app, config)
+        restart(FailoverBeaconOptions.Builder().memoryQueueSize(1).build())
         val release = CountDownLatch(1)
         assertNotNull(SdkRegistry.instance).storageExecutor.execute { release.await() }
 
@@ -103,6 +95,27 @@ class TelemetryEndToEndTest {
         awaitSdkThread()
 
         assertEquals(1, events.size)
+    }
+
+    @Test
+    fun `uploadPeriod sets how long a batch file takes events`() {
+        restart(FailoverBeaconOptions.Builder().uploadPeriod(1, TimeUnit.MILLISECONDS).build())
+
+        execute("a.test")
+        execute("a.test")
+
+        assertEquals(2, beaconDir().listFiles()!!.size)
+    }
+
+    @Test
+    fun `diskQueueBytes limits the stored events`() {
+        restart(FailoverBeaconOptions.Builder().diskQueueBytes(1).build())
+
+        execute("a.test")
+        execute("a.test")
+
+        val batch = beaconDir().listFiles()!!.single()
+        assertEquals(listOf(events.last().removePrefix("$EVENT_PREFIX ")), batch.readLines())
     }
 
     @Test
@@ -124,6 +137,18 @@ class TelemetryEndToEndTest {
         val request = Request.Builder().url("http://$host:${server.port}/").build()
         client.newCall(request).execute().use { it.body.string() }
     }
+
+    private fun restart(options: FailoverBeaconOptions) {
+        FailoverBeacon.stop()
+        val config = FailoverBeaconConfig.Builder()
+            .beacons(listOf("https://beacon.example"))
+            .successSampleRate(1.0)
+            .options(options)
+            .build()
+        FailoverBeacon.initialize(app, config)
+    }
+
+    private fun beaconDir() = File(app.cacheDir, "failoverbeacon/2f7cbe9a31e83f24")
 
     private fun awaitSdkThread() {
         val executor = assertNotNull(SdkRegistry.instance).storageExecutor

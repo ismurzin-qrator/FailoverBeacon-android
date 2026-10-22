@@ -7,6 +7,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.LogOutput
 import org.junit.Rule
@@ -83,29 +84,42 @@ class EventStorageTest {
     }
 
     @Test
-    fun `a failed write drops the line and is logged once`() {
+    fun `a failed write loses that line for that beacon only and is logged once`() {
         storage.write("one")
         val batch = File(rootDir(), A_DIR).listFiles()!!.single()
-        batch.setWritable(false)
+        batch.delete()
+        batch.mkdir()
 
         storage.write("two")
         storage.write("three")
-        batch.setWritable(true)
 
-        assertEquals(listOf(listOf("one")), batches(A_DIR))
+        assertEquals(listOf(listOf("three")), batches(A_DIR))
         assertEquals(listOf(listOf("one", "two", "three")), batches(B_DIR))
         assertEquals(listOf(Log.WARN), logged)
     }
 
     @Test
-    fun `a full share drops the oldest batches of that beacon`() {
+    fun `writing goes on after the cache directory was cleared`() {
+        storage.write("one")
+        rootDir().deleteRecursively()
+
+        storage.write("two")
+        storage.write("three")
+
+        assertEquals(listOf(listOf("three")), batches(A_DIR))
+        assertEquals(listOf(Log.WARN), logged)
+    }
+
+    @Test
+    fun `a beacon keeps within its share, counting the batch it opens`() {
         val storage = newStorage(A, B, maxBytes = 2_000)
 
         writeInNewBatches(storage, count = 4, line = "x".repeat(399))
 
         val written = (0 until 4).map { (START + it * 60_000).toString() }
-        assertEquals(written.drop(1), names(A_DIR))
-        assertEquals(written.drop(1), names(B_DIR))
+        assertEquals(written.drop(2), names(A_DIR))
+        assertEquals(written.drop(2), names(B_DIR))
+        assertTrue(files(A_DIR).sumOf { it.length() } <= 1_000)
     }
 
     @Test
@@ -114,45 +128,41 @@ class EventStorageTest {
 
         writeInNewBatches(storage, count = 4, line = "x".repeat(399))
 
-        assertEquals(4, names(A_DIR).size)
+        assertEquals(3, names(A_DIR).size)
     }
 
     @Test
-    fun `a batch is no larger than the share of a beacon`() {
+    fun `a batch takes at most half of the share of a beacon`() {
         val storage = newStorage(A, maxBytes = 1_000)
 
-        storage.write("x".repeat(599))
-        storage.write("x".repeat(599))
+        storage.write("x".repeat(299))
+        storage.write("x".repeat(299))
 
         assertEquals(2, names(A_DIR).size)
     }
 
     @Test
-    fun `drops batches older than 18 hours, including those of an earlier storage`() {
+    fun `drops batches older than 18 hours, named in the future or not by time`() {
         val dir = File(rootDir(), A_DIR).apply { mkdirs() }
         File(dir, (START - EIGHTEEN_HOURS).toString()).writeText("old\n")
         File(dir, (START - EIGHTEEN_HOURS + 1).toString()).writeText("recent\n")
+        File(dir, (START + TEN_MINUTES).toString()).writeText("ahead\n")
+        File(dir, (START + TEN_MINUTES + 1).toString()).writeText("future\n")
+        File(dir, "x").writeText("foreign\n")
 
         storage.write("one")
-        now = START + 1
         val afterStart = names(A_DIR)
         now = START + EIGHTEEN_HOURS
         storage.write("two")
 
-        assertEquals(listOf(START - EIGHTEEN_HOURS + 1, START).map(Long::toString), afterStart)
-        assertEquals(listOf(START + EIGHTEEN_HOURS).map(Long::toString), names(A_DIR))
-    }
-
-    @Test
-    fun `clear deletes every batch and writing goes on`() {
-        storage.write("one")
-
-        storage.clear()
-        val afterClear = rootDir().exists()
-        storage.write("two")
-
-        assertFalse(afterClear)
-        assertEquals(listOf(listOf("two")), batches(A_DIR))
+        assertEquals(
+            listOf(START - EIGHTEEN_HOURS + 1, START, START + TEN_MINUTES).map(Long::toString),
+            afterStart
+        )
+        assertEquals(
+            listOf(START + TEN_MINUTES, START + EIGHTEEN_HOURS).map(Long::toString),
+            names(A_DIR)
+        )
     }
 
     private fun newStorage(vararg beacons: String, maxBytes: Long = 5L * 1024 * 1024) =
@@ -167,7 +177,8 @@ class EventStorageTest {
 
     private fun rootDir() = File(temp.root, "failoverbeacon")
 
-    private fun files(dir: String) = File(rootDir(), dir).listFiles()!!.sortedBy { it.name }
+    private fun files(dir: String) =
+        File(rootDir(), dir).listFiles()!!.filter { it.isFile }.sortedBy { it.name }
 
     private fun names(dir: String) = files(dir).map { it.name }
 
@@ -180,5 +191,6 @@ class EventStorageTest {
         const val B_DIR = "35b22c6cbc7988f8"
         const val START = 1_761_040_980_000L
         const val EIGHTEEN_HOURS = 18 * 60 * 60 * 1000L
+        const val TEN_MINUTES = 10 * 60 * 1000L
     }
 }

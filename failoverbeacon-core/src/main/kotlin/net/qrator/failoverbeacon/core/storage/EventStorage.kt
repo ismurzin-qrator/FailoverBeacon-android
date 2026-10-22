@@ -16,10 +16,10 @@ class EventStorage(
     batchWindowMillis: Long,
     maxBytes: Long
 ) {
-    private val writeWindowMillis = batchWindowMillis * WRITE_PERCENT / 100
+    private val writeWindowMillis = batchWindowMillis / 100 * WRITE_PERCENT
     private val beaconDirNames by lazy { beacons.associateWith(::dirName) }
     private val beaconMaxBytes = maxBytes / beacons.size.coerceAtLeast(1)
-    private val maxBatchBytes = minOf(MAX_BATCH_BYTES, beaconMaxBytes)
+    private val maxBatchBytes = minOf(MAX_BATCH_BYTES, beaconMaxBytes / 2)
     private val rootDir by lazy { File(cacheDir(), ROOT_DIR_NAME).also(::deleteRemovedBeacons) }
     private val openBatches = HashMap<String, OpenBatch>()
 
@@ -29,7 +29,8 @@ class EventStorage(
         for (beacon in beaconDirNames.keys) {
             try {
                 append(beacon, bytes, now)
-            } catch (e: IOException) {
+            } catch (e: Exception) {
+                openBatches.remove(beacon)
                 SdkRegistry.logger.warn(e, onlyOnce = true) {
                     "An event could not be written to disk."
                 }
@@ -72,8 +73,11 @@ class EventStorage(
         val batches = dir.listFiles()?.sortedBy { it.name.toLongOrNull() ?: 0 } ?: return
         var size = batches.sumOf { it.length() }
         for (batch in batches) {
-            val expired = batch.name.toLongOrNull()?.let { now - it >= MAX_AGE_MILLIS } ?: true
-            if (!expired && size <= beaconMaxBytes) break
+            val created = batch.name.toLongOrNull()
+            val expired = created == null ||
+                now - created >= MAX_AGE_MILLIS ||
+                created - now > CLOCK_TOLERANCE_MILLIS
+            if (!expired && size + maxBatchBytes <= beaconMaxBytes) continue
             size -= batch.length()
             batch.delete()
             SdkRegistry.logger.debug {
@@ -102,6 +106,7 @@ class EventStorage(
         const val WRITE_PERCENT = 95
         const val MAX_BATCH_BYTES = 1024L * 1024
         const val MAX_AGE_MILLIS = 18 * 60 * 60 * 1000L
+        const val CLOCK_TOLERANCE_MILLIS = 10 * 60 * 1000L
         const val DIR_NAME_LENGTH = 16
         const val BYTE_MASK = 0xff
         const val HEX = 16
