@@ -39,7 +39,9 @@ class EventStorage(
 
     fun clear() {
         openBatches.clear()
-        rootDir.deleteRecursively()
+        if (!rootDir.deleteRecursively()) {
+            SdkRegistry.logger.warn { "Cannot delete the stored events" }
+        }
     }
 
     private fun append(beacon: String, bytes: ByteArray, now: Long) {

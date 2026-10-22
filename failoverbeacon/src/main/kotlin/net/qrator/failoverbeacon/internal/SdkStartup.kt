@@ -8,7 +8,6 @@ import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.app.ForegroundSource
 import net.qrator.failoverbeacon.core.call.ExchangeBus
-import net.qrator.failoverbeacon.core.logging.warn
 import net.qrator.failoverbeacon.core.storage.EventStorage
 import net.qrator.failoverbeacon.core.thread.SdkExecutor
 import net.qrator.failoverbeacon.internal.app.ForegroundMonitor
@@ -35,11 +34,7 @@ internal object SdkStartup {
             exchangeBus = ExchangeBus(),
             networkSource = networkMonitor,
             foregroundSource = foregroundMonitor ?: ForegroundSource { null },
-            storageExecutor = SdkExecutor("storage", config.options.memoryQueueSize) {
-                SdkRegistry.logger.warn(onlyOnce = true) {
-                    "Memory queue is full. Events are dropped"
-                }
-            }
+            storageExecutor = SdkExecutor("storage")
         )
         installFeatures(sdk, config)
         if (!SdkRegistry.install(sdk)) return false
@@ -62,6 +57,7 @@ internal object SdkStartup {
             blockedHosts = config.blockedHosts,
             failureSampleRate = config.failureSampleRate,
             successSampleRate = config.successSampleRate,
+            memoryQueueSize = config.options.memoryQueueSize,
             executor = sdk.storageExecutor,
             storage = storage
         )

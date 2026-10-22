@@ -42,7 +42,7 @@ class SdkInstance(
 
     override fun close() {
         exchangeBus.close()
-        storageExecutor.shutdownNow()
+        storageExecutor.shutdown()
         networkSource.close()
         foregroundSource.close()
     }

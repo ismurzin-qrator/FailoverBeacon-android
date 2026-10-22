@@ -4,6 +4,7 @@ import android.util.Log
 import java.io.File
 import java.net.InetAddress
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -14,6 +15,7 @@ import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.Consent
 import net.qrator.failoverbeacon.FailoverBeacon
 import net.qrator.failoverbeacon.FailoverBeaconConfig
+import net.qrator.failoverbeacon.FailoverBeaconOptions
 import net.qrator.failoverbeacon.core.SdkRegistry
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -83,6 +85,27 @@ class TelemetryEndToEndTest {
     }
 
     @Test
+    fun `keeps at most memoryQueueSize events waiting for the SDK thread`() {
+        FailoverBeacon.stop()
+        val options = FailoverBeaconOptions.Builder().memoryQueueSize(1).build()
+        val config = FailoverBeaconConfig.Builder()
+            .beacons(listOf("https://beacon.example"))
+            .successSampleRate(1.0)
+            .options(options)
+            .build()
+        FailoverBeacon.initialize(app, config)
+        val release = CountDownLatch(1)
+        assertNotNull(SdkRegistry.instance).storageExecutor.execute { release.await() }
+
+        call("a.test")
+        call("a.test")
+        release.countDown()
+        awaitSdkThread()
+
+        assertEquals(1, events.size)
+    }
+
+    @Test
     fun `stops reporting once consent is withdrawn`() {
         execute("a.test")
         FailoverBeacon.setConsent(Consent.NOT_GRANTED)
@@ -92,10 +115,14 @@ class TelemetryEndToEndTest {
     }
 
     private fun execute(host: String, status: Int = 200) {
+        call(host, status)
+        awaitSdkThread()
+    }
+
+    private fun call(host: String, status: Int = 200) {
         server.enqueue(MockResponse().setResponseCode(status).setBody("ok"))
         val request = Request.Builder().url("http://$host:${server.port}/").build()
         client.newCall(request).execute().use { it.body.string() }
-        awaitSdkThread()
     }
 
     private fun awaitSdkThread() {

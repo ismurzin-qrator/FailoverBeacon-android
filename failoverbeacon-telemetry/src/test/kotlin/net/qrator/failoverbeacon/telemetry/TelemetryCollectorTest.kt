@@ -39,6 +39,7 @@ class TelemetryCollectorTest {
         blockedHosts = setOf("blocked.com"),
         failureSampleRate = 0.7,
         successSampleRate = 0.3,
+        memoryQueueSize = 2,
         executor = tasks::addLast,
         storage = storage
     )
@@ -77,6 +78,27 @@ class TelemetryCollectorTest {
         assertEquals(0, queuedBeforeWithdrawal)
         assertTrue(stored)
         assertFalse(storedDir().exists())
+    }
+
+    @Test
+    fun `drops events beyond the memory queue size and logs it once`() {
+        repeat(4) { collector.onExchange(failure()) }
+        val queuedWhenFull = tasks.size
+        tasks.removeFirst().run()
+        collector.onExchange(failure())
+
+        assertEquals(2, queuedWhenFull)
+        assertEquals(2, tasks.size)
+        assertEquals(1, logs.count { it.first == Log.WARN })
+    }
+
+    @Test
+    fun `a data deletion is queued while the memory queue is full`() {
+        repeat(2) { collector.onExchange(failure()) }
+
+        collector.clearData()
+
+        assertEquals(3, tasks.size)
     }
 
     @Test

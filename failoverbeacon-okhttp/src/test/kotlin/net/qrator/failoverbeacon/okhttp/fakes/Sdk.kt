@@ -27,7 +27,7 @@ fun installSdk(
             exchangeBus = bus,
             networkSource = { network },
             foregroundSource = { foreground },
-            storageExecutor = SdkExecutor("test", capacity = 1) {}
+            storageExecutor = SdkExecutor("test")
         )
     )
 }

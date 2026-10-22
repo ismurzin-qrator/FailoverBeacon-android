@@ -258,6 +258,19 @@ class FailoverBeaconTest {
     }
 
     @Test
+    fun `withdrawn consent right before stop still deletes stored events`() {
+        FailoverBeacon.initialize(app, config)
+        val event = storeEvent()
+        val executor = assertNotNull(SdkRegistry.instance).storageExecutor
+
+        FailoverBeacon.setConsent(Consent.NOT_GRANTED)
+        FailoverBeacon.stop()
+
+        assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS))
+        assertFalse(event.exists())
+    }
+
+    @Test
     fun `initialize without consent deletes events of an earlier run`() {
         val event = storeEvent()
 

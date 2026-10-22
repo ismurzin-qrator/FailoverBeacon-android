@@ -16,8 +16,7 @@ import net.qrator.failoverbeacon.core.logging.LogOutput
 class SdkExecutorTest {
     private val previousOutput = SdkRegistry.logger.output
     private val logged = CopyOnWriteArrayList<Pair<Int, Throwable?>>()
-    private var dropped = 0
-    private val executor = SdkExecutor("test", capacity = 10) { dropped++ }
+    private val executor = SdkExecutor("test")
 
     @BeforeTest
     fun setUp() {
@@ -44,39 +43,18 @@ class SdkExecutorTest {
     }
 
     @Test
-    fun `drops a new task while the queue is full`() {
-        val executor = SdkExecutor("full", capacity = 1) { dropped++ }
-        val running = CountDownLatch(1)
+    fun `shutdown lets the queued tasks finish and drops later ones`() {
         val release = CountDownLatch(1)
         val ran = CopyOnWriteArrayList<String>()
-        executor.execute {
-            running.countDown()
-            release.await()
-        }
-        running.await()
+        executor.execute { release.await() }
+        executor.execute { ran += "queued" }
 
-        val queuedRan = CountDownLatch(1)
-        executor.execute {
-            ran += "queued"
-            queuedRan.countDown()
-        }
-        executor.execute { ran += "dropped" }
-        release.countDown()
-        queuedRan.await()
         executor.shutdown()
-        executor.awaitTermination(5, TimeUnit.SECONDS)
+        executor.execute { ran += "after shutdown" }
+        release.countDown()
 
+        assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS))
         assertEquals(listOf("queued"), ran)
-        assertEquals(1, dropped)
-    }
-
-    @Test
-    fun `drops tasks after shutdown without reporting them`() {
-        executor.shutdownNow()
-
-        executor.execute {}
-
-        assertEquals(0, dropped)
     }
 
     @Test
