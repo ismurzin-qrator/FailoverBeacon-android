@@ -44,7 +44,7 @@ class EventStorageTest {
     }
 
     @Test
-    fun `a batch takes lines for 0,95 of its window`() {
+    fun `a batch takes lines for 95 percent of its window`() {
         storage.write("one")
         now = START + 56_999
         storage.write("two")

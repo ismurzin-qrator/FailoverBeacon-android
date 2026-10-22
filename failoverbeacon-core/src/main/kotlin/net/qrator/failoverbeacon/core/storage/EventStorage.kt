@@ -32,7 +32,7 @@ class EventStorage(
             } catch (e: Exception) {
                 openBatches.remove(beacon)
                 SdkRegistry.logger.warn(e, onlyOnce = true) {
-                    "An event could not be written to disk."
+                    "Cannot write an event to disk"
                 }
             }
         }

@@ -62,6 +62,7 @@ class FailoverBeaconTest {
 
     @Test
     fun `event time starts at the device clock and advances with the elapsed realtime`() {
+        SystemClock.sleep(3_600_000)
         FailoverBeacon.initialize(app, config)
         val clock = assertNotNull(SdkRegistry.instance).epochClock
         val start = clock.nowMillis()
@@ -263,9 +264,12 @@ class FailoverBeaconTest {
         FailoverBeacon.initialize(app, config)
         val event = storeEvent()
         val executor = assertNotNull(SdkRegistry.instance).storageExecutor
+        val release = CountDownLatch(1)
+        executor.execute { release.await() }
 
         FailoverBeacon.setConsent(Consent.NOT_GRANTED)
         FailoverBeacon.stop()
+        release.countDown()
 
         assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS))
         assertFalse(event.exists())

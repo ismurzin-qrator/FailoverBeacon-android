@@ -116,6 +116,18 @@ class TelemetryEventSerializerTest {
     }
 
     @Test
+    fun `writes only the phases that happened`() {
+        val event = MINIMAL.copy(timings = TelemetryTimings(null, null, null, 2, 30, 4))
+
+        val json = JSONObject(serializer.toJson(event, 1.0))
+
+        assertEquals(
+            """{"send":2,"wait":30,"receive":4}""",
+            json.getJSONObject("timings").toString()
+        )
+    }
+
+    @Test
     fun `tells no network from an unknown one`() {
         val json = JSONObject(serializer.toJson(MINIMAL.copy(network = TelemetryNetwork.None), 1.0))
 
