@@ -8,6 +8,7 @@ internal class EventFilter(
     private val consentSource: ConsentSource,
     private val blockedHosts: Set<String>
 ) {
-    fun accepts(event: TelemetryEvent): Boolean =
-        consentSource.consent != TrackingConsent.NOT_GRANTED && event.host !in blockedHosts
+    fun consentAllows(): Boolean = consentSource.consent != TrackingConsent.NOT_GRANTED
+
+    fun accepts(event: TelemetryEvent): Boolean = consentAllows() && event.host !in blockedHosts
 }

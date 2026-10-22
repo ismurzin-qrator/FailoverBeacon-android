@@ -22,6 +22,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import net.qrator.failoverbeacon.core.DataOwner
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.internal.LogcatLogger
@@ -268,6 +269,28 @@ class FailoverBeaconTest {
 
         assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS))
         assertFalse(event.exists())
+    }
+
+    @Test
+    fun `publishing consent sends the current value and keeps a change made meanwhile`() {
+        FailoverBeacon.initialize(app, config)
+        val instance = assertNotNull(SdkRegistry.instance)
+        val published = CopyOnWriteArrayList<TrackingConsent>()
+        instance.addDataOwner(
+            object : DataOwner {
+                override fun onConsentChanged(consent: TrackingConsent) {
+                    published += consent
+                }
+
+                override fun clearData() = Unit
+            }
+        )
+
+        FailoverBeacon.setConsent(Consent.NOT_GRANTED)
+        instance.publishConsent()
+
+        assertEquals(TrackingConsent.NOT_GRANTED, instance.consent)
+        assertEquals(listOf(TrackingConsent.NOT_GRANTED, TrackingConsent.NOT_GRANTED), published)
     }
 
     @Test

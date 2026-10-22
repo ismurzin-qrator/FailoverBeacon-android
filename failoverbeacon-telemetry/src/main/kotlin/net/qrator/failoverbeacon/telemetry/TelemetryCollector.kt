@@ -33,6 +33,7 @@ class TelemetryCollector(
     private val memoryQueueSlots = Semaphore(memoryQueueSize)
 
     override fun onExchange(exchange: Exchange) {
+        if (!filter.consentAllows()) return
         if (!memoryQueueSlots.tryAcquire()) {
             SdkRegistry.logger.warn(onlyOnce = true) { "Memory queue is full. Events are dropped" }
             return

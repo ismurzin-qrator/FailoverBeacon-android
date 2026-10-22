@@ -33,6 +33,11 @@ class SdkInstance(
 
     fun applyConsent(consent: TrackingConsent) {
         this.consent = consent
+        publishConsent()
+    }
+
+    fun publishConsent() {
+        val consent = consent
         dataOwners.forEach { it.onConsentChanged(consent) }
     }
 

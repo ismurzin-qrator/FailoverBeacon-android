@@ -81,6 +81,15 @@ class TelemetryCollectorTest {
     }
 
     @Test
+    fun `an exchange that ends without consent is not queued`() {
+        consentSource.consent = TrackingConsent.NOT_GRANTED
+        collector.onExchange(failure())
+        consentSource.consent = TrackingConsent.GRANTED
+
+        assertEquals(0, tasks.size)
+    }
+
+    @Test
     fun `drops events beyond the memory queue size and logs it once`() {
         repeat(4) { collector.onExchange(failure()) }
         val queuedWhenFull = tasks.size
@@ -167,7 +176,7 @@ class TelemetryCollectorTest {
 
     private fun send(exchange: Exchange) {
         collector.onExchange(exchange)
-        tasks.removeFirst().run()
+        tasks.removeFirstOrNull()?.run()
     }
 
     private fun failure(host: String? = "a.com") = exchange(

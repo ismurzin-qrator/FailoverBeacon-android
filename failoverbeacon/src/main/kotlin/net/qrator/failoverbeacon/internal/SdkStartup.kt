@@ -40,7 +40,7 @@ internal object SdkStartup {
         if (!SdkRegistry.install(sdk)) return false
         networkMonitor.register()
         foregroundMonitor?.register()
-        sdk.applyConsent(consent)
+        sdk.publishConsent()
         return true
     }
 
