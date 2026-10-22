@@ -8,6 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
+import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
 import net.qrator.failoverbeacon.core.logging.LogOutput
@@ -17,11 +18,13 @@ class TelemetryCollectorTest {
     private val previousOutput = SdkRegistry.logger.output
     private val previousLevel = SdkRegistry.logger.minLevel
     private val consentSource = TestConsentSource(TrackingConsent.GRANTED)
+    private val tasks = ArrayDeque<Runnable>()
     private val collector = TelemetryCollector(
         consentSource,
         blockedHosts = setOf("blocked.com"),
         failureSampleRate = 0.7,
-        successSampleRate = 0.3
+        successSampleRate = 0.3,
+        executor = tasks::addLast
     )
 
     @BeforeTest
@@ -38,8 +41,8 @@ class TelemetryCollectorTest {
 
     @Test
     fun `logs a kept event with the fraction of its class`() {
-        collector.onExchange(exchange(callId = KEPT))
-        collector.onExchange(failure())
+        send(exchange(callId = KEPT))
+        send(failure())
 
         val (level, message) = logs.first()
         assertEquals(Log.DEBUG, level)
@@ -52,29 +55,43 @@ class TelemetryCollectorTest {
 
     @Test
     fun `collects with consent granted or pending, never without it`() {
-        collector.onExchange(failure())
+        send(failure())
         consentSource.consent = TrackingConsent.PENDING
-        collector.onExchange(failure())
+        send(failure())
         consentSource.consent = TrackingConsent.NOT_GRANTED
-        collector.onExchange(failure())
+        send(failure())
 
         assertEquals(2, logs.size)
     }
 
     @Test
+    fun `reads consent when the SDK thread gets to the event`() {
+        collector.onExchange(failure())
+        consentSource.consent = TrackingConsent.NOT_GRANTED
+        tasks.removeFirst().run()
+
+        assertEquals(emptyList(), logs)
+    }
+
+    @Test
     fun `drops a blocked host only, subdomains and unnamed follow-ups pass`() {
-        collector.onExchange(failure(host = "blocked.com"))
-        collector.onExchange(failure(host = "sub.blocked.com"))
-        collector.onExchange(failure(host = null))
+        send(failure(host = "blocked.com"))
+        send(failure(host = "sub.blocked.com"))
+        send(failure(host = null))
 
         assertEquals(2, logs.size)
     }
 
     @Test
     fun `drops what the sampler drops`() {
-        collector.onExchange(exchange(callId = DROPPED))
+        send(exchange(callId = DROPPED))
 
         assertEquals(emptyList(), logs)
+    }
+
+    private fun send(exchange: Exchange) {
+        collector.onExchange(exchange)
+        tasks.removeFirst().run()
     }
 
     private fun failure(host: String? = "a.com") = exchange(

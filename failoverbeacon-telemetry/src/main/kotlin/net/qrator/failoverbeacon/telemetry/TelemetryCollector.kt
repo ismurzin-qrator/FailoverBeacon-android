@@ -1,5 +1,6 @@
 package net.qrator.failoverbeacon.telemetry
 
+import java.util.concurrent.Executor
 import net.qrator.failoverbeacon.core.ConsentSource
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
@@ -13,13 +14,18 @@ class TelemetryCollector(
     consentSource: ConsentSource,
     blockedHosts: Set<String>,
     failureSampleRate: Double,
-    successSampleRate: Double
+    successSampleRate: Double,
+    private val executor: Executor
 ) : ExchangeSubscriber {
     private val eventMapper = TelemetryEventMapper()
     private val filter = EventFilter(consentSource, blockedHosts)
     private val sampler = Sampler(failureSampleRate, successSampleRate)
 
     override fun onExchange(exchange: Exchange) {
+        executor.execute { collect(exchange) }
+    }
+
+    private fun collect(exchange: Exchange) {
         val event = eventMapper.toEvent(exchange)
         if (!filter.accepts(event)) return
         val samplingFraction = sampler.sample(event) ?: return

@@ -3,10 +3,12 @@ package net.qrator.failoverbeacon.okhttp
 import android.util.Log
 import java.net.InetAddress
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.Consent
 import net.qrator.failoverbeacon.FailoverBeacon
@@ -82,6 +84,12 @@ class TelemetryEndToEndTest {
         server.enqueue(MockResponse().setResponseCode(status).setBody("ok"))
         val request = Request.Builder().url("http://$host:${server.port}/").build()
         client.newCall(request).execute().use { it.body.string() }
+        awaitSdkThread()
+    }
+
+    private fun awaitSdkThread() {
+        val executor = assertNotNull(SdkRegistry.instance).storageExecutor
+        executor.submit {}.get(5, TimeUnit.SECONDS)
     }
 
     private companion object {

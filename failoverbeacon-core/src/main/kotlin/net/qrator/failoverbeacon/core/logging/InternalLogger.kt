@@ -51,8 +51,12 @@ inline fun InternalLogger.info(throwable: Throwable? = null, message: () -> Stri
     if (isLoggable(Log.INFO)) log(Log.INFO, message(), throwable)
 }
 
-inline fun InternalLogger.warn(throwable: Throwable? = null, message: () -> String) {
-    if (isLoggable(Log.WARN)) log(Log.WARN, message(), throwable)
+inline fun InternalLogger.warn(
+    throwable: Throwable? = null,
+    onlyOnce: Boolean = false,
+    message: () -> String
+) {
+    if (isLoggable(Log.WARN)) log(Log.WARN, message(), throwable, onlyOnce)
 }
 
 inline fun InternalLogger.error(

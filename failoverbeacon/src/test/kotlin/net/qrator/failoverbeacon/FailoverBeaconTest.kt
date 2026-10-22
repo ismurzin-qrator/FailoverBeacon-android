@@ -181,9 +181,10 @@ class FailoverBeaconTest {
     }
 
     @Test
-    fun `stop stops watching the network and the activities until the next initialize`() {
+    fun `stop stops the SDK thread and the watchers until the next initialize`() {
         FailoverBeacon.initialize(app, config)
         val foreground = SdkRegistry.instance?.foregroundSource
+        val executor = SdkRegistry.instance?.storageExecutor
 
         FailoverBeacon.stop()
         Robolectric.buildActivity(Activity::class.java).setup()
@@ -192,6 +193,7 @@ class FailoverBeaconTest {
         FailoverBeacon.initialize(app, config)
 
         assertNull(stopped)
+        assertEquals(true, executor?.isShutdown)
         assertEquals(emptySet(), callbacksAfterStop)
         assertEquals(false, foreground?.isForeground())
         assertNotNull(SdkRegistry.instance)
