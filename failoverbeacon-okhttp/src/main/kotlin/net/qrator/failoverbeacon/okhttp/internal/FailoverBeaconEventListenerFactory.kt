@@ -19,6 +19,7 @@ internal class FailoverBeaconEventListenerFactory(private val appFactory: EventL
         if (CallRecordingEventListener.incompatible) return appListener
         val callRecorder = CallRecorder(
             clock = sdk.clock,
+            epochClock = sdk.epochClock,
             networkSource = sdk.networkSource,
             foregroundSource = sdk.foregroundSource,
             failureMapper = failureMapper,

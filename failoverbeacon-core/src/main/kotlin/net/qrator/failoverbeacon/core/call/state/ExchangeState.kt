@@ -12,6 +12,7 @@ internal class ExchangeState(
     val callId: Long,
     val resendCount: Int,
     val startNanos: Long,
+    val startTimeMillis: Long,
     val network: NetworkSnapshot,
     val foreground: Boolean?
 ) {

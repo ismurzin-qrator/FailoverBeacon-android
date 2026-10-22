@@ -20,6 +20,7 @@ data class Exchange(
     val dnsAddresses: List<String>?,
     val attempts: List<ConnectAttempt>,
     val timings: ExchangeTimings,
+    val startTimeMillis: Long,
     val durationNanos: Long,
     val outcome: ExchangeOutcome,
     val network: NetworkSnapshot,

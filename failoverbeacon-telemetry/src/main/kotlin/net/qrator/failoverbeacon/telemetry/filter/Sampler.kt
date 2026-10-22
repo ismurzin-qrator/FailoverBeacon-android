@@ -8,10 +8,10 @@ internal class Sampler(
     private val failureSampleRate: Double,
     private val successSampleRate: Double
 ) {
-    fun fraction(event: TelemetryEvent): Double =
-        if (isSuccess(event)) successSampleRate else failureSampleRate
-
-    fun keeps(event: TelemetryEvent): Boolean = roll(event.callId) < fraction(event)
+    fun sample(event: TelemetryEvent): Double? {
+        val fraction = if (isSuccess(event)) successSampleRate else failureSampleRate
+        return fraction.takeIf { roll(event.callId) < it }
+    }
 
     private fun isSuccess(event: TelemetryEvent): Boolean = event.type == TelemetryErrorType.OK &&
         event.attempts.none { it.result == TelemetryAttemptResult.FAILED }

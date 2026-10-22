@@ -5,11 +5,13 @@ import android.app.Application
 import android.content.Context
 import android.content.ContextWrapper
 import android.net.ConnectivityManager
+import android.os.SystemClock
 import android.util.Log
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -53,6 +55,18 @@ class FailoverBeaconTest {
         FailoverBeacon.initialize(ContextWrapper(app), config)
 
         assertSame(app, SdkRegistry.instance?.appContext)
+    }
+
+    @Test
+    fun `event time starts at the device clock and advances with the elapsed realtime`() {
+        FailoverBeacon.initialize(app, config)
+        val clock = assertNotNull(SdkRegistry.instance).epochClock
+        val start = clock.nowMillis()
+
+        SystemClock.sleep(65_000)
+
+        assertTrue(abs(start - System.currentTimeMillis()) < 1_000)
+        assertEquals(start + 65_000, clock.nowMillis())
     }
 
     @Test

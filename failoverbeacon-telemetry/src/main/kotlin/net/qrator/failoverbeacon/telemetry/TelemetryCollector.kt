@@ -21,9 +21,8 @@ class TelemetryCollector(
 
     override fun onExchange(exchange: Exchange) {
         val event = eventMapper.toEvent(exchange)
-        if (!filter.accepts(event) || !sampler.keeps(event)) return
-        SdkRegistry.logger.debug {
-            "Telemetry event $event, samplingFraction=${sampler.fraction(event)}"
-        }
+        if (!filter.accepts(event)) return
+        val samplingFraction = sampler.sample(event) ?: return
+        SdkRegistry.logger.debug { "Telemetry event $event, samplingFraction=$samplingFraction" }
     }
 }

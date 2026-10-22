@@ -42,6 +42,7 @@ internal class ExchangeMapper(failureMapper: FailureMapper) {
                 )
             },
             timings = timingsMapper.toTimings(state),
+            startTimeMillis = startTimeMillis,
             durationNanos = timingsMapper.toDurationNanos(state),
             outcome = outcomeMapper.toOutcome(state, results),
             network = network,

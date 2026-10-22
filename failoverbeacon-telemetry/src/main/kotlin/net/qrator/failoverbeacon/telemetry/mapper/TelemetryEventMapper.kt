@@ -45,6 +45,7 @@ internal class TelemetryEventMapper {
             tls = connection?.tls?.let(tlsMapper::toTls),
             reusedConnection = exchange.reusedConnection,
             dnsAddresses = exchange.dnsAddresses,
+            startTimeMillis = exchange.startTimeMillis,
             elapsedMs = timingsMapper.toMillis(exchange.durationNanos),
             timings = timingsMapper.toTimings(exchange.timings),
             requestBodyBytes = exchange.request.bodyBytes,

@@ -66,6 +66,7 @@ class TelemetryEventMapperTest {
                 attempt("1.1.1.3", untrusted, 40 * MS + 999_999)
             ),
             timings = ExchangeTimings(MS + 999_999, 20 * MS, 12 * MS, 2 * MS, 30 * MS, 4 * MS),
+            startTimeMillis = 1_761_040_980_000,
             network = CONNECTED,
             foreground = true
         )
@@ -87,6 +88,7 @@ class TelemetryEventMapperTest {
             tls = TelemetryTls("TLSv1.3", "TLS_AES_128_GCM_SHA256", "CN=Test CA"),
             reusedConnection = true,
             dnsAddresses = listOf("1.1.1.1", "1.1.1.2"),
+            startTimeMillis = 1_761_040_980_000,
             elapsedMs = 60,
             timings = TelemetryTimings(1, 20, 12, 2, 30, 4),
             requestBodyBytes = 3,

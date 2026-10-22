@@ -26,17 +26,27 @@ import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 
 class CallRecorderTest {
     private var time = 0L
+    private var epochTime = 0L
     private var network: NetworkSnapshot = NetworkSnapshot.Unknown
     private var foreground: Boolean? = null
     private val published = mutableListOf<Exchange>()
     private val recorder =
-        CallRecorder({ time }, { network }, { foreground }, TestFailureMapper, published::add)
+        CallRecorder(
+            { time },
+            { epochTime },
+            { network },
+            { foreground },
+            TestFailureMapper,
+            published::add
+        )
 
     @Test
-    fun `each exchange keeps the network and foreground state it started with`() {
+    fun `each exchange keeps the time, network and foreground state it started with`() {
+        epochTime = 1_000
         foreground = true
         start()
         acquire()
+        epochTime = 2_000
         network = NetworkSnapshot.None
         foreground = false
         respond(302)
@@ -51,6 +61,7 @@ class CallRecorderTest {
             }
         )
         assertEquals(listOf(true, false), published.map { it.foreground })
+        assertEquals(listOf(1_000L, 2_000L), published.map { it.startTimeMillis })
     }
 
     @Test
@@ -343,6 +354,7 @@ class CallRecorderTest {
             val recorder =
                 CallRecorder(
                     clock = { time },
+                    epochClock = { epochTime },
                     networkSource = { network },
                     foregroundSource = { foreground },
                     failureMapper = TestFailureMapper,

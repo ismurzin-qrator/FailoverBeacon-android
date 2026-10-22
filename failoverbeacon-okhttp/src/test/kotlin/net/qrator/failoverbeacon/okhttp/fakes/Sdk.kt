@@ -12,7 +12,8 @@ import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 fun installSdk(
     vararg subscribers: ExchangeSubscriber,
     network: NetworkSnapshot = NetworkSnapshot.Unknown,
-    foreground: Boolean? = null
+    foreground: Boolean? = null,
+    startTimeMillis: Long = 0
 ) {
     val bus = ExchangeBus()
     subscribers.forEach(bus::subscribe)
@@ -21,6 +22,7 @@ fun installSdk(
             appContext = ContextWrapper(null),
             consent = TrackingConsent.GRANTED,
             clock = { System.nanoTime() },
+            epochClock = { startTimeMillis },
             exchangeBus = bus,
             networkSource = { network },
             foregroundSource = { foreground }

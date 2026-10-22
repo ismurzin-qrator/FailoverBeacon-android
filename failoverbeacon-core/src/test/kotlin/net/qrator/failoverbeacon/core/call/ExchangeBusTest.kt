@@ -29,6 +29,7 @@ class ExchangeBusTest {
         dnsAddresses = null,
         attempts = emptyList(),
         timings = ExchangeTimings(null, null, null, null, null, null),
+        startTimeMillis = 0,
         durationNanos = 0,
         outcome = ExchangeOutcome.Canceled(step = null),
         network = NetworkSnapshot.Unknown,

@@ -23,6 +23,7 @@ internal data class TelemetryEvent(
     val tls: TelemetryTls?,
     val reusedConnection: Boolean,
     val dnsAddresses: List<String>?,
+    val startTimeMillis: Long,
     val elapsedMs: Long,
     val timings: TelemetryTimings,
     val requestBodyBytes: Long?,

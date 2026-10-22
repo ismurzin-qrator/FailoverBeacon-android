@@ -65,7 +65,12 @@ class CallRecordingTest {
     @BeforeTest
     fun setUp() {
         server.start(LOOPBACK, 0)
-        installSdk(ExchangeSubscriber(exchanges::add), network = NETWORK, foreground = true)
+        installSdk(
+            ExchangeSubscriber(exchanges::add),
+            network = NETWORK,
+            foreground = true,
+            startTimeMillis = START_TIME_MILLIS
+        )
     }
 
     @AfterTest
@@ -101,6 +106,7 @@ class CallRecordingTest {
         assertEquals(ExchangeOutcome.Ok, exchange.outcome)
         assertEquals(NETWORK, exchange.network)
         assertEquals(true, exchange.foreground)
+        assertEquals(START_TIME_MILLIS, exchange.startTimeMillis)
     }
 
     @Test
@@ -713,6 +719,7 @@ class CallRecordingTest {
     private companion object {
         const val LOOPBACK_IP = "127.0.0.1"
         val NETWORK = NetworkSnapshot.None
+        const val START_TIME_MILLIS = 1_761_040_980_000
         const val MAX_FOLLOW_UPS = 20
         const val LARGE_HEADER = 64 * 1024
         val LOOPBACK: InetAddress = InetAddress.getByName(LOOPBACK_IP)
