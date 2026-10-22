@@ -51,8 +51,8 @@ public object FailoverBeacon {
     }
 
     /**
-     * Changes the user's [consent]. The SDK does not persist it. Ignored while the SDK is not
-     * running.
+     * Changes the user's [consent]. The SDK does not persist it. [Consent.NOT_GRANTED] deletes the
+     * stored events. Ignored while the SDK is not running.
      */
     @JvmStatic
     public fun setConsent(consent: Consent) {
@@ -61,17 +61,18 @@ public object FailoverBeacon {
             SdkRegistry.logger.warn { "SDK is not running. setConsent ignored" }
             return
         }
-        instance.consent = toTrackingConsent(consent)
+        instance.applyConsent(toTrackingConsent(consent))
     }
 
     /** Deletes stored events without changing consent. Ignored while the SDK is not running. */
     @JvmStatic
     public fun clearAllData() {
-        if (SdkRegistry.instance == null) {
+        val instance = SdkRegistry.instance
+        if (instance == null) {
             SdkRegistry.logger.warn { "SDK is not running. clearAllData ignored" }
             return
         }
-        // Nothing is stored yet.
+        instance.clearData()
     }
 
     /**

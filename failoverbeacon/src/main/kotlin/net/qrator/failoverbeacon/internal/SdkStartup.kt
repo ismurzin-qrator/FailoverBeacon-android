@@ -41,34 +41,31 @@ internal object SdkStartup {
                 }
             }
         )
-        val storage = EventStorage(
-            cacheDir = appContext::getCacheDir,
-            beacons = config.beacons,
-            clock = epochClock,
-            batchWindowMillis = config.options.uploadPeriodMillis,
-            maxBytes = config.options.diskQueueBytes
-        )
-        installFeatures(sdk, config, storage)
+        installFeatures(sdk, config)
         if (!SdkRegistry.install(sdk)) return false
         networkMonitor.register()
         foregroundMonitor?.register()
+        sdk.applyConsent(consent)
         return true
     }
 
-    private fun installFeatures(
-        sdk: SdkInstance,
-        config: FailoverBeaconConfig,
-        storage: EventStorage
-    ) {
-        sdk.exchangeBus.subscribe(
-            TelemetryCollector(
-                consentSource = sdk,
-                blockedHosts = config.blockedHosts,
-                failureSampleRate = config.failureSampleRate,
-                successSampleRate = config.successSampleRate,
-                executor = sdk.storageExecutor,
-                storage = storage
-            )
+    private fun installFeatures(sdk: SdkInstance, config: FailoverBeaconConfig) {
+        val storage = EventStorage(
+            cacheDir = sdk.appContext::getCacheDir,
+            beacons = config.beacons,
+            clock = sdk.epochClock,
+            batchWindowMillis = config.options.uploadPeriodMillis,
+            maxBytes = config.options.diskQueueBytes
         )
+        val telemetry = TelemetryCollector(
+            consentSource = sdk,
+            blockedHosts = config.blockedHosts,
+            failureSampleRate = config.failureSampleRate,
+            successSampleRate = config.successSampleRate,
+            executor = sdk.storageExecutor,
+            storage = storage
+        )
+        sdk.exchangeBus.subscribe(telemetry)
+        sdk.addDataOwner(telemetry)
     }
 }

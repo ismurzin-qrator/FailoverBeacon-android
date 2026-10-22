@@ -5,6 +5,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
@@ -58,8 +59,34 @@ class TelemetryCollectorTest {
     fun `stores a kept event`() {
         send(failure())
 
-        val batch = temp.root.resolve("failoverbeacon").walk().single { it.isFile }
+        val batch = storedDir().walk().single { it.isFile }
         assertEquals("a.com", JSONObject(batch.readLines().single()).getString("host"))
+    }
+
+    @Test
+    fun `withdrawn consent clears the stored events on the SDK thread, others keep them`() {
+        send(failure())
+
+        collector.onConsentChanged(TrackingConsent.PENDING)
+        collector.onConsentChanged(TrackingConsent.GRANTED)
+        val queuedBeforeWithdrawal = tasks.size
+        collector.onConsentChanged(TrackingConsent.NOT_GRANTED)
+        val stored = storedDir().exists()
+        tasks.removeFirst().run()
+
+        assertEquals(0, queuedBeforeWithdrawal)
+        assertTrue(stored)
+        assertFalse(storedDir().exists())
+    }
+
+    @Test
+    fun `clearData clears the stored events on the SDK thread`() {
+        send(failure())
+
+        collector.clearData()
+        tasks.removeFirst().run()
+
+        assertFalse(storedDir().exists())
     }
 
     @Test
@@ -113,6 +140,8 @@ class TelemetryCollectorTest {
 
         assertEquals(emptyList(), logs)
     }
+
+    private fun storedDir() = temp.root.resolve("failoverbeacon")
 
     private fun send(exchange: Exchange) {
         collector.onExchange(exchange)

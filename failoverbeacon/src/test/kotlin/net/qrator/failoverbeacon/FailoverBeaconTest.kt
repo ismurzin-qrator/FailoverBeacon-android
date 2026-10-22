@@ -7,6 +7,7 @@ import android.content.ContextWrapper
 import android.net.ConnectivityManager
 import android.os.SystemClock
 import android.util.Log
+import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -16,6 +17,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
@@ -225,6 +227,65 @@ class FailoverBeaconTest {
 
         assertTrue(logs.isEmpty())
         assertTrue(ShadowLog.getLogsForTag("FailoverBeacon").isEmpty())
+    }
+
+    @Test
+    fun `clearAllData deletes stored events and keeps consent`() {
+        FailoverBeacon.initialize(app, config)
+        val event = storeEvent()
+
+        FailoverBeacon.clearAllData()
+        awaitSdkThread()
+
+        assertFalse(event.exists())
+        assertEquals(TrackingConsent.GRANTED, SdkRegistry.instance?.consent)
+    }
+
+    @Test
+    fun `withdrawn consent deletes stored events, pending and granted keep them`() {
+        FailoverBeacon.initialize(app, config)
+        val event = storeEvent()
+
+        FailoverBeacon.setConsent(Consent.PENDING)
+        FailoverBeacon.setConsent(Consent.GRANTED)
+        awaitSdkThread()
+        val kept = event.exists()
+        FailoverBeacon.setConsent(Consent.NOT_GRANTED)
+        awaitSdkThread()
+
+        assertTrue(kept)
+        assertFalse(event.exists())
+    }
+
+    @Test
+    fun `initialize without consent deletes events of an earlier run`() {
+        val event = storeEvent()
+
+        FailoverBeacon.initialize(app, config, Consent.NOT_GRANTED)
+        awaitSdkThread()
+
+        assertFalse(event.exists())
+    }
+
+    @Test
+    fun `initialize with consent and stop keep stored events`() {
+        val event = storeEvent()
+
+        FailoverBeacon.initialize(app, config, Consent.PENDING)
+        awaitSdkThread()
+        FailoverBeacon.stop()
+
+        assertTrue(event.exists())
+    }
+
+    private fun storeEvent(): File =
+        File(app.cacheDir, "failoverbeacon/2f7cbe9a31e83f24/1761040980000").apply {
+            parentFile?.mkdirs()
+            writeText("{}\n")
+        }
+
+    private fun awaitSdkThread() {
+        assertNotNull(SdkRegistry.instance).storageExecutor.submit {}.get(5, TimeUnit.SECONDS)
     }
 
     private fun networkCallbacks() =

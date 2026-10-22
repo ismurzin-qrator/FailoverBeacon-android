@@ -37,6 +37,11 @@ class EventStorage(
         }
     }
 
+    fun clear() {
+        openBatches.clear()
+        rootDir.deleteRecursively()
+    }
+
     private fun append(beacon: String, bytes: ByteArray, now: Long) {
         val batch = openBatches[beacon]?.takeIf { it.accepts(bytes.size, now) }
             ?: OpenBatch(newBatchFile(beaconDir(beacon), now)).also { openBatches[beacon] = it }

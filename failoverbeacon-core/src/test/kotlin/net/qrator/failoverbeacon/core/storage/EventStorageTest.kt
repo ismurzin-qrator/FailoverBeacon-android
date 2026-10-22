@@ -6,6 +6,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.LogOutput
 import org.junit.Rule
@@ -140,6 +141,18 @@ class EventStorageTest {
 
         assertEquals(listOf(START - EIGHTEEN_HOURS + 1, START).map(Long::toString), afterStart)
         assertEquals(listOf(START + EIGHTEEN_HOURS).map(Long::toString), names(A_DIR))
+    }
+
+    @Test
+    fun `clear deletes every batch and writing goes on`() {
+        storage.write("one")
+
+        storage.clear()
+        val afterClear = rootDir().exists()
+        storage.write("two")
+
+        assertFalse(afterClear)
+        assertEquals(listOf(listOf("two")), batches(A_DIR))
     }
 
     private fun newStorage(vararg beacons: String, maxBytes: Long = 5L * 1024 * 1024) =
