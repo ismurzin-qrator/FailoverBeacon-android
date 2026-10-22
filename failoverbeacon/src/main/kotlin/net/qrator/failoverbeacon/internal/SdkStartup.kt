@@ -9,6 +9,7 @@ import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.app.ForegroundSource
 import net.qrator.failoverbeacon.core.call.ExchangeBus
 import net.qrator.failoverbeacon.core.logging.warn
+import net.qrator.failoverbeacon.core.storage.EventStorage
 import net.qrator.failoverbeacon.core.thread.SdkExecutor
 import net.qrator.failoverbeacon.internal.app.ForegroundMonitor
 import net.qrator.failoverbeacon.internal.network.NetworkMonitor
@@ -25,11 +26,12 @@ internal object SdkStartup {
         val application = appContext as? Application
         val networkMonitor = NetworkMonitor(appContext)
         val foregroundMonitor = application?.let(::ForegroundMonitor)
+        val epochClock = ElapsedRealtimeEpochClock()
         val sdk = SdkInstance(
             appContext = appContext,
             consent = consent,
             clock = NanoTimeClock,
-            epochClock = ElapsedRealtimeEpochClock(),
+            epochClock = epochClock,
             exchangeBus = ExchangeBus(),
             networkSource = networkMonitor,
             foregroundSource = foregroundMonitor ?: ForegroundSource { null },
@@ -39,21 +41,32 @@ internal object SdkStartup {
                 }
             }
         )
-        installFeatures(sdk, config)
+        val storage = EventStorage(
+            cacheDir = appContext::getCacheDir,
+            beacons = config.beacons,
+            clock = epochClock,
+            batchWindowMillis = config.options.uploadPeriodMillis
+        )
+        installFeatures(sdk, config, storage)
         if (!SdkRegistry.install(sdk)) return false
         networkMonitor.register()
         foregroundMonitor?.register()
         return true
     }
 
-    private fun installFeatures(sdk: SdkInstance, config: FailoverBeaconConfig) {
+    private fun installFeatures(
+        sdk: SdkInstance,
+        config: FailoverBeaconConfig,
+        storage: EventStorage
+    ) {
         sdk.exchangeBus.subscribe(
             TelemetryCollector(
                 consentSource = sdk,
                 blockedHosts = config.blockedHosts,
                 failureSampleRate = config.failureSampleRate,
                 successSampleRate = config.successSampleRate,
-                executor = sdk.storageExecutor
+                executor = sdk.storageExecutor,
+                storage = storage
             )
         )
     }

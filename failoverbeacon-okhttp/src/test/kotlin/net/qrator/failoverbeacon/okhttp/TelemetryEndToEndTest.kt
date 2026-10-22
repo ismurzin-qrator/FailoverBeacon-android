@@ -1,6 +1,7 @@
 package net.qrator.failoverbeacon.okhttp
 
 import android.util.Log
+import java.io.File
 import java.net.InetAddress
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
@@ -24,6 +25,7 @@ import org.robolectric.RuntimeEnvironment
 
 @RunWith(RobolectricTestRunner::class)
 class TelemetryEndToEndTest {
+    private val app = RuntimeEnvironment.getApplication()
     private val server = MockWebServer()
     private val events = CopyOnWriteArrayList<String>()
     private val client = OkHttpClient.Builder().dns {
@@ -44,7 +46,7 @@ class TelemetryEndToEndTest {
             .failureSampleRate(0.0)
             .successSampleRate(1.0)
             .build()
-        FailoverBeacon.initialize(RuntimeEnvironment.getApplication(), config)
+        FailoverBeacon.initialize(app, config)
     }
 
     @AfterTest
@@ -69,6 +71,15 @@ class TelemetryEndToEndTest {
         execute("a.test")
 
         assertTrue(events.single().contains(""""status_code":200"""), events.single())
+    }
+
+    @Test
+    fun `stores the event for the beacon on disk`() {
+        execute("a.test")
+
+        val beaconDir = File(app.cacheDir, "failoverbeacon/2f7cbe9a31e83f24")
+        val line = beaconDir.listFiles()!!.single().readText().trimEnd('\n')
+        assertEquals(events.single().removePrefix("$EVENT_PREFIX "), line)
     }
 
     @Test

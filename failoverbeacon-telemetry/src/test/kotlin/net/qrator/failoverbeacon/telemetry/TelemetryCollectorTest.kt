@@ -12,23 +12,32 @@ import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
 import net.qrator.failoverbeacon.core.logging.LogOutput
+import net.qrator.failoverbeacon.core.storage.EventStorage
 import org.json.JSONObject
+import org.junit.Rule
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class TelemetryCollectorTest {
+    @get:Rule
+    val temp = TemporaryFolder()
+
     private val logs = mutableListOf<Pair<Int, String>>()
     private val previousOutput = SdkRegistry.logger.output
     private val previousLevel = SdkRegistry.logger.minLevel
     private val consentSource = TestConsentSource(TrackingConsent.GRANTED)
     private val tasks = ArrayDeque<Runnable>()
+    private val storage =
+        EventStorage({ temp.root }, listOf(BEACON), { 0 }, batchWindowMillis = 60_000)
     private val collector = TelemetryCollector(
         consentSource,
         blockedHosts = setOf("blocked.com"),
         failureSampleRate = 0.7,
         successSampleRate = 0.3,
-        executor = tasks::addLast
+        executor = tasks::addLast,
+        storage = storage
     )
 
     @BeforeTest
@@ -41,6 +50,14 @@ class TelemetryCollectorTest {
     fun tearDown() {
         SdkRegistry.logger.output = previousOutput
         SdkRegistry.logger.minLevel = previousLevel
+    }
+
+    @Test
+    fun `stores a kept event`() {
+        send(failure())
+
+        val batch = temp.root.resolve("failoverbeacon").walk().single { it.isFile }
+        assertEquals("a.com", JSONObject(batch.readLines().single()).getString("host"))
     }
 
     @Test
@@ -107,6 +124,7 @@ class TelemetryCollectorTest {
     )
 
     private companion object {
+        const val BEACON = "https://beacon.example"
         const val KEPT = 0L
         const val DROPPED = -1L
     }
