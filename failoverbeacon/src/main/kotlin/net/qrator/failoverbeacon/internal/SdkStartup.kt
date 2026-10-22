@@ -45,7 +45,8 @@ internal object SdkStartup {
             cacheDir = appContext::getCacheDir,
             beacons = config.beacons,
             clock = epochClock,
-            batchWindowMillis = config.options.uploadPeriodMillis
+            batchWindowMillis = config.options.uploadPeriodMillis,
+            maxBytes = config.options.diskQueueBytes
         )
         installFeatures(sdk, config, storage)
         if (!SdkRegistry.install(sdk)) return false

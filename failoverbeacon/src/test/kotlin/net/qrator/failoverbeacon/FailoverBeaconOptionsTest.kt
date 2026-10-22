@@ -11,7 +11,7 @@ class FailoverBeaconOptionsTest {
         val options = FailoverBeaconOptions.Builder().build()
 
         assertEquals(60_000L, options.uploadPeriodMillis)
-        assertEquals(1000, options.diskQueueSize)
+        assertEquals(5L * 1024 * 1024, options.diskQueueBytes)
         assertEquals(1000, options.memoryQueueSize)
     }
 
@@ -26,8 +26,8 @@ class FailoverBeaconOptionsTest {
     fun `queue sizes reject non-positive values`() {
         val builder = FailoverBeaconOptions.Builder()
 
-        assertFailsWith<IllegalArgumentException> { builder.diskQueueSize(0) }
-        assertFailsWith<IllegalArgumentException> { builder.diskQueueSize(-1) }
+        assertFailsWith<IllegalArgumentException> { builder.diskQueueBytes(0) }
+        assertFailsWith<IllegalArgumentException> { builder.diskQueueBytes(-1) }
         assertFailsWith<IllegalArgumentException> { builder.memoryQueueSize(0) }
         assertFailsWith<IllegalArgumentException> { builder.memoryQueueSize(-1) }
     }

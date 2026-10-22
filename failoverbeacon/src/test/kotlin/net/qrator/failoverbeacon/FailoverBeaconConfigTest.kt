@@ -17,7 +17,7 @@ class FailoverBeaconConfigTest {
         assertEquals(1.0, config.failureSampleRate)
         assertEquals(0.1, config.successSampleRate)
         assertEquals(60_000L, config.options.uploadPeriodMillis)
-        assertEquals(1000, config.options.diskQueueSize)
+        assertEquals(5L * 1024 * 1024, config.options.diskQueueBytes)
         assertEquals(1000, config.options.memoryQueueSize)
     }
 
@@ -138,7 +138,7 @@ class FailoverBeaconConfigTest {
 
     @Test
     fun `options are kept`() {
-        val options = FailoverBeaconOptions.Builder().diskQueueSize(10).build()
+        val options = FailoverBeaconOptions.Builder().diskQueueBytes(10).build()
 
         val config = builderWithBeacon().options(options).build()
 

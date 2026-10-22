@@ -10,13 +10,13 @@ import java.util.concurrent.TimeUnit
  */
 public class FailoverBeaconOptions private constructor(
     internal val uploadPeriodMillis: Long,
-    internal val diskQueueSize: Int,
+    internal val diskQueueBytes: Long,
     internal val memoryQueueSize: Int
 ) {
     /** Builds [FailoverBeaconOptions]. Every setter is optional. */
     public class Builder {
         private var uploadPeriodMillis = DEFAULT_UPLOAD_PERIOD_MILLIS
-        private var diskQueueSize = DEFAULT_DISK_QUEUE_SIZE
+        private var diskQueueBytes = DEFAULT_DISK_QUEUE_BYTES
         private var memoryQueueSize = DEFAULT_MEMORY_QUEUE_SIZE
 
         /**
@@ -31,14 +31,15 @@ public class FailoverBeaconOptions private constructor(
         }
 
         /**
-         * Sets the maximum number of events stored on disk. When the queue is full, the oldest
-         * events are dropped. The default value is 1000.
+         * Sets the maximum size in bytes of the events stored on disk, shared equally by the
+         * beacons. When a beacon's share is full, its oldest events are dropped. Events older than
+         * 18 hours are dropped as well. The default value is 5 MB.
          *
-         * @throws IllegalArgumentException if [size] is not positive.
+         * @throws IllegalArgumentException if [bytes] is not positive.
          */
-        public fun diskQueueSize(size: Int): Builder = apply {
-            require(size > 0) { "diskQueueSize must be > 0, was $size" }
-            diskQueueSize = size
+        public fun diskQueueBytes(bytes: Long): Builder = apply {
+            require(bytes > 0) { "diskQueueBytes must be > 0, was $bytes" }
+            diskQueueBytes = bytes
         }
 
         /**
@@ -54,11 +55,11 @@ public class FailoverBeaconOptions private constructor(
 
         /** Creates the options. */
         public fun build(): FailoverBeaconOptions =
-            FailoverBeaconOptions(uploadPeriodMillis, diskQueueSize, memoryQueueSize)
+            FailoverBeaconOptions(uploadPeriodMillis, diskQueueBytes, memoryQueueSize)
 
         private companion object {
             private val DEFAULT_UPLOAD_PERIOD_MILLIS = TimeUnit.SECONDS.toMillis(60)
-            private const val DEFAULT_DISK_QUEUE_SIZE = 1000
+            private const val DEFAULT_DISK_QUEUE_BYTES = 5L * 1024 * 1024
             private const val DEFAULT_MEMORY_QUEUE_SIZE = 1000
         }
     }

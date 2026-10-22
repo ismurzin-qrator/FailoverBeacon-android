@@ -11,7 +11,7 @@ public final class FailoverBeaconConfigJavaTest {
     public void everyBuilderMethodIsCallableFromJava() {
         FailoverBeaconOptions options = new FailoverBeaconOptions.Builder()
                 .uploadPeriod(30, TimeUnit.SECONDS)
-                .diskQueueSize(500)
+                .diskQueueBytes(1024 * 1024)
                 .memoryQueueSize(500)
                 .build();
 

@@ -30,7 +30,9 @@ class TelemetryCollectorTest {
     private val consentSource = TestConsentSource(TrackingConsent.GRANTED)
     private val tasks = ArrayDeque<Runnable>()
     private val storage =
-        EventStorage({ temp.root }, listOf(BEACON), { 0 }, batchWindowMillis = 60_000)
+        EventStorage({
+            temp.root
+        }, listOf(BEACON), { 0 }, batchWindowMillis = 60_000, maxBytes = 1_000_000)
     private val collector = TelemetryCollector(
         consentSource,
         blockedHosts = setOf("blocked.com"),

@@ -96,8 +96,61 @@ class EventStorageTest {
         assertEquals(listOf(Log.WARN), logged)
     }
 
-    private fun newStorage(vararg beacons: String) =
-        EventStorage({ temp.root }, beacons.toList(), { now }, batchWindowMillis = 60_000)
+    @Test
+    fun `a full share drops the oldest batches of that beacon`() {
+        val storage = newStorage(A, B, maxBytes = 2_000)
+
+        writeInNewBatches(storage, count = 4, line = "x".repeat(399))
+
+        val written = (0 until 4).map { (START + it * 60_000).toString() }
+        assertEquals(written.drop(1), names(A_DIR))
+        assertEquals(written.drop(1), names(B_DIR))
+    }
+
+    @Test
+    fun `one beacon gets the whole limit`() {
+        val storage = newStorage(A, maxBytes = 2_000)
+
+        writeInNewBatches(storage, count = 4, line = "x".repeat(399))
+
+        assertEquals(4, names(A_DIR).size)
+    }
+
+    @Test
+    fun `a batch is no larger than the share of a beacon`() {
+        val storage = newStorage(A, maxBytes = 1_000)
+
+        storage.write("x".repeat(599))
+        storage.write("x".repeat(599))
+
+        assertEquals(2, names(A_DIR).size)
+    }
+
+    @Test
+    fun `drops batches older than 18 hours, including those of an earlier storage`() {
+        val dir = File(rootDir(), A_DIR).apply { mkdirs() }
+        File(dir, (START - EIGHTEEN_HOURS).toString()).writeText("old\n")
+        File(dir, (START - EIGHTEEN_HOURS + 1).toString()).writeText("recent\n")
+
+        storage.write("one")
+        now = START + 1
+        val afterStart = names(A_DIR)
+        now = START + EIGHTEEN_HOURS
+        storage.write("two")
+
+        assertEquals(listOf(START - EIGHTEEN_HOURS + 1, START).map(Long::toString), afterStart)
+        assertEquals(listOf(START + EIGHTEEN_HOURS).map(Long::toString), names(A_DIR))
+    }
+
+    private fun newStorage(vararg beacons: String, maxBytes: Long = 5L * 1024 * 1024) =
+        EventStorage({ temp.root }, beacons.toList(), { now }, batchWindowMillis = 60_000, maxBytes)
+
+    private fun writeInNewBatches(storage: EventStorage, count: Int, line: String) {
+        repeat(count) {
+            storage.write(line)
+            now += 60_000
+        }
+    }
 
     private fun rootDir() = File(temp.root, "failoverbeacon")
 
@@ -113,5 +166,6 @@ class EventStorageTest {
         const val A_DIR = "38612c965a9c4c35"
         const val B_DIR = "35b22c6cbc7988f8"
         const val START = 1_761_040_980_000L
+        const val EIGHTEEN_HOURS = 18 * 60 * 60 * 1000L
     }
 }
