@@ -60,7 +60,7 @@ class TelemetryEndToEndTest {
         execute("пример.рф")
         execute("a.test")
 
-        assertTrue(events.single().contains("host=a.test"), events.single())
+        assertTrue(events.single().contains(""""host":"a.test""""), events.single())
     }
 
     @Test
@@ -68,7 +68,7 @@ class TelemetryEndToEndTest {
         execute("a.test", status = 500)
         execute("a.test")
 
-        assertTrue(events.single().contains("statusCode=200"), events.single())
+        assertTrue(events.single().contains(""""status_code":200"""), events.single())
     }
 
     @Test

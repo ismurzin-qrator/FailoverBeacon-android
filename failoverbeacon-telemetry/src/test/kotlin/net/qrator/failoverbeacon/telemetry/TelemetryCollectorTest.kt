@@ -12,7 +12,11 @@ import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
 import net.qrator.failoverbeacon.core.logging.LogOutput
+import org.json.JSONObject
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class TelemetryCollectorTest {
     private val logs = mutableListOf<Pair<Int, String>>()
     private val previousOutput = SdkRegistry.logger.output
@@ -46,10 +50,12 @@ class TelemetryCollectorTest {
 
         val (level, message) = logs.first()
         assertEquals(Log.DEBUG, level)
-        assertTrue(message.startsWith("Telemetry event TelemetryEvent(callId=$KEPT"), message)
+        assertTrue(message.startsWith("""Telemetry event {"format_version":1,"""), message)
         assertEquals(
-            listOf("samplingFraction=0.3", "samplingFraction=0.7"),
-            logs.map { it.second.substringAfterLast(", ") }
+            listOf(0.3, 0.7),
+            logs.map {
+                JSONObject(it.second.substringAfter(" event ")).getDouble("sampling_fraction")
+            }
         )
     }
 
