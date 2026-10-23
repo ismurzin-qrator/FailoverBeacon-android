@@ -125,33 +125,41 @@ class TelemetryEndToEndTest {
     }
 
     @Test
-    fun `uploads stored events to the beacon`() {
-        val beacon = MockWebServer()
-        beacon.useHttps(beaconCertificates.sslSocketFactory(), false)
-        beacon.enqueue(MockResponse().setResponseCode(202))
-        beacon.start(LOOPBACK, 0)
-        val defaultSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory()
-        HttpsURLConnection.setDefaultSSLSocketFactory(clientCertificates.sslSocketFactory())
-        try {
-            restart(
-                FailoverBeaconOptions.Builder().uploadPeriod(100, TimeUnit.MILLISECONDS).build(),
-                beacon = "https://localhost:${beacon.port}/events"
-            )
+    fun `uploads stored events to the beacon`() = withBeacon { beacon, url ->
+        restart(
+            FailoverBeaconOptions.Builder().uploadPeriod(100, TimeUnit.MILLISECONDS).build(),
+            beacon = url
+        )
 
+        execute("a.test")
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(1))
+        val request = assertNotNull(beacon.takeRequest(5, TimeUnit.SECONDS))
+        awaitUploadThread()
+
+        val lines = GZIPInputStream(request.body.inputStream()).reader().readLines()
+        assertTrue(lines.first().startsWith("""{"sent_at":"""), lines.first())
+        assertEquals(listOf(events.single().removePrefix("$EVENT_PREFIX ")), lines.drop(1))
+        assertEquals(emptyList(), storedFiles())
+    }
+
+    @Test
+    fun `uploads events of the previous launch right after initialize`() =
+        withBeacon { beacon, url ->
+            val defaults = FailoverBeaconOptions.Builder().build()
+            restart(defaults, beacon = url)
             execute("a.test")
-            ShadowSystemClock.advanceBy(Duration.ofSeconds(1))
+            FailoverBeacon.stop()
+            val batch = storedFiles().single()
+            batch.renameTo(File(batch.parentFile, "${System.currentTimeMillis() - 120_000}"))
+
+            restart(defaults, beacon = url)
             val request = assertNotNull(beacon.takeRequest(5, TimeUnit.SECONDS))
             awaitUploadThread()
 
             val lines = GZIPInputStream(request.body.inputStream()).reader().readLines()
-            assertTrue(lines.first().startsWith("""{"sent_at":"""), lines.first())
             assertEquals(listOf(events.single().removePrefix("$EVENT_PREFIX ")), lines.drop(1))
             assertEquals(emptyList(), storedFiles())
-        } finally {
-            HttpsURLConnection.setDefaultSSLSocketFactory(defaultSocketFactory)
-            beacon.shutdown()
         }
-    }
 
     @Test
     fun `stops reporting once consent is withdrawn`() {
@@ -181,6 +189,21 @@ class TelemetryEndToEndTest {
             .options(options)
             .build()
         FailoverBeacon.initialize(app, config)
+    }
+
+    private fun withBeacon(block: (beacon: MockWebServer, url: String) -> Unit) {
+        val beacon = MockWebServer()
+        beacon.useHttps(beaconCertificates.sslSocketFactory(), false)
+        beacon.enqueue(MockResponse().setResponseCode(202))
+        beacon.start(LOOPBACK, 0)
+        val defaultSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory()
+        HttpsURLConnection.setDefaultSSLSocketFactory(clientCertificates.sslSocketFactory())
+        try {
+            block(beacon, "https://localhost:${beacon.port}/events")
+        } finally {
+            HttpsURLConnection.setDefaultSSLSocketFactory(defaultSocketFactory)
+            beacon.shutdown()
+        }
     }
 
     private fun beaconDir() = File(app.cacheDir, "failoverbeacon/2f7cbe9a31e83f24")

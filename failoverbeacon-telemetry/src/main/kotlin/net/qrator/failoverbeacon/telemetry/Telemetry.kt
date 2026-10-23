@@ -52,7 +52,7 @@ class Telemetry(
     fun start() {
         sdk.uploadExecutor.scheduleWithFixedDelay(
             uploader::upload,
-            uploadPeriodMillis,
+            0,
             uploadPeriodMillis,
             TimeUnit.MILLISECONDS
         )

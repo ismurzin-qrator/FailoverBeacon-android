@@ -209,7 +209,7 @@ class FailoverBeaconTest {
     }
 
     @Test
-    fun `schedules the upload every upload period`() {
+    fun `uploads at start and then every upload period`() {
         val options = FailoverBeaconOptions.Builder().uploadPeriod(5, TimeUnit.MINUTES).build()
         FailoverBeacon.initialize(
             app,
@@ -219,6 +219,7 @@ class FailoverBeaconTest {
         val executor = assertNotNull(
             SdkRegistry.instance
         ).uploadExecutor as ScheduledThreadPoolExecutor
+        executor.submit {}.get(5, TimeUnit.SECONDS)
         val upload = executor.queue.single() as ScheduledFuture<*>
 
         assertTrue(upload.getDelay(TimeUnit.MILLISECONDS) in 290_000..300_000)
