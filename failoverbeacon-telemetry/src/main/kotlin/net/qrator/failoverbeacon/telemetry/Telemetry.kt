@@ -34,6 +34,7 @@ class Telemetry(
     private val uploader = TelemetryUploader(
         beacons = beacons,
         storage = storage,
+        storageExecutor = sdk.storageExecutor,
         consentSource = sdk,
         clock = sdk.epochClock
     )

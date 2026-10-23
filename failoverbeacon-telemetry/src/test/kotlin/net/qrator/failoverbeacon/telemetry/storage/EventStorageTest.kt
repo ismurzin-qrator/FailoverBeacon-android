@@ -216,6 +216,18 @@ class EventStorageTest {
         assertEquals(listOf(listOf("one"), listOf("two")), batches(B_DIR))
     }
 
+    @Test
+    fun `a removed beacon loses its batches and gets no more lines`() {
+        storage.write("one")
+        storage.removeBeacon(A)
+        storage.write("two")
+        now = START + 120_000
+
+        assertEquals(setOf(B_DIR), rootDir().list()?.toSet())
+        assertEquals(listOf(listOf("one", "two")), batches(B_DIR))
+        assertEquals(emptyList(), storage.readyBatches(A))
+    }
+
     private fun newStorage(vararg beacons: String, maxBytes: Long = 5L * 1024 * 1024) =
         EventStorage({ temp.root }, beacons.toList(), { now }, batchWindowMillis = 60_000, maxBytes)
 

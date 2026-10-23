@@ -23,11 +23,12 @@ internal class EventStorage(
     private val maxBatchBytes = minOf(MAX_BATCH_BYTES, beaconMaxBytes / 2)
     private val rootDir by lazy { File(cacheDir(), ROOT_DIR_NAME).also(::deleteRemovedBeacons) }
     private val openBatches = HashMap<String, OpenBatch>()
+    private val writtenBeacons = beacons.toMutableSet()
 
     fun write(line: String) {
         val bytes = (line + '\n').toByteArray(Charsets.UTF_8)
         val now = clock.nowMillis()
-        for (beacon in beaconDirNames.keys) {
+        for (beacon in writtenBeacons) {
             try {
                 append(beacon, bytes, now)
             } catch (e: Exception) {
@@ -61,6 +62,12 @@ internal class EventStorage(
 
     fun delete(batches: List<File>) {
         batches.forEach(File::delete)
+    }
+
+    fun removeBeacon(beacon: String) {
+        writtenBeacons -= beacon
+        openBatches.remove(beacon)
+        beaconDir(beacon).deleteRecursively()
     }
 
     fun clear() {
