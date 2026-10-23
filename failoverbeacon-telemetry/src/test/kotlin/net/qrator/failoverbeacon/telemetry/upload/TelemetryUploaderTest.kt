@@ -84,20 +84,42 @@ class TelemetryUploaderTest {
     }
 
     @Test
-    fun `a timeout, a rate limit, a server error or no network keep the batches`() {
+    fun `a timeout, a rate limit, a server error or no network keep the batches and back off`() {
         writeInNewBatches("one")
         val codes = listOf(408, 429, 500, 503, 599)
 
         codes.forEach { code ->
-            respond(code)
-            uploader.upload()
+            respond(code, code)
+            val uploader = uploader(listOf(beacon), storage)
+            repeat(3) { uploader.upload() }
         }
         server.shutdown()
         uploader.upload()
 
-        assertEquals(codes.size, server.requestCount)
+        assertEquals(codes.size * 2, server.requestCount)
         assertEquals(1, storedFiles().size)
         assertEquals(emptyList(), warnings)
+    }
+
+    @Test
+    fun `a failing beacon waits twice as many passes after each failure, up to 60`() {
+        writeInNewBatches("one")
+        respond(*IntArray(9) { 500 })
+
+        val attempts = (1..184).filter { uploadSends() }
+
+        assertEquals(listOf(1, 2, 4, 8, 16, 32, 64, 124, 184), attempts)
+    }
+
+    @Test
+    fun `a success resets the backoff`() {
+        writeInNewBatches("one")
+        respond(500, 500, 202, 500, 500)
+
+        val attempts = (1..4).filter { uploadSends() }
+        writeInNewBatches("two")
+
+        assertEquals(listOf(1, 2, 4, 5, 6), attempts + (5..6).filter { uploadSends() })
     }
 
     @Test
@@ -160,14 +182,16 @@ class TelemetryUploaderTest {
         val beacons = listOf(beacon, other.url("/events").toString())
         val storage = storage(beacons)
         val uploader = uploader(beacons, storage)
-        writeInNewBatches("one", storage = storage)
-        respond(500)
-        other.enqueue(MockResponse().setResponseCode(202))
+        respond(500, 500)
+        listOf("one", "two", "three").forEach { line ->
+            writeInNewBatches(line, storage = storage)
+            other.enqueue(MockResponse().setResponseCode(202))
+            uploader.upload()
+        }
 
-        uploader.upload()
-
-        assertEquals(listOf("one"), requests(other).single().events)
-        assertEquals(1, storedFiles().size)
+        assertEquals(2, server.requestCount)
+        assertEquals(listOf("one", "two", "three"), requests(other).flatMap { it.events })
+        assertEquals(3, storedFiles().size)
         other.shutdown()
     }
 
@@ -220,6 +244,12 @@ class TelemetryUploaderTest {
             now += WINDOW
         }
         now += WINDOW
+    }
+
+    private fun uploadSends(): Boolean {
+        val before = server.requestCount
+        uploader.upload()
+        return server.requestCount > before
     }
 
     private fun respond(vararg codes: Int) {

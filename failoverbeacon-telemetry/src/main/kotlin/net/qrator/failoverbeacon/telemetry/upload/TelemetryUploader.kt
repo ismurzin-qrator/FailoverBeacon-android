@@ -24,13 +24,18 @@ internal class TelemetryUploader(
     private val dropped: DroppedEvents
 ) {
     private val client = BeaconClient()
+    private val backoff = beacons.associateWith { BeaconBackoff() }
+    private var pass = 0L
 
     fun upload() {
         TrafficStats.setThreadStatsTag(TRAFFIC_STATS_TAG)
+        pass++
         beacons.forEach(::upload)
     }
 
     private fun upload(beacon: String) {
+        val backoff = backoff.getValue(beacon)
+        if (!backoff.canAttempt(pass)) return
         var batches = storage.readyBatches(beacon)
         while (batches.isNotEmpty() && canSend()) {
             val request = nextRequest(batches)
@@ -40,14 +45,20 @@ internal class TelemetryUploader(
                 val code = client.post(beacon, body(events, reported))
                 SdkRegistry.logger.debug { "Events sent to $beacon: $code" }
                 when {
-                    code == null || isRetryable(code) -> return
+                    code == null || isRetryable(code) -> {
+                        backoff.onFailure(pass)
+                        return
+                    }
 
                     code == HTTP_GONE -> {
                         removeBeacon(beacon)
                         return
                     }
 
-                    code in HTTP_SUCCESS -> dropped.subtract(beacon, reported)
+                    code in HTTP_SUCCESS -> {
+                        dropped.subtract(beacon, reported)
+                        backoff.onSuccess()
+                    }
 
                     else -> reject(beacon, code, events)
                 }
