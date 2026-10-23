@@ -9,6 +9,8 @@ import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.core.logging.warn
+import net.qrator.failoverbeacon.core.network.NetworkSource
+import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 import net.qrator.failoverbeacon.core.time.EpochClock
 import net.qrator.failoverbeacon.telemetry.BuildConfig
 import net.qrator.failoverbeacon.telemetry.DropReason
@@ -20,6 +22,7 @@ internal class TelemetryUploader(
     private val storage: EventStorage,
     private val storageExecutor: Executor,
     private val consentSource: ConsentSource,
+    private val networkSource: NetworkSource,
     private val clock: EpochClock,
     private val dropped: DroppedEvents
 ) {
@@ -87,8 +90,15 @@ internal class TelemetryUploader(
         }
     }
 
-    private fun canSend(): Boolean =
-        consentSource.consent == TrackingConsent.GRANTED && !Thread.currentThread().isInterrupted
+    private fun canSend(): Boolean = consentSource.consent == TrackingConsent.GRANTED &&
+        hasNetwork() &&
+        !Thread.currentThread().isInterrupted
+
+    private fun hasNetwork(): Boolean = when (val network = networkSource.currentNetwork()) {
+        NetworkSnapshot.None -> false
+        NetworkSnapshot.Unknown -> true
+        is NetworkSnapshot.Connected -> network.blocked != true
+    }
 
     private fun nextRequest(batches: List<File>): List<File> {
         var size = 0L

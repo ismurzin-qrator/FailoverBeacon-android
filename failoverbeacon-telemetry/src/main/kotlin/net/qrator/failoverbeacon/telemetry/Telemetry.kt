@@ -39,6 +39,7 @@ class Telemetry(
         storage = storage,
         storageExecutor = sdk.storageExecutor,
         consentSource = sdk,
+        networkSource = sdk.networkSource,
         clock = sdk.epochClock,
         dropped = dropped
     )

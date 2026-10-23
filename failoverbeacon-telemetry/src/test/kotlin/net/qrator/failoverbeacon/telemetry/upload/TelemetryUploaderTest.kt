@@ -14,6 +14,9 @@ import kotlin.test.assertNotNull
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.logging.LogOutput
+import net.qrator.failoverbeacon.core.network.NetworkSource
+import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
+import net.qrator.failoverbeacon.core.network.model.NetworkTransport
 import net.qrator.failoverbeacon.telemetry.BuildConfig
 import net.qrator.failoverbeacon.telemetry.DropReason
 import net.qrator.failoverbeacon.telemetry.DroppedEvents
@@ -36,6 +39,7 @@ class TelemetryUploaderTest {
     private val beacon = server.url("/events").toString()
     private val consent = TestConsentSource(TrackingConsent.GRANTED)
     private var now = START
+    private var network: NetworkSnapshot = NetworkSnapshot.Unknown
     private val dropped = DroppedEvents(listOf(beacon))
     private val storage = storage(listOf(beacon))
     private val uploader = uploader(listOf(beacon), storage)
@@ -80,6 +84,51 @@ class TelemetryUploaderTest {
         uploader.upload()
 
         assertEquals(0, server.requestCount)
+        assertEquals(1, storedFiles().size)
+    }
+
+    @Test
+    fun `sends nothing without network or with network blocked, and sends once it is back`() {
+        writeInNewBatches("one")
+        respond(202)
+
+        network = NetworkSnapshot.None
+        uploader.upload()
+        network = connected(blocked = true)
+        uploader.upload()
+        assertEquals(0, server.requestCount)
+        assertEquals(1, storedFiles().size)
+
+        network = connected(blocked = false)
+        uploader.upload()
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `sends when the network or its blocking is unknown`() {
+        respond(202, 202)
+
+        listOf(NetworkSnapshot.Unknown, connected(blocked = null)).forEach {
+            network = it
+            writeInNewBatches("one")
+            uploader.upload()
+        }
+
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun `a network lost between requests stops the pass`() {
+        val networks = ArrayDeque(listOf(NetworkSnapshot.Unknown))
+        val uploader = uploader(listOf(beacon), storage) {
+            networks.removeFirstOrNull() ?: NetworkSnapshot.None
+        }
+        writeInNewBatches(*Array(3) { "1".repeat(400 * 1024) })
+        respond(202)
+
+        uploader.upload()
+
+        assertEquals(1, server.requestCount)
         assertEquals(1, storedFiles().size)
     }
 
@@ -235,8 +284,33 @@ class TelemetryUploaderTest {
     private fun storage(beacons: List<String>) =
         EventStorage({ temp.root }, beacons, { now }, WINDOW, DISK_BYTES, dropped)
 
-    private fun uploader(beacons: List<String>, storage: EventStorage) =
-        TelemetryUploader(beacons, storage, Executor(Runnable::run), consent, { now }, dropped)
+    private fun uploader(
+        beacons: List<String>,
+        storage: EventStorage,
+        networkSource: NetworkSource = NetworkSource { network }
+    ) = TelemetryUploader(
+        beacons,
+        storage,
+        Executor(Runnable::run),
+        consent,
+        networkSource,
+        { now },
+        dropped
+    )
+
+    private fun connected(blocked: Boolean?) = NetworkSnapshot.Connected(
+        transport = NetworkTransport.WIFI,
+        vpn = false,
+        validated = true,
+        captivePortal = false,
+        metered = false,
+        roaming = false,
+        downstreamKbps = null,
+        upstreamKbps = null,
+        signalStrength = null,
+        carrier = null,
+        blocked = blocked
+    )
 
     private fun writeInNewBatches(vararg lines: String, storage: EventStorage = this.storage) {
         lines.forEach { line ->
