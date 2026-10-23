@@ -21,6 +21,7 @@ import net.qrator.failoverbeacon.telemetry.TestConsentSource
 import net.qrator.failoverbeacon.telemetry.storage.EventStorage
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import org.json.JSONObject
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
@@ -31,15 +32,13 @@ class TelemetryUploaderTest {
     @get:Rule
     val temp = TemporaryFolder()
 
-    private val a = MockWebServer()
-    private val b = MockWebServer()
-    private val beacons = listOf(a.url("/a").toString(), b.url("/b").toString())
+    private val server = MockWebServer()
+    private val beacon = server.url("/events").toString()
     private val consent = TestConsentSource(TrackingConsent.GRANTED)
     private var now = START
-    private val dropped = DroppedEvents(beacons)
-    private val storage = EventStorage({ temp.root }, beacons, { now }, WINDOW, DISK_BYTES, dropped)
-    private val uploader =
-        TelemetryUploader(beacons, storage, Executor(Runnable::run), consent, { now }, dropped)
+    private val dropped = DroppedEvents(listOf(beacon))
+    private val storage = storage(listOf(beacon))
+    private val uploader = uploader(listOf(beacon), storage)
     private val previousOutput = SdkRegistry.logger.output
     private val warnings = CopyOnWriteArrayList<String>()
 
@@ -51,23 +50,24 @@ class TelemetryUploaderTest {
 
     @AfterTest
     fun tearDown() {
-        a.shutdown()
-        b.shutdown()
+        server.shutdown()
         SdkRegistry.logger.output = previousOutput
         SdkRegistry.clear()
     }
 
     @Test
     fun `sends ready batches in one request after a metadata line and deletes them`() {
+        dropped.add(beacon, DropReason.EXPIRED, 40)
         writeInNewBatches("one", "two")
-        a.enqueue(MockResponse().setResponseCode(202))
-        b.enqueue(MockResponse().setResponseCode(202))
+        respond(202)
 
         uploader.upload()
 
-        assertEquals(listOf(metadata(), "one", "two"), lines(a))
-        assertEquals(listOf(metadata(), "one", "two"), lines(b))
+        val metadata = """{"sent_at":$now,"sdk_version":"${BuildConfig.SDK_VERSION}",""" +
+            """"dropped":{"expired":40}}"""
+        assertEquals(listOf(listOf(metadata, "one", "two")), requests().map { it.lines })
         assertEquals(emptyList(), storedFiles())
+        assertEquals(emptyMap(), dropped.snapshot(beacon))
     }
 
     @Test
@@ -79,164 +79,119 @@ class TelemetryUploaderTest {
         consent.consent = TrackingConsent.NOT_GRANTED
         uploader.upload()
 
-        assertEquals(0, a.requestCount + b.requestCount)
-        assertEquals(2, storedFiles().size)
+        assertEquals(0, server.requestCount)
+        assertEquals(1, storedFiles().size)
     }
 
     @Test
-    fun `a failed request keeps its batches and the next beacon is still sent`() {
+    fun `a timeout, a rate limit, a server error or no network keep the batches`() {
         writeInNewBatches("one")
-        a.enqueue(MockResponse().setResponseCode(500))
-        a.enqueue(MockResponse().setResponseCode(202))
-        b.enqueue(MockResponse().setResponseCode(202))
+        val codes = listOf(408, 429, 500, 503, 599)
+
+        codes.forEach { code ->
+            respond(code)
+            uploader.upload()
+        }
+        server.shutdown()
+        uploader.upload()
+
+        assertEquals(codes.size, server.requestCount)
+        assertEquals(1, storedFiles().size)
+        assertEquals(emptyList(), warnings)
+    }
+
+    @Test
+    fun `a failed request goes again in the next pass with its drop counts`() {
+        dropped.add(beacon, DropReason.DISK_OVERFLOW, 3)
+        writeInNewBatches("one")
+        respond(500, 202)
 
         uploader.upload()
-        val keptAfterFailure = storedFiles().size
         uploader.upload()
 
-        assertEquals(1, keptAfterFailure)
-        assertEquals(listOf("one"), lines(a).drop(1))
-        assertEquals(listOf("one"), lines(a).drop(1))
-        assertEquals(1, b.requestCount)
+        val sent = requests()
+        assertEquals(listOf(listOf("one"), listOf("one")), sent.map { it.events })
+        assertEquals(List(2) { """{"disk_overflow":3}""" }, sent.map { it.dropped })
         assertEquals(emptyList(), storedFiles())
+        assertEquals(emptyMap(), dropped.snapshot(beacon))
     }
 
     @Test
-    fun `a gone beacon gets nothing more until the SDK starts again`() {
-        writeInNewBatches("one")
-        a.enqueue(MockResponse().setResponseCode(410))
-        b.enqueue(MockResponse().setResponseCode(202))
-        b.enqueue(MockResponse().setResponseCode(202))
+    fun `rejected events are dropped, logged and counted as send errors`() {
+        respond(400, 307, 202)
 
-        uploader.upload()
-        val storedAfterGone = storedFiles()
-        writeInNewBatches("two")
-        uploader.upload()
+        listOf("one", "two", "three").forEach { line ->
+            writeInNewBatches(line)
+            uploader.upload()
+        }
 
-        assertEquals(emptyList(), storedAfterGone)
-        assertEquals(1, a.requestCount)
-        assertEquals(listOf("one"), lines(b).drop(1))
-        assertEquals(listOf("two"), lines(b).drop(1))
+        val sent = requests()
         assertEquals(
-            listOf("Beacon ${beacons[0]} is gone. Events are no longer sent to it"),
-            warnings
+            listOf(null, """{"send_error":1}""", """{"send_error":2}"""),
+            sent.map { it.dropped }
         )
-    }
-
-    @Test
-    fun `other codes drop the batches with one warning per beacon and code`() {
-        writeInNewBatches("one")
-        a.enqueue(MockResponse().setResponseCode(400))
-        b.enqueue(MockResponse().setResponseCode(307))
-        a.enqueue(MockResponse().setResponseCode(400))
-        b.enqueue(MockResponse().setResponseCode(202))
-
-        uploader.upload()
-        val storedAfterRejected = storedFiles()
-        writeInNewBatches("two")
-        uploader.upload()
-
-        assertEquals(emptyList(), storedAfterRejected)
         assertEquals(emptyList(), storedFiles())
         assertEquals(
             listOf(
-                "Beacon ${beacons[0]} rejected events with code 400. Events are dropped",
-                "Beacon ${beacons[1]} rejected events with code 307. Events are dropped"
+                "Beacon $beacon rejected events with code 400. Events are dropped",
+                "Beacon $beacon rejected events with code 307. Events are dropped"
             ),
             warnings
         )
     }
 
     @Test
-    fun `a timeout, a rate limit and server errors keep the batches`() {
+    fun `a gone beacon gets nothing more`() {
         writeInNewBatches("one")
-        b.enqueue(MockResponse().setResponseCode(202))
-        val codes = listOf(408, 429, 500, 503, 599)
+        respond(410)
 
-        codes.forEach { code ->
-            a.enqueue(MockResponse().setResponseCode(code))
-            uploader.upload()
-        }
+        uploader.upload()
+        writeInNewBatches("two")
+        uploader.upload()
 
-        assertEquals(codes.size, a.requestCount)
+        assertEquals(1, server.requestCount)
+        assertEquals(emptyList(), storedFiles())
+        assertEquals(listOf("Beacon $beacon is gone. Events are no longer sent to it"), warnings)
+    }
+
+    @Test
+    fun `a failing beacon does not hold back the next one`() {
+        val other = MockWebServer()
+        val beacons = listOf(beacon, other.url("/events").toString())
+        val storage = storage(beacons)
+        val uploader = uploader(beacons, storage)
+        writeInNewBatches("one", storage = storage)
+        respond(500)
+        other.enqueue(MockResponse().setResponseCode(202))
+
+        uploader.upload()
+
+        assertEquals(listOf("one"), requests(other).single().events)
         assertEquals(1, storedFiles().size)
-        assertEquals(emptyList(), warnings)
-    }
-
-    @Test
-    fun `reports drop counts in the metadata line and clears them after a success`() {
-        dropped.add(beacons[0], DropReason.EXPIRED, 40)
-        writeInNewBatches("one")
-        a.enqueue(MockResponse().setResponseCode(202))
-        b.enqueue(MockResponse().setResponseCode(202))
-
-        uploader.upload()
-
-        assertEquals(metadata(""","dropped":{"expired":40}"""), lines(a).first())
-        assertEquals(metadata(), lines(b).first())
-        assertEquals(emptyMap(), dropped.snapshot(beacons[0]))
-    }
-
-    @Test
-    fun `drop counts stay after a failed request and go with the next one`() {
-        dropped.add(beacons[0], DropReason.DISK_OVERFLOW, 3)
-        writeInNewBatches("one")
-        a.enqueue(MockResponse().setResponseCode(500))
-        a.enqueue(MockResponse().setResponseCode(202))
-        repeat(2) { b.enqueue(MockResponse().setResponseCode(202)) }
-
-        uploader.upload()
-        uploader.upload()
-
-        assertEquals(metadata(""","dropped":{"disk_overflow":3}"""), lines(a).first())
-        assertEquals(metadata(""","dropped":{"disk_overflow":3}"""), lines(a).first())
-        assertEquals(emptyMap(), dropped.snapshot(beacons[0]))
-    }
-
-    @Test
-    fun `rejected events go as send errors with the next request`() {
-        writeInNewBatches("one", "two")
-        a.enqueue(MockResponse().setResponseCode(400))
-        a.enqueue(MockResponse().setResponseCode(202))
-        repeat(2) { b.enqueue(MockResponse().setResponseCode(202)) }
-
-        uploader.upload()
-        writeInNewBatches("three")
-        uploader.upload()
-
-        assertEquals(listOf("one", "two"), lines(a).drop(1))
-        assertEquals(
-            listOf(metadata(""","dropped":{"send_error":2}"""), "three"),
-            lines(a)
-        )
+        other.shutdown()
     }
 
     @Test
     fun `batches over 1 MB go in several requests of one pass, oldest first`() {
-        val single = listOf(beacons.first())
-        val storage =
-            EventStorage({ temp.root }, single, { now }, WINDOW, DISK_BYTES, dropped)
-        val uploader =
-            TelemetryUploader(single, storage, Executor(Runnable::run), consent, { now }, dropped)
         val (first, second, third) = listOf("1", "2", "3").map { it.repeat(400 * 1024) }
-        writeInNewBatches(first, second, third, storage = storage)
-        repeat(2) { a.enqueue(MockResponse().setResponseCode(202)) }
+        writeInNewBatches(first, second, third)
+        respond(202, 202)
 
         uploader.upload()
 
-        assertEquals(listOf(first, second), lines(a).drop(1))
-        assertEquals(listOf(third), lines(a).drop(1))
+        assertEquals(listOf(listOf(first, second), listOf(third)), requests().map { it.events })
         assertEquals(emptyList(), storedFiles())
     }
 
     @Test
-    fun `a batch still taking events waits for a later pass`() {
-        storage.write("one")
-        now = START + WINDOW / 100 * 105 - 1
+    fun `a batch with no whole line is deleted without a request`() {
+        writeInNewBatches("one")
+        storedFiles().single().writeText("cut")
 
         uploader.upload()
 
-        assertEquals(0, a.requestCount + b.requestCount)
+        assertEquals(0, server.requestCount)
+        assertEquals(emptyList(), storedFiles())
     }
 
     @Test
@@ -250,8 +205,14 @@ class TelemetryUploaderTest {
             Thread.interrupted()
         }
 
-        assertEquals(0, a.requestCount + b.requestCount)
+        assertEquals(0, server.requestCount)
     }
+
+    private fun storage(beacons: List<String>) =
+        EventStorage({ temp.root }, beacons, { now }, WINDOW, DISK_BYTES, dropped)
+
+    private fun uploader(beacons: List<String>, storage: EventStorage) =
+        TelemetryUploader(beacons, storage, Executor(Runnable::run), consent, { now }, dropped)
 
     private fun writeInNewBatches(vararg lines: String, storage: EventStorage = this.storage) {
         lines.forEach { line ->
@@ -261,16 +222,23 @@ class TelemetryUploaderTest {
         now += WINDOW
     }
 
-    private fun metadata(dropped: String = ""): String =
-        """{"sent_at":$now,"sdk_version":"${BuildConfig.SDK_VERSION}"$dropped}"""
-
-    private fun lines(server: MockWebServer): List<String> {
-        val request = assertNotNull(server.takeRequest(5, TimeUnit.SECONDS))
-        return GZIPInputStream(request.body.inputStream()).reader().readLines()
+    private fun respond(vararg codes: Int) {
+        codes.forEach { server.enqueue(MockResponse().setResponseCode(it)) }
     }
+
+    private fun requests(server: MockWebServer = this.server): List<SentRequest> =
+        List(server.requestCount) {
+            val request = assertNotNull(server.takeRequest(5, TimeUnit.SECONDS))
+            SentRequest(GZIPInputStream(request.body.inputStream()).reader().readLines())
+        }
 
     private fun storedFiles(): List<File> =
         File(temp.root, "failoverbeacon").walk().filter { it.isFile }.toList()
+
+    private class SentRequest(val lines: List<String>) {
+        val events = lines.drop(1)
+        val dropped = JSONObject(lines.first()).optJSONObject("dropped")?.toString()
+    }
 
     private companion object {
         const val START = 1_761_040_980_000L

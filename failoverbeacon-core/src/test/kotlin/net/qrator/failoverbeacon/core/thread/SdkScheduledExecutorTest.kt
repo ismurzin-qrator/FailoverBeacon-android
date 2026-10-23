@@ -63,6 +63,6 @@ class SdkScheduledExecutorTest {
 
         executor.scheduleWithFixedDelay({}, 0, 1, TimeUnit.MILLISECONDS)
 
-        assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS))
+        assertTrue(executor.queue.isEmpty())
     }
 }

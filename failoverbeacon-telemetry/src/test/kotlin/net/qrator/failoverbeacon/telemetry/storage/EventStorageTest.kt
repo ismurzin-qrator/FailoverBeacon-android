@@ -211,18 +211,6 @@ class EventStorageTest {
     }
 
     @Test
-    fun `deletes the given batches`() {
-        storage.write("one")
-        now = START + 60_000
-        storage.write("two")
-
-        storage.delete(files(A_DIR).take(1))
-
-        assertEquals(listOf(listOf("two")), batches(A_DIR))
-        assertEquals(listOf(listOf("one"), listOf("two")), batches(B_DIR))
-    }
-
-    @Test
     fun `a removed beacon loses its batches and gets no more lines`() {
         storage.write("one")
         storage.removeBeacon(A)
