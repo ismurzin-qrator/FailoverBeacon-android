@@ -3,9 +3,12 @@ package net.qrator.failoverbeacon.okhttp
 import android.util.Log
 import java.io.File
 import java.net.InetAddress
+import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPInputStream
+import javax.net.ssl.HttpsURLConnection
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -21,9 +24,12 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.tls.HandshakeCertificates
+import okhttp3.tls.HeldCertificate
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.shadows.ShadowSystemClock
 
 @RunWith(RobolectricTestRunner::class)
 class TelemetryEndToEndTest {
@@ -119,6 +125,35 @@ class TelemetryEndToEndTest {
     }
 
     @Test
+    fun `uploads stored events to the beacon`() {
+        val beacon = MockWebServer()
+        beacon.useHttps(beaconCertificates.sslSocketFactory(), false)
+        beacon.enqueue(MockResponse().setResponseCode(202))
+        beacon.start(LOOPBACK, 0)
+        val defaultSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory()
+        HttpsURLConnection.setDefaultSSLSocketFactory(clientCertificates.sslSocketFactory())
+        try {
+            restart(
+                FailoverBeaconOptions.Builder().uploadPeriod(100, TimeUnit.MILLISECONDS).build(),
+                beacon = "https://localhost:${beacon.port}/events"
+            )
+
+            execute("a.test")
+            ShadowSystemClock.advanceBy(Duration.ofSeconds(1))
+            val request = assertNotNull(beacon.takeRequest(5, TimeUnit.SECONDS))
+            awaitUploadThread()
+
+            val lines = GZIPInputStream(request.body.inputStream()).reader().readLines()
+            assertTrue(lines.first().startsWith("""{"sent_at":"""), lines.first())
+            assertEquals(listOf(events.single().removePrefix("$EVENT_PREFIX ")), lines.drop(1))
+            assertEquals(emptyList(), storedFiles())
+        } finally {
+            HttpsURLConnection.setDefaultSSLSocketFactory(defaultSocketFactory)
+            beacon.shutdown()
+        }
+    }
+
+    @Test
     fun `stops reporting once consent is withdrawn`() {
         execute("a.test")
         FailoverBeacon.setConsent(Consent.NOT_GRANTED)
@@ -138,10 +173,10 @@ class TelemetryEndToEndTest {
         client.newCall(request).execute().use { it.body.string() }
     }
 
-    private fun restart(options: FailoverBeaconOptions) {
+    private fun restart(options: FailoverBeaconOptions, beacon: String = "https://beacon.example") {
         FailoverBeacon.stop()
         val config = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
+            .beacons(listOf(beacon))
             .successSampleRate(1.0)
             .options(options)
             .build()
@@ -150,13 +185,31 @@ class TelemetryEndToEndTest {
 
     private fun beaconDir() = File(app.cacheDir, "failoverbeacon/2f7cbe9a31e83f24")
 
+    private fun storedFiles() =
+        File(app.cacheDir, "failoverbeacon").walk().filter { it.isFile }.toList()
+
     private fun awaitSdkThread() {
         val executor = assertNotNull(SdkRegistry.instance).storageExecutor
+        executor.submit {}.get(5, TimeUnit.SECONDS)
+    }
+
+    private fun awaitUploadThread() {
+        val executor = assertNotNull(SdkRegistry.instance).uploadExecutor
         executor.submit {}.get(5, TimeUnit.SECONDS)
     }
 
     private companion object {
         const val EVENT_PREFIX = "Telemetry event"
         val LOOPBACK: InetAddress = InetAddress.getByName("127.0.0.1")
+
+        val beaconCertificate: HeldCertificate = HeldCertificate.Builder()
+            .addSubjectAlternativeName("localhost")
+            .build()
+        val beaconCertificates: HandshakeCertificates = HandshakeCertificates.Builder()
+            .heldCertificate(beaconCertificate)
+            .build()
+        val clientCertificates: HandshakeCertificates = HandshakeCertificates.Builder()
+            .addTrustedCertificate(beaconCertificate.certificate)
+            .build()
     }
 }
