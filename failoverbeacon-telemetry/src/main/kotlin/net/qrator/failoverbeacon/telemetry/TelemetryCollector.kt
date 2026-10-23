@@ -10,11 +10,11 @@ import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
 import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.core.logging.warn
-import net.qrator.failoverbeacon.core.storage.EventStorage
 import net.qrator.failoverbeacon.telemetry.filter.EventFilter
 import net.qrator.failoverbeacon.telemetry.filter.Sampler
 import net.qrator.failoverbeacon.telemetry.mapper.TelemetryEventMapper
 import net.qrator.failoverbeacon.telemetry.serialization.TelemetryEventSerializer
+import net.qrator.failoverbeacon.telemetry.storage.EventStorage
 
 class TelemetryCollector(
     consentSource: ConsentSource,

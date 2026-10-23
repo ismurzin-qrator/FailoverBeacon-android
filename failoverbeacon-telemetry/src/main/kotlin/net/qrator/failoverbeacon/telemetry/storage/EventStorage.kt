@@ -1,4 +1,4 @@
-package net.qrator.failoverbeacon.core.storage
+package net.qrator.failoverbeacon.telemetry.storage
 
 import java.io.File
 import java.io.IOException

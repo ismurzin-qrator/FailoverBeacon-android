@@ -1,4 +1,4 @@
-package net.qrator.failoverbeacon.core.storage
+package net.qrator.failoverbeacon.telemetry.storage
 
 import android.util.Log
 import java.io.File

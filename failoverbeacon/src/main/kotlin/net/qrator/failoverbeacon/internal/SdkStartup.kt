@@ -8,13 +8,13 @@ import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.app.ForegroundSource
 import net.qrator.failoverbeacon.core.call.ExchangeBus
-import net.qrator.failoverbeacon.core.storage.EventStorage
 import net.qrator.failoverbeacon.core.thread.SdkExecutor
 import net.qrator.failoverbeacon.internal.app.ForegroundMonitor
 import net.qrator.failoverbeacon.internal.network.NetworkMonitor
 import net.qrator.failoverbeacon.internal.time.ElapsedRealtimeEpochClock
 import net.qrator.failoverbeacon.internal.time.NanoTimeClock
 import net.qrator.failoverbeacon.telemetry.TelemetryCollector
+import net.qrator.failoverbeacon.telemetry.storage.EventStorage
 
 internal object SdkStartup {
     fun start(

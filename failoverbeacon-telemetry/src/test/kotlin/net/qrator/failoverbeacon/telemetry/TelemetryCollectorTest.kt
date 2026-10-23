@@ -13,7 +13,7 @@ import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
 import net.qrator.failoverbeacon.core.logging.LogOutput
-import net.qrator.failoverbeacon.core.storage.EventStorage
+import net.qrator.failoverbeacon.telemetry.storage.EventStorage
 import org.json.JSONObject
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
