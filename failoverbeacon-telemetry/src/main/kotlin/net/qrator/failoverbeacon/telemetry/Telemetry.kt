@@ -15,12 +15,14 @@ class Telemetry(
     private val uploadPeriodMillis: Long,
     diskQueueBytes: Long
 ) {
+    private val dropped = DroppedEvents(beacons)
     private val storage = EventStorage(
         cacheDir = sdk.appContext::getCacheDir,
         beacons = beacons,
         clock = sdk.epochClock,
         batchWindowMillis = uploadPeriodMillis,
-        maxBytes = diskQueueBytes
+        maxBytes = diskQueueBytes,
+        dropped = dropped
     )
     private val collector = TelemetryCollector(
         consentSource = sdk,
@@ -29,14 +31,16 @@ class Telemetry(
         successSampleRate = successSampleRate,
         memoryQueueSize = memoryQueueSize,
         executor = sdk.storageExecutor,
-        storage = storage
+        storage = storage,
+        dropped = dropped
     )
     private val uploader = TelemetryUploader(
         beacons = beacons,
         storage = storage,
         storageExecutor = sdk.storageExecutor,
         consentSource = sdk,
-        clock = sdk.epochClock
+        clock = sdk.epochClock,
+        dropped = dropped
     )
 
     fun subscribe() {

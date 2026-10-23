@@ -23,7 +23,8 @@ internal class TelemetryCollector(
     successSampleRate: Double,
     memoryQueueSize: Int,
     private val executor: Executor,
-    private val storage: EventStorage
+    private val storage: EventStorage,
+    private val dropped: DroppedEvents
 ) : ExchangeSubscriber,
     DataOwner {
     private val eventMapper = TelemetryEventMapper()
@@ -35,6 +36,7 @@ internal class TelemetryCollector(
     override fun onExchange(exchange: Exchange) {
         if (!filter.consentAllows()) return
         if (!memoryQueueSlots.tryAcquire()) {
+            dropped.addToAll(DropReason.MEMORY_OVERFLOW, 1)
             SdkRegistry.logger.warn(onlyOnce = true) { "Memory queue is full. Events are dropped" }
             return
         }
@@ -52,7 +54,10 @@ internal class TelemetryCollector(
     }
 
     override fun clearData() {
-        executor.execute { storage.clear() }
+        executor.execute {
+            storage.clear()
+            dropped.clear()
+        }
     }
 
     private fun collect(exchange: Exchange) {

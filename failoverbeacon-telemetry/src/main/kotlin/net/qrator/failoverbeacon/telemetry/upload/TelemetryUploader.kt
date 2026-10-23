@@ -11,6 +11,8 @@ import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.core.logging.warn
 import net.qrator.failoverbeacon.core.time.EpochClock
 import net.qrator.failoverbeacon.telemetry.BuildConfig
+import net.qrator.failoverbeacon.telemetry.DropReason
+import net.qrator.failoverbeacon.telemetry.DroppedEvents
 import net.qrator.failoverbeacon.telemetry.storage.EventStorage
 
 internal class TelemetryUploader(
@@ -18,7 +20,8 @@ internal class TelemetryUploader(
     private val storage: EventStorage,
     private val storageExecutor: Executor,
     private val consentSource: ConsentSource,
-    private val clock: EpochClock
+    private val clock: EpochClock,
+    private val dropped: DroppedEvents
 ) {
     private val client = BeaconClient()
 
@@ -33,7 +36,8 @@ internal class TelemetryUploader(
             val request = nextRequest(batches)
             val events = request.map(storage::read).filter { it.isNotEmpty() }
             if (events.isNotEmpty()) {
-                val code = client.post(beacon, body(events))
+                val reported = dropped.snapshot(beacon)
+                val code = client.post(beacon, body(events, reported))
                 SdkRegistry.logger.debug { "Events sent to $beacon: $code" }
                 when {
                     code == null || isRetryable(code) -> return
@@ -43,9 +47,9 @@ internal class TelemetryUploader(
                         return
                     }
 
-                    code !in HTTP_SUCCESS -> SdkRegistry.logger.warn(onlyOnce = true) {
-                        "Beacon $beacon rejected events with code $code. Events are dropped"
-                    }
+                    code in HTTP_SUCCESS -> dropped.subtract(beacon, reported)
+
+                    else -> reject(beacon, code, events)
                 }
             }
             storage.delete(request)
@@ -55,6 +59,15 @@ internal class TelemetryUploader(
 
     private fun isRetryable(code: Int): Boolean =
         code == HTTP_CLIENT_TIMEOUT || code == HTTP_TOO_MANY_REQUESTS || code in HTTP_SERVER_ERROR
+
+    private fun reject(beacon: String, code: Int, events: List<ByteArray>) {
+        dropped.add(beacon, DropReason.SEND_ERROR, events.sumOf { it.lineCount() }.toLong())
+        SdkRegistry.logger.warn(onlyOnce = true) {
+            "Beacon $beacon rejected events with code $code. Events are dropped"
+        }
+    }
+
+    private fun ByteArray.lineCount(): Int = count { it == NEW_LINE }
 
     private fun removeBeacon(beacon: String) {
         storageExecutor.execute { storage.removeBeacon(beacon) }
@@ -74,18 +87,33 @@ internal class TelemetryUploader(
         }
     }
 
-    private fun body(events: List<ByteArray>): ByteArray {
+    private fun body(events: List<ByteArray>, reported: Map<DropReason, Long>): ByteArray {
         val body = ByteArrayOutputStream()
-        val metadata = """{"sent_at":${clock.nowMillis()},"sdk_version":"$SDK_VERSION"}"""
-        body.write((metadata + '\n').toByteArray(Charsets.UTF_8))
+        body.write((metadata(reported) + '\n').toByteArray(Charsets.UTF_8))
         events.forEach(body::write)
         return body.toByteArray()
+    }
+
+    private fun metadata(reported: Map<DropReason, Long>): String {
+        val droppedField = if (reported.isEmpty()) {
+            ""
+        } else {
+            reported.entries.joinToString(
+                ",",
+                prefix = ",\"dropped\":{",
+                postfix = "}"
+            ) { (reason, count) ->
+                "\"${reason.code}\":$count"
+            }
+        }
+        return """{"sent_at":${clock.nowMillis()},"sdk_version":"$SDK_VERSION"$droppedField}"""
     }
 
     private companion object {
         const val SDK_VERSION = BuildConfig.SDK_VERSION
         const val TRAFFIC_STATS_TAG = 0x4642 // FB
         const val MAX_REQUEST_BYTES = 1024L * 1024
+        const val NEW_LINE = '\n'.code.toByte()
         const val HTTP_CLIENT_TIMEOUT = 408
         const val HTTP_GONE = 410
         const val HTTP_TOO_MANY_REQUESTS = 429

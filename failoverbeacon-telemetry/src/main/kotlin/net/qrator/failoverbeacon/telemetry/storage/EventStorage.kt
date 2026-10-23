@@ -8,13 +8,16 @@ import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.core.logging.warn
 import net.qrator.failoverbeacon.core.time.EpochClock
+import net.qrator.failoverbeacon.telemetry.DropReason
+import net.qrator.failoverbeacon.telemetry.DroppedEvents
 
 internal class EventStorage(
     private val cacheDir: () -> File,
     beacons: List<String>,
     private val clock: EpochClock,
     batchWindowMillis: Long,
-    maxBytes: Long
+    maxBytes: Long,
+    private val dropped: DroppedEvents
 ) {
     private val writeWindowMillis = batchWindowMillis / 100 * WRITE_PERCENT
     private val readWindowMillis = batchWindowMillis / 100 * READ_PERCENT
@@ -57,7 +60,7 @@ internal class EventStorage(
             SdkRegistry.logger.debug(e) { "Cannot read stored events" }
             return ByteArray(0)
         }
-        return bytes.copyOf(bytes.lastIndexOf('\n'.code.toByte()) + 1)
+        return bytes.copyOf(bytes.lastIndexOf(NEW_LINE) + 1)
     }
 
     fun delete(batches: List<File>) {
@@ -79,7 +82,7 @@ internal class EventStorage(
 
     private fun append(beacon: String, bytes: ByteArray, now: Long) {
         val batch = openBatches[beacon]?.takeIf { it.accepts(bytes.size, now) }
-            ?: OpenBatch(newBatchFile(beaconDir(beacon), now)).also { openBatches[beacon] = it }
+            ?: OpenBatch(newBatchFile(beacon, now)).also { openBatches[beacon] = it }
         RandomAccessFile(batch.file, "rw").use { file ->
             val length = file.length()
             try {
@@ -93,15 +96,16 @@ internal class EventStorage(
         batch.size += bytes.size
     }
 
-    private fun newBatchFile(dir: File, now: Long): File {
-        dropOldBatches(dir, now)
+    private fun newBatchFile(beacon: String, now: Long): File {
+        val dir = beaconDir(beacon)
+        dropOldBatches(beacon, dir, now)
         dir.mkdirs()
         var name = now
         while (File(dir, name.toString()).exists()) name++
         return File(dir, name.toString())
     }
 
-    private fun dropOldBatches(dir: File, now: Long) {
+    private fun dropOldBatches(beacon: String, dir: File, now: Long) {
         val batches = dir.listFiles()?.sortedBy { it.name.toLongOrNull() ?: 0 } ?: return
         var size = batches.sumOf { it.length() }
         for (batch in batches) {
@@ -111,7 +115,13 @@ internal class EventStorage(
                 created - now > CLOCK_TOLERANCE_MILLIS
             if (!expired && size + maxBatchBytes <= beaconMaxBytes) continue
             size -= batch.length()
+            val lines = read(batch).count { it == NEW_LINE }.toLong()
             batch.delete()
+            dropped.add(
+                beacon,
+                if (expired) DropReason.EXPIRED else DropReason.DISK_OVERFLOW,
+                lines
+            )
             SdkRegistry.logger.debug {
                 if (expired) "Expired events dropped" else "Disk queue is full. Old events dropped"
             }
@@ -135,6 +145,7 @@ internal class EventStorage(
 
     private companion object {
         const val ROOT_DIR_NAME = "failoverbeacon"
+        const val NEW_LINE = '\n'.code.toByte()
         const val WRITE_PERCENT = 95
         const val READ_PERCENT = 105
         const val MAX_BATCH_BYTES = 1024L * 1024

@@ -30,12 +30,14 @@ class TelemetryCollectorTest {
     private val previousLevel = SdkRegistry.logger.minLevel
     private val consentSource = TestConsentSource(TrackingConsent.GRANTED)
     private val tasks = ArrayDeque<Runnable>()
+    private val dropped = DroppedEvents(listOf(BEACON))
     private val storage = EventStorage(
         cacheDir = { temp.root },
         beacons = listOf(BEACON),
         clock = { 0 },
         batchWindowMillis = 60_000,
-        maxBytes = 1_000_000
+        maxBytes = 1_000_000,
+        dropped = dropped
     )
     private val collector = TelemetryCollector(
         consentSource,
@@ -44,7 +46,8 @@ class TelemetryCollectorTest {
         successSampleRate = 0.3,
         memoryQueueSize = 2,
         executor = tasks::addLast,
-        storage = storage
+        storage = storage,
+        dropped = dropped
     )
 
     @BeforeTest
@@ -102,6 +105,7 @@ class TelemetryCollectorTest {
         assertEquals(2, queuedWhenFull)
         assertEquals(2, tasks.size)
         assertEquals(1, logs.count { it.first == Log.WARN })
+        assertEquals(mapOf(DropReason.MEMORY_OVERFLOW to 2L), dropped.snapshot(BEACON))
     }
 
     @Test
@@ -114,13 +118,15 @@ class TelemetryCollectorTest {
     }
 
     @Test
-    fun `clearData clears the stored events on the SDK thread`() {
+    fun `clearData clears the stored events and the drop counts on the SDK thread`() {
         send(failure())
+        dropped.add(BEACON, DropReason.EXPIRED, 1)
 
         collector.clearData()
         tasks.removeFirst().run()
 
         assertFalse(storedDir().exists())
+        assertEquals(emptyMap(), dropped.snapshot(BEACON))
     }
 
     @Test

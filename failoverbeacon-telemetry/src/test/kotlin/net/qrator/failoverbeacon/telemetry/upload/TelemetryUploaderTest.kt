@@ -15,6 +15,8 @@ import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.logging.LogOutput
 import net.qrator.failoverbeacon.telemetry.BuildConfig
+import net.qrator.failoverbeacon.telemetry.DropReason
+import net.qrator.failoverbeacon.telemetry.DroppedEvents
 import net.qrator.failoverbeacon.telemetry.TestConsentSource
 import net.qrator.failoverbeacon.telemetry.storage.EventStorage
 import okhttp3.mockwebserver.MockResponse
@@ -34,9 +36,10 @@ class TelemetryUploaderTest {
     private val beacons = listOf(a.url("/a").toString(), b.url("/b").toString())
     private val consent = TestConsentSource(TrackingConsent.GRANTED)
     private var now = START
-    private val storage = EventStorage({ temp.root }, beacons, { now }, WINDOW, 5L * 1024 * 1024)
+    private val dropped = DroppedEvents(beacons)
+    private val storage = EventStorage({ temp.root }, beacons, { now }, WINDOW, DISK_BYTES, dropped)
     private val uploader =
-        TelemetryUploader(beacons, storage, Executor(Runnable::run), consent) { now }
+        TelemetryUploader(beacons, storage, Executor(Runnable::run), consent, { now }, dropped)
     private val previousOutput = SdkRegistry.logger.output
     private val warnings = CopyOnWriteArrayList<String>()
 
@@ -62,9 +65,8 @@ class TelemetryUploaderTest {
 
         uploader.upload()
 
-        val metadata = """{"sent_at":$now,"sdk_version":"${BuildConfig.SDK_VERSION}"}"""
-        assertEquals(listOf(metadata, "one", "two"), lines(a))
-        assertEquals(listOf(metadata, "one", "two"), lines(b))
+        assertEquals(listOf(metadata(), "one", "two"), lines(a))
+        assertEquals(listOf(metadata(), "one", "two"), lines(b))
         assertEquals(emptyList(), storedFiles())
     }
 
@@ -162,10 +164,60 @@ class TelemetryUploaderTest {
     }
 
     @Test
+    fun `reports drop counts in the metadata line and clears them after a success`() {
+        dropped.add(beacons[0], DropReason.EXPIRED, 40)
+        writeInNewBatches("one")
+        a.enqueue(MockResponse().setResponseCode(202))
+        b.enqueue(MockResponse().setResponseCode(202))
+
+        uploader.upload()
+
+        assertEquals(metadata(""","dropped":{"expired":40}"""), lines(a).first())
+        assertEquals(metadata(), lines(b).first())
+        assertEquals(emptyMap(), dropped.snapshot(beacons[0]))
+    }
+
+    @Test
+    fun `drop counts stay after a failed request and go with the next one`() {
+        dropped.add(beacons[0], DropReason.DISK_OVERFLOW, 3)
+        writeInNewBatches("one")
+        a.enqueue(MockResponse().setResponseCode(500))
+        a.enqueue(MockResponse().setResponseCode(202))
+        repeat(2) { b.enqueue(MockResponse().setResponseCode(202)) }
+
+        uploader.upload()
+        uploader.upload()
+
+        assertEquals(metadata(""","dropped":{"disk_overflow":3}"""), lines(a).first())
+        assertEquals(metadata(""","dropped":{"disk_overflow":3}"""), lines(a).first())
+        assertEquals(emptyMap(), dropped.snapshot(beacons[0]))
+    }
+
+    @Test
+    fun `rejected events go as send errors with the next request`() {
+        writeInNewBatches("one", "two")
+        a.enqueue(MockResponse().setResponseCode(400))
+        a.enqueue(MockResponse().setResponseCode(202))
+        repeat(2) { b.enqueue(MockResponse().setResponseCode(202)) }
+
+        uploader.upload()
+        writeInNewBatches("three")
+        uploader.upload()
+
+        assertEquals(listOf("one", "two"), lines(a).drop(1))
+        assertEquals(
+            listOf(metadata(""","dropped":{"send_error":2}"""), "three"),
+            lines(a)
+        )
+    }
+
+    @Test
     fun `batches over 1 MB go in several requests of one pass, oldest first`() {
         val single = listOf(beacons.first())
-        val storage = EventStorage({ temp.root }, single, { now }, WINDOW, 5L * 1024 * 1024)
-        val uploader = TelemetryUploader(single, storage, Executor(Runnable::run), consent) { now }
+        val storage =
+            EventStorage({ temp.root }, single, { now }, WINDOW, DISK_BYTES, dropped)
+        val uploader =
+            TelemetryUploader(single, storage, Executor(Runnable::run), consent, { now }, dropped)
         val (first, second, third) = listOf("1", "2", "3").map { it.repeat(400 * 1024) }
         writeInNewBatches(first, second, third, storage = storage)
         repeat(2) { a.enqueue(MockResponse().setResponseCode(202)) }
@@ -209,6 +261,9 @@ class TelemetryUploaderTest {
         now += WINDOW
     }
 
+    private fun metadata(dropped: String = ""): String =
+        """{"sent_at":$now,"sdk_version":"${BuildConfig.SDK_VERSION}"$dropped}"""
+
     private fun lines(server: MockWebServer): List<String> {
         val request = assertNotNull(server.takeRequest(5, TimeUnit.SECONDS))
         return GZIPInputStream(request.body.inputStream()).reader().readLines()
@@ -220,5 +275,6 @@ class TelemetryUploaderTest {
     private companion object {
         const val START = 1_761_040_980_000L
         const val WINDOW = 60_000L
+        const val DISK_BYTES = 5L * 1024 * 1024
     }
 }

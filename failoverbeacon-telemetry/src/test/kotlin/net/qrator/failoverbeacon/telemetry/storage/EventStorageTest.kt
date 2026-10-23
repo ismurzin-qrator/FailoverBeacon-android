@@ -10,6 +10,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.LogOutput
+import net.qrator.failoverbeacon.telemetry.DropReason
+import net.qrator.failoverbeacon.telemetry.DroppedEvents
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 
@@ -20,6 +22,7 @@ class EventStorageTest {
     private val previousOutput = SdkRegistry.logger.output
     private val logged = mutableListOf<Int>()
     private var now = START
+    private val dropped = DroppedEvents(listOf(A, B))
     private val storage = newStorage(A, B)
 
     @BeforeTest
@@ -120,6 +123,8 @@ class EventStorageTest {
         assertEquals(written.drop(2), names(A_DIR))
         assertEquals(written.drop(2), names(B_DIR))
         assertTrue(files(A_DIR).sumOf { it.length() } <= 1_000)
+        assertEquals(mapOf(DropReason.DISK_OVERFLOW to 2L), dropped.snapshot(A))
+        assertEquals(mapOf(DropReason.DISK_OVERFLOW to 2L), dropped.snapshot(B))
     }
 
     @Test
@@ -163,6 +168,7 @@ class EventStorageTest {
             listOf(START + TEN_MINUTES, START + EIGHTEEN_HOURS).map(Long::toString),
             names(A_DIR)
         )
+        assertEquals(mapOf(DropReason.EXPIRED to 5L), dropped.snapshot(A))
     }
 
     @Test
@@ -229,7 +235,9 @@ class EventStorageTest {
     }
 
     private fun newStorage(vararg beacons: String, maxBytes: Long = 5L * 1024 * 1024) =
-        EventStorage({ temp.root }, beacons.toList(), { now }, batchWindowMillis = 60_000, maxBytes)
+        EventStorage({
+            temp.root
+        }, beacons.toList(), { now }, batchWindowMillis = 60_000, maxBytes, dropped)
 
     private fun writeInNewBatches(storage: EventStorage, count: Int, line: String) {
         repeat(count) {
