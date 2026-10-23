@@ -20,13 +20,17 @@ public class FailoverBeaconOptions private constructor(
         private var memoryQueueSize = DEFAULT_MEMORY_QUEUE_SIZE
 
         /**
-         * Sets how often stored events are uploaded. The default value is 60 seconds.
+         * Sets how often stored events are uploaded, from 1 second to 8 hours. The default value
+         * is 60 seconds.
          *
-         * @throws IllegalArgumentException if [period] is shorter than 1 millisecond.
+         * @throws IllegalArgumentException if [period] is shorter than 1 second or longer than
+         *     8 hours.
          */
         public fun uploadPeriod(period: Long, unit: TimeUnit): Builder = apply {
             val millis = unit.toMillis(period)
-            require(millis > 0) { "uploadPeriod must be at least 1 ms, was $period $unit" }
+            require(millis in MIN_UPLOAD_PERIOD_MILLIS..MAX_UPLOAD_PERIOD_MILLIS) {
+                "uploadPeriod must be from 1 second to 8 hours, was $period $unit"
+            }
             uploadPeriodMillis = millis
         }
 
@@ -59,6 +63,8 @@ public class FailoverBeaconOptions private constructor(
 
         private companion object {
             private val DEFAULT_UPLOAD_PERIOD_MILLIS = TimeUnit.SECONDS.toMillis(60)
+            private val MIN_UPLOAD_PERIOD_MILLIS = TimeUnit.SECONDS.toMillis(1)
+            private val MAX_UPLOAD_PERIOD_MILLIS = TimeUnit.HOURS.toMillis(8)
             private const val DEFAULT_DISK_QUEUE_BYTES = 5L * 1024 * 1024
             private const val DEFAULT_MEMORY_QUEUE_SIZE = 1000
         }

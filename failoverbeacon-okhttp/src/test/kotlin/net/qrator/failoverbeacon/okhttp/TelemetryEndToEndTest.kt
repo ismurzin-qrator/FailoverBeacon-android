@@ -105,9 +105,10 @@ class TelemetryEndToEndTest {
 
     @Test
     fun `uploadPeriod sets how long a batch file takes events`() {
-        restart(FailoverBeaconOptions.Builder().uploadPeriod(1, TimeUnit.MILLISECONDS).build())
+        restart(FailoverBeaconOptions.Builder().uploadPeriod(1, TimeUnit.SECONDS).build())
 
         execute("a.test")
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(1))
         execute("a.test")
 
         assertEquals(2, beaconDir().listFiles()!!.size)
@@ -127,12 +128,12 @@ class TelemetryEndToEndTest {
     @Test
     fun `uploads stored events to the beacon`() = withBeacon { beacon, url ->
         restart(
-            FailoverBeaconOptions.Builder().uploadPeriod(100, TimeUnit.MILLISECONDS).build(),
+            FailoverBeaconOptions.Builder().uploadPeriod(1, TimeUnit.SECONDS).build(),
             beacon = url
         )
 
         execute("a.test")
-        ShadowSystemClock.advanceBy(Duration.ofSeconds(1))
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(2))
         val request = assertNotNull(beacon.takeRequest(5, TimeUnit.SECONDS))
         awaitUploadThread()
 

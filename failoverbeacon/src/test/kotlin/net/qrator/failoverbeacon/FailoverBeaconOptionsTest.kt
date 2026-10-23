@@ -16,9 +16,22 @@ class FailoverBeaconOptionsTest {
     }
 
     @Test
-    fun `uploadPeriod rejects periods shorter than 1 ms`() {
+    fun `uploadPeriod accepts periods from 1 second to 8 hours`() {
+        val builder = FailoverBeaconOptions.Builder()
+
+        val shortest = builder.uploadPeriod(1, TimeUnit.SECONDS).build()
+        val longest = builder.uploadPeriod(8, TimeUnit.HOURS).build()
+
+        assertEquals(1000L, shortest.uploadPeriodMillis)
+        assertEquals(28_800_000L, longest.uploadPeriodMillis)
         assertFailsWith<IllegalArgumentException> {
-            FailoverBeaconOptions.Builder().uploadPeriod(999_999, TimeUnit.NANOSECONDS)
+            builder.uploadPeriod(999_999_999, TimeUnit.NANOSECONDS)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            builder.uploadPeriod(28_800_001, TimeUnit.MILLISECONDS)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            builder.uploadPeriod(Long.MAX_VALUE, TimeUnit.DAYS)
         }
     }
 
