@@ -238,6 +238,40 @@ class FailoverBeaconTest {
     }
 
     @Test
+    fun `stays inactive when it cannot start`() {
+        val context = object : ContextWrapper(app) {
+            override fun getApplicationContext(): Context? = null
+
+            override fun getSystemService(name: String): Any? = throw IllegalStateException()
+        }
+
+        FailoverBeacon.initialize(context, config)
+
+        assertNull(SdkRegistry.instance)
+        assertTrue(logs.contains(Log.ERROR to "Cannot start the SDK. SDK is inactive"), "$logs")
+    }
+
+    @Test
+    fun `a start that fails after install is rolled back`() {
+        val application = object : Application() {
+            init {
+                attachBaseContext(app)
+            }
+
+            override fun getApplicationContext(): Context = this
+
+            override fun registerActivityLifecycleCallbacks(callback: ActivityLifecycleCallbacks) =
+                throw IllegalStateException()
+        }
+        val callbacks = networkCallbacks()
+
+        FailoverBeacon.initialize(application, config)
+
+        assertNull(SdkRegistry.instance)
+        assertEquals(callbacks, networkCallbacks())
+    }
+
+    @Test
     fun `setLogLevel rejects values outside Log constants`() {
         assertFailsWith<IllegalArgumentException> { FailoverBeacon.setLogLevel(0) }
     }

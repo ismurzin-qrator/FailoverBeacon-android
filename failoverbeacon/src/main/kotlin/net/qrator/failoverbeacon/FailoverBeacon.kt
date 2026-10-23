@@ -4,8 +4,10 @@ import android.content.Context
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.logging.LogOutput
+import net.qrator.failoverbeacon.core.logging.error
 import net.qrator.failoverbeacon.core.logging.info
 import net.qrator.failoverbeacon.core.logging.warn
+import net.qrator.failoverbeacon.core.util.catchSdkFailure
 import net.qrator.failoverbeacon.internal.AndroidMainProcessDetector
 import net.qrator.failoverbeacon.internal.LogcatLogger
 import net.qrator.failoverbeacon.internal.SdkStartup
@@ -43,11 +45,17 @@ public object FailoverBeacon {
             SdkRegistry.logger.warn { "Not the main process. SDK is inactive" }
             return
         }
-        if (!SdkStartup.start(appContext, toTrackingConsent(consent), config)) {
-            SdkRegistry.logger.warn { ALREADY_INITIALIZED }
-            return
+        var started: Boolean? = null
+        catchSdkFailure(
+            onFailure = { SdkRegistry.logger.error(it) { "Cannot start the SDK. SDK is inactive" } }
+        ) {
+            started = SdkStartup.start(appContext, toTrackingConsent(consent), config)
         }
-        SdkRegistry.logger.info { "SDK initialized" }
+        when (started) {
+            null -> return
+            false -> SdkRegistry.logger.warn { ALREADY_INITIALIZED }
+            true -> SdkRegistry.logger.info { "SDK initialized" }
+        }
     }
 
     /**

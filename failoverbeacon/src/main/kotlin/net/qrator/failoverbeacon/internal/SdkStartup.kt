@@ -48,10 +48,15 @@ internal object SdkStartup {
         )
         telemetry.subscribe()
         if (!SdkRegistry.install(sdk)) return false
-        networkMonitor.register()
-        foregroundMonitor?.register()
-        telemetry.start()
-        sdk.publishConsent()
+        try {
+            networkMonitor.register()
+            foregroundMonitor?.register()
+            telemetry.start()
+            sdk.publishConsent()
+        } catch (e: Throwable) {
+            SdkRegistry.clear()
+            throw e
+        }
         return true
     }
 }
