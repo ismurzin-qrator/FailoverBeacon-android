@@ -165,6 +165,57 @@ class EventStorageTest {
         )
     }
 
+    @Test
+    fun `ready batches are the closed ones of a beacon, oldest first`() {
+        val beforeWrite = storage.readyBatches(A)
+        storage.write("one")
+        now = START + 60_000
+        storage.write("two")
+        now = START + 60_000 + 62_999
+        val oneReady = storage.readyBatches(A).map { it.name }
+        now += 1
+
+        assertEquals(emptyList(), beforeWrite)
+        assertEquals(listOf(START.toString()), oneReady)
+        assertEquals(names(A_DIR), storage.readyBatches(A).map { it.name })
+    }
+
+    @Test
+    fun `batches older than 18 hours, ahead of the clock or not named by time are not ready`() {
+        val dir = File(rootDir(), A_DIR).apply { mkdirs() }
+        File(dir, (START - EIGHTEEN_HOURS).toString()).writeText("old\n")
+        File(dir, (START - EIGHTEEN_HOURS + 1).toString()).writeText("recent\n")
+        File(dir, (START + 1).toString()).writeText("ahead\n")
+        File(dir, "x").writeText("foreign\n")
+
+        assertEquals(
+            listOf((START - EIGHTEEN_HOURS + 1).toString()),
+            storage.readyBatches(A).map { it.name }
+        )
+    }
+
+    @Test
+    fun `reading drops a cut last line and a missing batch reads as empty`() {
+        val dir = File(rootDir(), A_DIR).apply { mkdirs() }
+        val cut = File(dir, "1").apply { writeText("one\ntwo\nthr") }
+        val missing = File(dir, "2")
+
+        assertEquals("one\ntwo\n", storage.read(cut).toString(Charsets.UTF_8))
+        assertEquals(0, storage.read(missing).size)
+    }
+
+    @Test
+    fun `deletes the given batches`() {
+        storage.write("one")
+        now = START + 60_000
+        storage.write("two")
+
+        storage.delete(files(A_DIR).take(1))
+
+        assertEquals(listOf(listOf("two")), batches(A_DIR))
+        assertEquals(listOf(listOf("one"), listOf("two")), batches(B_DIR))
+    }
+
     private fun newStorage(vararg beacons: String, maxBytes: Long = 5L * 1024 * 1024) =
         EventStorage({ temp.root }, beacons.toList(), { now }, batchWindowMillis = 60_000, maxBytes)
 

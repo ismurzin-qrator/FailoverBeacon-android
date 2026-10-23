@@ -11,6 +11,8 @@ import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlin.test.AfterTest
@@ -189,6 +191,7 @@ class FailoverBeaconTest {
         FailoverBeacon.initialize(app, config)
         val foreground = SdkRegistry.instance?.foregroundSource
         val executor = SdkRegistry.instance?.storageExecutor
+        val uploadExecutor = SdkRegistry.instance?.uploadExecutor
 
         FailoverBeacon.stop()
         Robolectric.buildActivity(Activity::class.java).setup()
@@ -198,10 +201,27 @@ class FailoverBeaconTest {
 
         assertNull(stopped)
         assertEquals(true, executor?.isShutdown)
+        assertEquals(true, uploadExecutor?.isShutdown)
         assertEquals(emptySet(), callbacksAfterStop)
         assertEquals(false, foreground?.isForeground())
         assertNotNull(SdkRegistry.instance)
         assertEquals(1, networkCallbacks().size)
+    }
+
+    @Test
+    fun `schedules the upload every upload period`() {
+        val options = FailoverBeaconOptions.Builder().uploadPeriod(5, TimeUnit.MINUTES).build()
+        FailoverBeacon.initialize(
+            app,
+            FailoverBeaconConfig.Builder().beacons(config.beacons).options(options).build()
+        )
+
+        val executor = assertNotNull(
+            SdkRegistry.instance
+        ).uploadExecutor as ScheduledThreadPoolExecutor
+        val upload = executor.queue.single() as ScheduledFuture<*>
+
+        assertTrue(upload.getDelay(TimeUnit.MILLISECONDS) in 290_000..300_000)
     }
 
     @Test

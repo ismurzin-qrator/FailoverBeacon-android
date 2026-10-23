@@ -4,6 +4,7 @@ import android.content.Context
 import java.io.Closeable
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.ScheduledExecutorService
 import net.qrator.failoverbeacon.core.app.ForegroundSource
 import net.qrator.failoverbeacon.core.call.ExchangeBus
 import net.qrator.failoverbeacon.core.network.NetworkSource
@@ -18,7 +19,8 @@ class SdkInstance(
     val exchangeBus: ExchangeBus,
     val networkSource: NetworkSource,
     val foregroundSource: ForegroundSource,
-    val storageExecutor: ExecutorService
+    val storageExecutor: ExecutorService,
+    val uploadExecutor: ScheduledExecutorService
 ) : ConsentSource,
     Closeable {
     @Volatile
@@ -48,6 +50,7 @@ class SdkInstance(
     override fun close() {
         exchangeBus.close()
         storageExecutor.shutdown()
+        uploadExecutor.shutdownNow()
         networkSource.close()
         foregroundSource.close()
     }

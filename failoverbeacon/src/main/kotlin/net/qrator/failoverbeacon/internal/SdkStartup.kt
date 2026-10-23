@@ -9,12 +9,12 @@ import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.app.ForegroundSource
 import net.qrator.failoverbeacon.core.call.ExchangeBus
 import net.qrator.failoverbeacon.core.thread.SdkExecutor
+import net.qrator.failoverbeacon.core.thread.SdkScheduledExecutor
 import net.qrator.failoverbeacon.internal.app.ForegroundMonitor
 import net.qrator.failoverbeacon.internal.network.NetworkMonitor
 import net.qrator.failoverbeacon.internal.time.ElapsedRealtimeEpochClock
 import net.qrator.failoverbeacon.internal.time.NanoTimeClock
-import net.qrator.failoverbeacon.telemetry.TelemetryCollector
-import net.qrator.failoverbeacon.telemetry.storage.EventStorage
+import net.qrator.failoverbeacon.telemetry.Telemetry
 
 internal object SdkStartup {
     fun start(
@@ -25,43 +25,33 @@ internal object SdkStartup {
         val application = appContext as? Application
         val networkMonitor = NetworkMonitor(appContext)
         val foregroundMonitor = application?.let(::ForegroundMonitor)
-        val epochClock = ElapsedRealtimeEpochClock()
         val sdk = SdkInstance(
             appContext = appContext,
             consent = consent,
             clock = NanoTimeClock,
-            epochClock = epochClock,
+            epochClock = ElapsedRealtimeEpochClock(),
             exchangeBus = ExchangeBus(),
             networkSource = networkMonitor,
             foregroundSource = foregroundMonitor ?: ForegroundSource { null },
-            storageExecutor = SdkExecutor("storage")
+            storageExecutor = SdkExecutor("storage"),
+            uploadExecutor = SdkScheduledExecutor("upload")
         )
-        installFeatures(sdk, config)
-        if (!SdkRegistry.install(sdk)) return false
-        networkMonitor.register()
-        foregroundMonitor?.register()
-        sdk.publishConsent()
-        return true
-    }
-
-    private fun installFeatures(sdk: SdkInstance, config: FailoverBeaconConfig) {
-        val storage = EventStorage(
-            cacheDir = sdk.appContext::getCacheDir,
+        val telemetry = Telemetry(
+            sdk = sdk,
             beacons = config.beacons,
-            clock = sdk.epochClock,
-            batchWindowMillis = config.options.uploadPeriodMillis,
-            maxBytes = config.options.diskQueueBytes
-        )
-        val telemetry = TelemetryCollector(
-            consentSource = sdk,
             blockedHosts = config.blockedHosts,
             failureSampleRate = config.failureSampleRate,
             successSampleRate = config.successSampleRate,
             memoryQueueSize = config.options.memoryQueueSize,
-            executor = sdk.storageExecutor,
-            storage = storage
+            uploadPeriodMillis = config.options.uploadPeriodMillis,
+            diskQueueBytes = config.options.diskQueueBytes
         )
-        sdk.exchangeBus.subscribe(telemetry)
-        sdk.addDataOwner(telemetry)
+        telemetry.subscribe()
+        if (!SdkRegistry.install(sdk)) return false
+        networkMonitor.register()
+        foregroundMonitor?.register()
+        telemetry.start()
+        sdk.publishConsent()
+        return true
     }
 }

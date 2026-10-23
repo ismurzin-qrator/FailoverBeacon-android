@@ -16,7 +16,7 @@ import net.qrator.failoverbeacon.telemetry.mapper.TelemetryEventMapper
 import net.qrator.failoverbeacon.telemetry.serialization.TelemetryEventSerializer
 import net.qrator.failoverbeacon.telemetry.storage.EventStorage
 
-class TelemetryCollector(
+internal class TelemetryCollector(
     consentSource: ConsentSource,
     blockedHosts: Set<String>,
     failureSampleRate: Double,

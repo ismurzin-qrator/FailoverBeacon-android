@@ -9,7 +9,7 @@ import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.core.logging.warn
 import net.qrator.failoverbeacon.core.time.EpochClock
 
-class EventStorage(
+internal class EventStorage(
     private val cacheDir: () -> File,
     beacons: List<String>,
     private val clock: EpochClock,
@@ -17,6 +17,7 @@ class EventStorage(
     maxBytes: Long
 ) {
     private val writeWindowMillis = batchWindowMillis / 100 * WRITE_PERCENT
+    private val readWindowMillis = batchWindowMillis / 100 * READ_PERCENT
     private val beaconDirNames by lazy { beacons.associateWith(::dirName) }
     private val beaconMaxBytes = maxBytes / beacons.size.coerceAtLeast(1)
     private val maxBatchBytes = minOf(MAX_BATCH_BYTES, beaconMaxBytes / 2)
@@ -36,6 +37,30 @@ class EventStorage(
                 }
             }
         }
+    }
+
+    fun readyBatches(beacon: String): List<File> {
+        val now = clock.nowMillis()
+        return beaconDir(beacon).listFiles().orEmpty()
+            .mapNotNull { file ->
+                val created = file.name.toLongOrNull() ?: return@mapNotNull null
+                file.takeIf { now - created in readWindowMillis until MAX_AGE_MILLIS }
+            }
+            .sortedBy { it.name.toLongOrNull() }
+    }
+
+    fun read(batch: File): ByteArray {
+        val bytes = try {
+            batch.readBytes()
+        } catch (e: IOException) {
+            SdkRegistry.logger.debug(e) { "Cannot read stored events" }
+            return ByteArray(0)
+        }
+        return bytes.copyOf(bytes.lastIndexOf('\n'.code.toByte()) + 1)
+    }
+
+    fun delete(batches: List<File>) {
+        batches.forEach(File::delete)
     }
 
     fun clear() {
@@ -104,6 +129,7 @@ class EventStorage(
     private companion object {
         const val ROOT_DIR_NAME = "failoverbeacon"
         const val WRITE_PERCENT = 95
+        const val READ_PERCENT = 105
         const val MAX_BATCH_BYTES = 1024L * 1024
         const val MAX_AGE_MILLIS = 18 * 60 * 60 * 1000L
         const val CLOCK_TOLERANCE_MILLIS = 10 * 60 * 1000L
