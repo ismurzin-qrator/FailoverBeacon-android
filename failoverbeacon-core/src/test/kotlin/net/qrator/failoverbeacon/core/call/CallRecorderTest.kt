@@ -30,15 +30,7 @@ class CallRecorderTest {
     private var network: NetworkSnapshot = NetworkSnapshot.Unknown
     private var foreground: Boolean? = null
     private val published = mutableListOf<Exchange>()
-    private val recorder =
-        CallRecorder(
-            { time },
-            { epochTime },
-            { network },
-            { foreground },
-            TestFailureMapper,
-            published::add
-        )
+    private var recorder = newRecorder()
 
     @Test
     fun `each exchange keeps the time, network and foreground state it started with`() {
@@ -350,34 +342,14 @@ class CallRecorderTest {
             CallStopReason.CANCELED,
             CallStopReason.TIMED_OUT
         )) {
-            val published = mutableListOf<Exchange>()
-            val recorder =
-                CallRecorder(
-                    clock = { time },
-                    epochClock = { epochTime },
-                    networkSource = { network },
-                    foregroundSource = { foreground },
-                    failureMapper = TestFailureMapper,
-                    publisher = published::add
-                )
+            published.clear()
+            recorder = newRecorder()
             time = 0
-            recorder.callStart("https", "a.com", 443, "GET")
-            recorder.connectionAcquired(
-                "1.1.1.1",
-                443,
-                "https",
-                "a.com",
-                443,
-                "h2",
-                ProxyType.DIRECT,
-                TLS
-            )
-            time = 1
-            recorder.requestHeadersStart()
-            time = 10
-            recorder.responseHeadersEnd(401, 6)
-            time = 600
-            recorder.responseBodyEnd(0)
+            start()
+            acquire()
+            at(1) { requestHeadersStart() }
+            at(10) { responseHeadersEnd(401, 6) }
+            at(600) { responseBodyEnd(0) }
             recorder.callFailed(IOException("stopped"), reason)
 
             val exchange = published.single()
@@ -446,6 +418,15 @@ class CallRecorderTest {
 
         assertEquals((0..19) + 29, published.map { it.resendCount })
     }
+
+    private fun newRecorder() = CallRecorder(
+        { time },
+        { epochTime },
+        { network },
+        { foreground },
+        TestFailureMapper,
+        published::add
+    )
 
     private fun start(method: String = "GET", host: String = "a.com") =
         recorder.callStart("https", host, 443, method)

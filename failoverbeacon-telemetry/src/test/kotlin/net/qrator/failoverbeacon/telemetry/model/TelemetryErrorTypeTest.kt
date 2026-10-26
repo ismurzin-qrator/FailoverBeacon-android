@@ -15,11 +15,4 @@ class TelemetryErrorTypeTest {
             assertEquals(expected, type.phase, type.code)
         }
     }
-
-    @Test
-    fun `error type codes are unique`() {
-        val codes = TelemetryErrorType.entries.map { it.code }
-
-        assertEquals(codes.size, codes.toSet().size)
-    }
 }

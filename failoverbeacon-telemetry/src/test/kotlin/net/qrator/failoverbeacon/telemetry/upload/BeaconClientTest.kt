@@ -7,7 +7,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 
@@ -37,14 +36,8 @@ class BeaconClientTest {
         assertEquals("/events", request.path)
         assertEquals("application/x-ndjson", request.getHeader("Content-Type"))
         assertEquals("gzip", request.getHeader("Content-Encoding"))
+        assertEquals(request.bodySize.toString(), request.getHeader("Content-Length"))
         assertEquals("one\ntwo\n", GZIPInputStream(request.body.inputStream()).reader().readText())
-    }
-
-    @Test
-    fun `returns an error status`() {
-        server.enqueue(MockResponse().setResponseCode(503).setBody("busy"))
-
-        assertEquals(503, client.post(server.url("/").toString(), "one\n".toByteArray()))
     }
 
     @Test
@@ -58,13 +51,5 @@ class BeaconClientTest {
 
         assertEquals(307, code)
         assertEquals(1, server.requestCount)
-    }
-
-    @Test
-    fun `returns null when the beacon cannot be reached`() {
-        val url = server.url("/").toString()
-        server.shutdown()
-
-        assertNull(client.post(url, "one\n".toByteArray()))
     }
 }

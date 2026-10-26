@@ -8,7 +8,6 @@ import java.net.NoRouteToHostException
 import java.net.ProtocolException
 import java.net.SocketException
 import java.net.SocketTimeoutException
-import java.net.UnknownHostException
 import java.security.cert.CertPathValidatorException
 import java.security.cert.CertificateException
 import javax.net.ssl.SSLException
@@ -24,7 +23,7 @@ import okhttp3.internal.http2.StreamResetException
 
 class OkHttpFailureMapperTest {
     @Test
-    fun `connect failures`() {
+    fun `a connect failure is typed by its exception and the cause behind it`() {
         assertType(
             FailureType.REFUSED,
             ConnectException("Failed to connect to /127.0.0.1:1")
@@ -41,7 +40,7 @@ class OkHttpFailureMapperTest {
     }
 
     @Test
-    fun `failures on an open connection`() {
+    fun `a failure on an open connection is a reset, a timeout or a closed stream`() {
         assertType(FailureType.RESET, SocketException("Connection reset"))
         assertType(
             FailureType.TIMED_OUT,
@@ -58,7 +57,7 @@ class OkHttpFailureMapperTest {
     }
 
     @Test
-    fun `HTTP failures`() {
+    fun `a broken HTTP exchange is a closed stream, a protocol error or a stream reset`() {
         assertType(FailureType.CLOSED, ProtocolException("unexpected end of stream"))
         assertType(FailureType.PROTOCOL_ERROR, ProtocolException("Unexpected status line: x"))
         assertType(
@@ -70,7 +69,7 @@ class OkHttpFailureMapperTest {
     }
 
     @Test
-    fun `TLS failures`() {
+    fun `a TLS failure is typed by its certificate check or its transport cause`() {
         val untrusted = CertPathValidatorException("Trust anchor for certification path not found.")
         assertType(
             FailureType.CERT_UNTRUSTED,

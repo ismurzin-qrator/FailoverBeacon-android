@@ -43,8 +43,9 @@ class DroppedEventsTest {
         dropped.clear()
         dropped.add(A, DropReason.EXPIRED, 1)
         dropped.subtract(A, reported)
+        dropped.add(A, DropReason.EXPIRED, 2)
 
-        assertEquals(emptyMap(), dropped.snapshot(A))
+        assertEquals(mapOf(DropReason.EXPIRED to 2L), dropped.snapshot(A))
     }
 
     private companion object {

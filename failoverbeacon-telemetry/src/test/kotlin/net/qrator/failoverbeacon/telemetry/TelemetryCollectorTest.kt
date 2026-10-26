@@ -5,8 +5,8 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
+import kotlin.test.assertFailsWith
+import net.qrator.failoverbeacon.core.ConsentSource
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.call.model.Exchange
@@ -39,16 +39,7 @@ class TelemetryCollectorTest {
         maxBytes = 1_000_000,
         dropped = dropped
     )
-    private val collector = TelemetryCollector(
-        consentSource,
-        blockedHosts = setOf("blocked.com"),
-        failureSampleRate = 0.7,
-        successSampleRate = 0.3,
-        memoryQueueSize = 2,
-        executor = tasks::addLast,
-        storage = storage,
-        dropped = dropped
-    )
+    private val collector = newCollector(consentSource)
 
     @BeforeTest
     fun setUp() {
@@ -63,36 +54,12 @@ class TelemetryCollectorTest {
     }
 
     @Test
-    fun `stores a kept event`() {
+    fun `stores a kept event and logs it`() {
         send(failure())
 
-        val batch = storedDir().walk().single { it.isFile }
-        assertEquals("a.com", JSONObject(batch.readLines().single()).getString("host"))
-    }
-
-    @Test
-    fun `withdrawn consent clears the stored events on the SDK thread, others keep them`() {
-        send(failure())
-
-        collector.onConsentChanged(TrackingConsent.PENDING)
-        collector.onConsentChanged(TrackingConsent.GRANTED)
-        val queuedBeforeWithdrawal = tasks.size
-        collector.onConsentChanged(TrackingConsent.NOT_GRANTED)
-        val stored = storedDir().exists()
-        tasks.removeFirst().run()
-
-        assertEquals(0, queuedBeforeWithdrawal)
-        assertTrue(stored)
-        assertFalse(storedDir().exists())
-    }
-
-    @Test
-    fun `an exchange that ends without consent is not queued`() {
-        consentSource.consent = TrackingConsent.NOT_GRANTED
-        collector.onExchange(failure())
-        consentSource.consent = TrackingConsent.GRANTED
-
-        assertEquals(0, tasks.size)
+        val line = storedLines().single()
+        assertEquals("a.com", JSONObject(line).getString("host"))
+        assertEquals(listOf(Log.DEBUG to "Telemetry event $line"), logs)
     }
 
     @Test
@@ -118,51 +85,70 @@ class TelemetryCollectorTest {
     }
 
     @Test
+    fun `a failed event frees its place in the memory queue`() {
+        var reads = 0
+        val collector = newCollector(
+            object : ConsentSource {
+                override val consent: TrackingConsent
+                    get() {
+                        check(reads++ != 1) { "consent unreadable" }
+                        return TrackingConsent.GRANTED
+                    }
+            }
+        )
+        collector.onExchange(failure())
+        assertFailsWith<IllegalStateException> { tasks.removeFirst().run() }
+
+        repeat(2) { collector.onExchange(failure()) }
+
+        assertEquals(2, tasks.size)
+    }
+
+    @Test
     fun `clearData clears the stored events and the drop counts on the SDK thread`() {
         send(failure())
         dropped.add(BEACON, DropReason.EXPIRED, 1)
+        val stored = storedLines().size
 
         collector.clearData()
+        val storedUntilTheTaskRuns = storedLines().size
         tasks.removeFirst().run()
 
-        assertFalse(storedDir().exists())
+        assertEquals(listOf(1, 1, 0), listOf(stored, storedUntilTheTaskRuns, storedLines().size))
         assertEquals(emptyMap(), dropped.snapshot(BEACON))
     }
 
     @Test
-    fun `logs a kept event with the fraction of its class`() {
+    fun `stores the sampling fraction of the event's class`() {
         send(exchange(callId = KEPT))
         send(failure())
 
-        val (level, message) = logs.first()
-        assertEquals(Log.DEBUG, level)
-        assertTrue(message.startsWith("""Telemetry event {"format_version":1,"""), message)
         assertEquals(
             listOf(0.3, 0.7),
-            logs.map {
-                JSONObject(it.second.substringAfter(" event ")).getDouble("sampling_fraction")
-            }
+            storedLines().map { JSONObject(it).getDouble("sampling_fraction") }
         )
     }
 
     @Test
-    fun `collects with consent granted or pending, never without it`() {
+    fun `collects with consent granted or pending, without it queues nothing`() {
         send(failure())
         consentSource.consent = TrackingConsent.PENDING
         send(failure())
         consentSource.consent = TrackingConsent.NOT_GRANTED
-        send(failure())
+        collector.onExchange(failure())
 
-        assertEquals(2, logs.size)
+        assertEquals(0, tasks.size)
+        assertEquals(2, storedLines().size)
     }
 
     @Test
-    fun `reads consent when the SDK thread gets to the event`() {
+    fun `reads consent again when the SDK thread gets to the event`() {
+        send(failure())
         collector.onExchange(failure())
         consentSource.consent = TrackingConsent.NOT_GRANTED
         tasks.removeFirst().run()
 
-        assertEquals(emptyList(), logs)
+        assertEquals(1, storedLines().size)
     }
 
     @Test
@@ -171,17 +157,38 @@ class TelemetryCollectorTest {
         send(failure(host = "sub.blocked.com"))
         send(failure(host = null))
 
-        assertEquals(2, logs.size)
+        assertEquals(
+            listOf("sub.blocked.com", null),
+            storedLines().map { JSONObject(it).optString("host").ifEmpty { null } }
+        )
     }
 
     @Test
-    fun `drops what the sampler drops`() {
+    fun `stores nothing the sampler drops`() {
         send(exchange(callId = DROPPED))
+        send(failure())
 
-        assertEquals(emptyList(), logs)
+        assertEquals(1, storedLines().size)
     }
 
+    private fun newCollector(consentSource: ConsentSource) = TelemetryCollector(
+        consentSource,
+        blockedHosts = setOf("blocked.com"),
+        failureSampleRate = 0.7,
+        successSampleRate = 0.3,
+        memoryQueueSize = 2,
+        executor = tasks::addLast,
+        storage = storage,
+        dropped = dropped
+    )
+
     private fun storedDir() = temp.root.resolve("failoverbeacon")
+
+    private fun storedLines(): List<String> = storedDir().walk()
+        .filter { it.isFile }
+        .sortedBy { it.name }
+        .flatMap { it.readLines() }
+        .toList()
 
     private fun send(exchange: Exchange) {
         collector.onExchange(exchange)

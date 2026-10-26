@@ -11,29 +11,16 @@ import org.robolectric.shadows.ShadowLog
 @RunWith(RobolectricTestRunner::class)
 class LogcatLoggerTest {
     @Test
-    fun `writes each level with the SDK tag`() {
-        for (level in Log.VERBOSE..Log.ERROR) {
-            LogcatLogger.log(level, "message $level", null)
+    fun `writes each level with the SDK tag and the throwable, ASSERT as ERROR`() {
+        val error = IllegalStateException()
+
+        for (level in Log.VERBOSE..Log.ASSERT) {
+            LogcatLogger.log(level, "message $level", error)
         }
 
         val logs = ShadowLog.getLogsForTag("FailoverBeacon")
-        assertEquals((Log.VERBOSE..Log.ERROR).toList(), logs.map { it.type })
-        assertEquals((Log.VERBOSE..Log.ERROR).map { "message $it" }, logs.map { it.msg })
-    }
-
-    @Test
-    fun `writes ASSERT as ERROR`() {
-        LogcatLogger.log(Log.ASSERT, "message", null)
-
-        assertEquals(Log.ERROR, ShadowLog.getLogsForTag("FailoverBeacon").single().type)
-    }
-
-    @Test
-    fun `passes the throwable`() {
-        val error = IllegalStateException()
-
-        LogcatLogger.log(Log.ERROR, "message", error)
-
-        assertSame(error, ShadowLog.getLogsForTag("FailoverBeacon").single().throwable)
+        assertEquals((Log.VERBOSE..Log.ERROR) + Log.ERROR, logs.map { it.type })
+        assertEquals((Log.VERBOSE..Log.ASSERT).map { "message $it" }, logs.map { it.msg })
+        logs.forEach { assertSame(error, it.throwable) }
     }
 }

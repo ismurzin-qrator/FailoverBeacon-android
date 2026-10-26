@@ -6,7 +6,6 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.LogOutput
@@ -59,7 +58,7 @@ class EventStorageTest {
     }
 
     @Test
-    fun `a full batch starts a new one`() {
+    fun `a batch holds at most 1 MB`() {
         val half = "x".repeat(600 * 1024)
 
         storage.write(half)
@@ -114,10 +113,21 @@ class EventStorageTest {
     }
 
     @Test
+    fun `a line written after clear starts a new batch`() {
+        storage.write("one")
+        storage.clear()
+
+        storage.write("two")
+
+        assertEquals(listOf(listOf("two")), batches(A_DIR))
+        assertEquals(emptyList(), logged)
+    }
+
+    @Test
     fun `a beacon keeps within its share, counting the batch it opens`() {
         val storage = newStorage(A, B, maxBytes = 2_000)
 
-        writeInNewBatches(storage, count = 4, line = "x".repeat(399))
+        writeInNewBatches(storage, count = 4, line = line(bytes = 400))
 
         val written = (0 until 4).map { (START + it * 60_000).toString() }
         assertEquals(written.drop(2), names(A_DIR))
@@ -131,7 +141,7 @@ class EventStorageTest {
     fun `one beacon gets the whole limit`() {
         val storage = newStorage(A, maxBytes = 2_000)
 
-        writeInNewBatches(storage, count = 4, line = "x".repeat(399))
+        writeInNewBatches(storage, count = 4, line = line(bytes = 400))
 
         assertEquals(3, names(A_DIR).size)
     }
@@ -140,8 +150,8 @@ class EventStorageTest {
     fun `a batch takes at most half of the share of a beacon`() {
         val storage = newStorage(A, maxBytes = 1_000)
 
-        storage.write("x".repeat(299))
-        storage.write("x".repeat(299))
+        storage.write(line(bytes = 300))
+        storage.write(line(bytes = 300))
 
         assertEquals(2, names(A_DIR).size)
     }
@@ -149,7 +159,7 @@ class EventStorageTest {
     @Test
     fun `drops batches older than 18 hours, named in the future or not by time`() {
         val dir = File(rootDir(), A_DIR).apply { mkdirs() }
-        File(dir, (START - EIGHTEEN_HOURS).toString()).writeText("old\n")
+        File(dir, (START - EIGHTEEN_HOURS).toString()).writeText("old\nold\n")
         File(dir, (START - EIGHTEEN_HOURS + 1).toString()).writeText("recent\n")
         File(dir, (START + TEN_MINUTES).toString()).writeText("ahead\n")
         File(dir, (START + TEN_MINUTES + 1).toString()).writeText("future\n")
@@ -168,7 +178,7 @@ class EventStorageTest {
             listOf(START + TEN_MINUTES, START + EIGHTEEN_HOURS).map(Long::toString),
             names(A_DIR)
         )
-        assertEquals(mapOf(DropReason.EXPIRED to 5L), dropped.snapshot(A))
+        assertEquals(mapOf(DropReason.EXPIRED to 6L), dropped.snapshot(A))
     }
 
     @Test
@@ -177,7 +187,7 @@ class EventStorageTest {
         storage.write("one")
         now = START + 60_000
         storage.write("two")
-        now = START + 60_000 + 62_999
+        now = START + 60_000 + READY_AGE - 1
         val oneReady = storage.readyBatches(A).map { it.name }
         now += 1
 
@@ -241,6 +251,8 @@ class EventStorageTest {
 
     private fun names(dir: String) = files(dir).map { it.name }
 
+    private fun line(bytes: Int) = "x".repeat(bytes - 1)
+
     private fun batches(dir: String) = files(dir).map { it.readLines() }
 
     private companion object {
@@ -249,6 +261,7 @@ class EventStorageTest {
         const val A_DIR = "38612c965a9c4c35"
         const val B_DIR = "35b22c6cbc7988f8"
         const val START = 1_761_040_980_000L
+        const val READY_AGE = 63_000L
         const val EIGHTEEN_HOURS = 18 * 60 * 60 * 1000L
         const val TEN_MINUTES = 10 * 60 * 1000L
     }

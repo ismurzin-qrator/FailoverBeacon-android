@@ -13,6 +13,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.Consent
@@ -40,6 +41,8 @@ class TelemetryEndToEndTest {
         listOf(LOOPBACK)
     }.build().withFailoverBeacon()
     private val previousOutput = SdkRegistry.logger.output
+    private val everySecond =
+        FailoverBeaconOptions.Builder().uploadPeriod(1, TimeUnit.SECONDS).build()
 
     @BeforeTest
     fun setUp() {
@@ -105,7 +108,7 @@ class TelemetryEndToEndTest {
 
     @Test
     fun `uploadPeriod sets how long a batch file takes events`() {
-        restart(FailoverBeaconOptions.Builder().uploadPeriod(1, TimeUnit.SECONDS).build())
+        restart(everySecond)
 
         execute("a.test")
         ShadowSystemClock.advanceBy(Duration.ofSeconds(1))
@@ -128,7 +131,7 @@ class TelemetryEndToEndTest {
     @Test
     fun `uploads stored events to the beacon`() = withBeacon { beacon, url ->
         restart(
-            FailoverBeaconOptions.Builder().uploadPeriod(1, TimeUnit.SECONDS).build(),
+            everySecond,
             beacon = url
         )
 
@@ -163,6 +166,44 @@ class TelemetryEndToEndTest {
         }
 
     @Test
+    fun `uploads events stored while consent was pending once it is granted`() =
+        withBeacon { beacon, url ->
+            restart(everySecond, beacon = url, consent = Consent.PENDING)
+            execute("a.test")
+            ShadowSystemClock.advanceBy(Duration.ofSeconds(2))
+
+            FailoverBeacon.setConsent(Consent.GRANTED)
+
+            val request = assertNotNull(beacon.takeRequest(5, TimeUnit.SECONDS))
+            val lines = GZIPInputStream(request.body.inputStream()).reader().readLines()
+            assertEquals(listOf(events.single().removePrefix("$EVENT_PREFIX ")), lines.drop(1))
+        }
+
+    @Test
+    fun `never stores, logs or uploads the path, query or headers of a request`() =
+        withBeacon { beacon, url ->
+            val logs = CopyOnWriteArrayList<String>()
+            restart(everySecond, url)
+            FailoverBeacon.setLogger { _, message, throwable -> logs += "$message $throwable" }
+            server.enqueue(MockResponse().setBody("ok"))
+            val request = Request.Builder()
+                .url("http://a.test:${server.port}/$SECRET?token=$SECRET")
+                .header("Authorization", SECRET)
+                .build()
+
+            client.newCall(request).execute().use { it.body.string() }
+            awaitSdkThread()
+            val stored = storedFiles().joinToString("\n") { it.readText() }
+            ShadowSystemClock.advanceBy(Duration.ofSeconds(2))
+            val upload = assertNotNull(beacon.takeRequest(5, TimeUnit.SECONDS))
+            awaitUploadThread()
+            val uploaded = GZIPInputStream(upload.body.inputStream()).reader().readText()
+
+            assertTrue(stored.contains(""""host":"a.test""""), stored)
+            (listOf(stored, uploaded) + logs).forEach { assertFalse(it.contains(SECRET), it) }
+        }
+
+    @Test
     fun `stops reporting once consent is withdrawn`() {
         execute("a.test")
         FailoverBeacon.setConsent(Consent.NOT_GRANTED)
@@ -182,14 +223,18 @@ class TelemetryEndToEndTest {
         client.newCall(request).execute().use { it.body.string() }
     }
 
-    private fun restart(options: FailoverBeaconOptions, beacon: String = "https://beacon.example") {
+    private fun restart(
+        options: FailoverBeaconOptions,
+        beacon: String = "https://beacon.example",
+        consent: Consent = Consent.GRANTED
+    ) {
         FailoverBeacon.stop()
         val config = FailoverBeaconConfig.Builder()
             .beacons(listOf(beacon))
             .successSampleRate(1.0)
             .options(options)
             .build()
-        FailoverBeacon.initialize(app, config)
+        FailoverBeacon.initialize(app, config, consent)
     }
 
     private fun withBeacon(block: (beacon: MockWebServer, url: String) -> Unit) {
@@ -207,7 +252,7 @@ class TelemetryEndToEndTest {
         }
     }
 
-    private fun beaconDir() = File(app.cacheDir, "failoverbeacon/2f7cbe9a31e83f24")
+    private fun beaconDir() = File(app.cacheDir, "failoverbeacon/$EXAMPLE_BEACON_DIR")
 
     private fun storedFiles() =
         File(app.cacheDir, "failoverbeacon").walk().filter { it.isFile }.toList()
@@ -224,6 +269,8 @@ class TelemetryEndToEndTest {
 
     private companion object {
         const val EVENT_PREFIX = "Telemetry event"
+        const val EXAMPLE_BEACON_DIR = "2f7cbe9a31e83f24"
+        const val SECRET = "s3cr3t"
         val LOOPBACK: InetAddress = InetAddress.getByName("127.0.0.1")
 
         val beaconCertificate: HeldCertificate = HeldCertificate.Builder()

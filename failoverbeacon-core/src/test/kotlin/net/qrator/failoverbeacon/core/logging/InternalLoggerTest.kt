@@ -47,10 +47,17 @@ class InternalLoggerTest {
     }
 
     @Test
-    fun `ignores exceptions thrown by the output`() {
-        logger.output = LogOutput { _, _, _ -> throw RuntimeException() }
+    fun `an output that throws gets the next message too`() {
+        val received = mutableListOf<String>()
+        logger.output = LogOutput { _, message, _ ->
+            received += message
+            throw RuntimeException()
+        }
 
-        logger.error { "error" }
+        logger.error { "first" }
+        logger.error { "second" }
+
+        assertEquals(listOf("first", "second"), received)
     }
 
     @Test

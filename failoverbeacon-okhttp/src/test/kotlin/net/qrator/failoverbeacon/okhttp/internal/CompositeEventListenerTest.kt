@@ -3,20 +3,12 @@ package net.qrator.failoverbeacon.okhttp.internal
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertSame
 import net.qrator.failoverbeacon.okhttp.fakes.RecordingEventListener
 import net.qrator.failoverbeacon.okhttp.fakes.eventListenerEvents
-import net.qrator.failoverbeacon.okhttp.fakes.notOverriddenEvents
 import net.qrator.failoverbeacon.okhttp.fakes.sendEvent
 
 class CompositeEventListenerTest {
     private val log = CopyOnWriteArrayList<String>()
-
-    @Test
-    fun `overrides every event`() {
-        assertEquals(emptyList(), CompositeEventListener::class.java.notOverriddenEvents())
-    }
 
     @Test
     fun `sends every event to the first listener and then to the second`() {

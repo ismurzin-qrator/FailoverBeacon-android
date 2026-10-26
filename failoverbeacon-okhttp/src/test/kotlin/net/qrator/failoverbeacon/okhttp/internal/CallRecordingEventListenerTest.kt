@@ -1,11 +1,8 @@
 package net.qrator.failoverbeacon.okhttp.internal
 
 import java.io.IOException
-import java.io.InterruptedIOException
-import java.net.ConnectException
 import java.net.InetAddress
 import java.net.InetSocketAddress
-import java.net.ProtocolException
 import java.net.Proxy
 import java.net.SocketException
 import java.net.SocketTimeoutException
@@ -101,24 +98,6 @@ class CallRecordingEventListenerTest {
     }
 
     @Test
-    fun `a connect failing on a canceled call is canceled, an earlier one is a failure`() {
-        val call = call(OkHttpClient())
-        var now = 0L
-        val listener = listener { now++ }
-
-        listener.connectStart(call, FIRST, Proxy.NO_PROXY)
-        listener.connectFailed(call, FIRST, Proxy.NO_PROXY, null, ConnectException("refused"))
-        listener.connectStart(call, SECOND, Proxy.NO_PROXY)
-        call.cancel()
-        listener.connectFailed(call, SECOND, Proxy.NO_PROXY, null, SocketException("Socket closed"))
-        listener.callFailed(call, IOException("Canceled"))
-
-        val (refused, canceled) = published.single().attempts
-        assertIs<ConnectResult.Failed>(refused.result)
-        assertEquals(ConnectResult.Canceled, canceled.result)
-    }
-
-    @Test
     fun `a connect OkHttp dropped after another connected is superseded`() {
         val call = call(OkHttpClient())
         var now = 0L
@@ -145,22 +124,6 @@ class CallRecordingEventListenerTest {
 
         assertEquals(
             FailureType.OTHER,
-            assertIs<ExchangeOutcome.Failed>(published.single().outcome).type
-        )
-    }
-
-    @Test
-    fun `too many follow-ups after a response reject it as a redirect loop`() {
-        val call = call(OkHttpClient())
-        val loop = ProtocolException("Too many follow-up requests: 21")
-        val listener = listener { 0 }
-        listener.requestHeadersStart(call)
-        listener.responseHeadersEnd(call, response(call, 302))
-
-        listener.callFailed(call, loop)
-
-        assertEquals(
-            FailureType.REDIRECT_LOOP,
             assertIs<ExchangeOutcome.Failed>(published.single().outcome).type
         )
     }

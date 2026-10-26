@@ -8,6 +8,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowLog
 
+// The only test on API 24, so FailoverBeacon is initialized in a sandbox of its own.
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [24])
 class FailoverBeaconDefaultsTest {

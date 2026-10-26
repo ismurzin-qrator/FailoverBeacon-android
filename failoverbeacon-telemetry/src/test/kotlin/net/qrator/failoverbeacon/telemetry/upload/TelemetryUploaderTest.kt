@@ -1,5 +1,6 @@
 package net.qrator.failoverbeacon.telemetry.upload
 
+import android.net.TrafficStats
 import android.util.Log
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
@@ -24,6 +25,7 @@ import net.qrator.failoverbeacon.telemetry.TestConsentSource
 import net.qrator.failoverbeacon.telemetry.storage.EventStorage
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.json.JSONObject
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
@@ -133,19 +135,28 @@ class TelemetryUploaderTest {
     }
 
     @Test
-    fun `a timeout, a rate limit, a server error or no network keep the batches and back off`() {
+    fun `a timeout, a rate limit or a server error keeps the batches`() {
         writeInNewBatches("one")
-        val codes = listOf(408, 429, 500, 503, 599)
+        val codes = intArrayOf(408, 429, 500, 503, 599)
+        respond(*codes)
 
-        codes.forEach { code ->
-            respond(code, code)
-            val uploader = uploader(listOf(beacon), storage)
-            repeat(3) { uploader.upload() }
-        }
+        codes.forEach { _ -> uploader(listOf(beacon), storage).upload() }
+
+        assertEquals(codes.size, server.requestCount)
+        assertEquals(1, storedFiles().size)
+        assertEquals(emptyList(), warnings)
+    }
+
+    @Test
+    fun `a dropped connection or an unreachable beacon keeps the batches`() {
+        writeInNewBatches("one")
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST))
+
+        uploader.upload()
         server.shutdown()
         uploader.upload()
 
-        assertEquals(codes.size * 2, server.requestCount)
+        assertEquals(1, server.requestCount)
         assertEquals(1, storedFiles().size)
         assertEquals(emptyList(), warnings)
     }
@@ -232,16 +243,19 @@ class TelemetryUploaderTest {
         val storage = storage(beacons)
         val uploader = uploader(beacons, storage)
         respond(500, 500)
-        listOf("one", "two", "three").forEach { line ->
-            writeInNewBatches(line, storage = storage)
-            other.enqueue(MockResponse().setResponseCode(202))
-            uploader.upload()
-        }
+        try {
+            listOf("one", "two", "three").forEach { line ->
+                writeInNewBatches(line, storage = storage)
+                other.enqueue(MockResponse().setResponseCode(202))
+                uploader.upload()
+            }
 
-        assertEquals(2, server.requestCount)
-        assertEquals(listOf("one", "two", "three"), requests(other).flatMap { it.events })
-        assertEquals(3, storedFiles().size)
-        other.shutdown()
+            assertEquals(2, server.requestCount)
+            assertEquals(listOf("one", "two", "three"), requests(other).flatMap { it.events })
+            assertEquals(3, storedFiles().size)
+        } finally {
+            other.shutdown()
+        }
     }
 
     @Test
@@ -254,6 +268,28 @@ class TelemetryUploaderTest {
 
         assertEquals(listOf(listOf(first, second), listOf(third)), requests().map { it.events })
         assertEquals(emptyList(), storedFiles())
+    }
+
+    @Test
+    fun `a batch over 1 MB goes alone`() {
+        val large = "1".repeat(1100 * 1024)
+        writeInNewBatches(large, "two")
+        respond(202, 202)
+
+        uploader.upload()
+
+        assertEquals(listOf(listOf(large), listOf("two")), requests().map { it.events })
+    }
+
+    @Test
+    fun `tags the sockets of the upload thread`() {
+        try {
+            uploader.upload()
+
+            assertEquals(SDK_TRAFFIC_TAG, TrafficStats.getThreadStatsTag())
+        } finally {
+            TrafficStats.clearThreadStatsTag()
+        }
     }
 
     @Test
@@ -348,5 +384,6 @@ class TelemetryUploaderTest {
         const val START = 1_761_040_980_000L
         const val WINDOW = 60_000L
         const val DISK_BYTES = 5L * 1024 * 1024
+        const val SDK_TRAFFIC_TAG = 0x4642
     }
 }

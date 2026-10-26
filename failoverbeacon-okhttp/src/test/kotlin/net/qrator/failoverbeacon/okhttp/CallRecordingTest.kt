@@ -44,12 +44,15 @@ import net.qrator.failoverbeacon.core.call.model.ProxyType
 import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 import net.qrator.failoverbeacon.okhttp.fakes.installSdk
 import okhttp3.Cache
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.EventListener
 import okhttp3.MediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.Response
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -110,6 +113,28 @@ class CallRecordingTest {
     }
 
     @Test
+    fun `records an asynchronous call`() {
+        server.enqueue(MockResponse().setBody("ok"))
+        val done = CountDownLatch(1)
+        val call = client().build().withFailoverBeacon()
+            .newCall(Request.Builder().url(server.url("/")).build())
+
+        call.enqueue(
+            object : Callback {
+                override fun onFailure(call: Call, e: IOException) = done.countDown()
+
+                override fun onResponse(call: Call, response: Response) {
+                    response.use { it.body.string() }
+                    done.countDown()
+                }
+            }
+        )
+
+        assertTrue(done.await(5, TimeUnit.SECONDS))
+        assertEquals(ExchangeOutcome.Ok, exchanges.single().outcome)
+    }
+
+    @Test
     fun `a call through an HTTP proxy records the proxy and its address`() {
         server.enqueue(MockResponse().setBody("proxied"))
         // Like the system selector, names the proxy by host: OkHttp resolves it with the client's Dns.
@@ -130,16 +155,7 @@ class CallRecordingTest {
     @Test
     fun `records the size of a request body`() {
         server.enqueue(MockResponse().setBody("ok"))
-        val body = object : RequestBody() {
-            override fun contentType(): MediaType? = null
-
-            override fun contentLength(): Long = 5
-
-            override fun writeTo(sink: BufferedSink) {
-                sink.writeUtf8("hello")
-            }
-        }
-        val request = Request.Builder().url(server.url("/")).post(body).build()
+        val request = Request.Builder().url(server.url("/")).post(body(bytes = 5)).build()
 
         client().build().withFailoverBeacon().newCall(request).execute().use { it.body.string() }
 
@@ -322,7 +338,7 @@ class CallRecordingTest {
     }
 
     @Test
-    fun `a call timeout is a failure`() {
+    fun `a call timeout fails as timed out`() {
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
         val client = client().callTimeout(200, TimeUnit.MILLISECONDS).build()
 
@@ -372,11 +388,7 @@ class CallRecordingTest {
     fun `an HTTPS call records the handshake`() {
         server.useHttps(serverCertificates.sslSocketFactory(), false)
         server.enqueue(MockResponse().setBody("secure"))
-        val client = client()
-            .sslSocketFactory(
-                clientCertificates.sslSocketFactory(),
-                clientCertificates.trustManager
-            )
+        val client = httpsClient()
             .build()
 
         execute(client, "https://localhost:${server.port}/")
@@ -397,11 +409,7 @@ class CallRecordingTest {
         server.useHttps(serverCertificates.sslSocketFactory(), false)
         server.enqueue(MockResponse().setBody("first"))
         server.enqueue(MockResponse().setBody("second"))
-        val client = client()
-            .sslSocketFactory(
-                clientCertificates.sslSocketFactory(),
-                clientCertificates.trustManager
-            )
+        val client = httpsClient()
             .build()
 
         execute(client, "https://localhost:${server.port}/")
@@ -420,11 +428,7 @@ class CallRecordingTest {
         server.protocols = listOf(Protocol.HTTP_2, Protocol.HTTP_1_1)
         server.enqueue(MockResponse().setBody("a"))
         server.enqueue(MockResponse().setBody("b"))
-        val client = client()
-            .sslSocketFactory(
-                clientCertificates.sslSocketFactory(),
-                clientCertificates.trustManager
-            )
+        val client = httpsClient()
             .build()
 
         execute(client, "https://a.test:${server.port}/")
@@ -447,11 +451,7 @@ class CallRecordingTest {
             ).setHeader("Location", "https://b.test:${server.port}/")
         )
         server.enqueue(MockResponse().setBody("b"))
-        val client = client()
-            .sslSocketFactory(
-                clientCertificates.sslSocketFactory(),
-                clientCertificates.trustManager
-            )
+        val client = httpsClient()
             .build()
 
         execute(client, "https://a.test:${server.port}/")
@@ -466,11 +466,7 @@ class CallRecordingTest {
         server.useHttps(serverCertificates.sslSocketFactory(), false)
         server.protocols = listOf(Protocol.HTTP_2, Protocol.HTTP_1_1)
         server.enqueue(MockResponse().setBody("a"))
-        val client = client()
-            .sslSocketFactory(
-                clientCertificates.sslSocketFactory(),
-                clientCertificates.trustManager
-            )
+        val client = httpsClient()
             .addNetworkInterceptor { chain ->
                 if (chain.request().url.host == "b.test") throw IOException("no token")
                 chain.proceed(chain.request())
@@ -504,11 +500,7 @@ class CallRecordingTest {
     @Test
     fun `an app interceptor failing after the handshake fails at no network step`() {
         server.useHttps(serverCertificates.sslSocketFactory(), false)
-        val client = client()
-            .sslSocketFactory(
-                clientCertificates.sslSocketFactory(),
-                clientCertificates.trustManager
-            )
+        val client = httpsClient()
             .addNetworkInterceptor { throw IOException("no token") }
             .build()
 
@@ -562,15 +554,7 @@ class CallRecordingTest {
     fun `a failed upload fails at REQUEST with no wait`() {
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_DURING_REQUEST_BODY))
         server.enqueue(MockResponse().setBody("ok"))
-        val body = object : RequestBody() {
-            override fun contentType(): MediaType? = null
-
-            override fun contentLength(): Long = 4L * 1024 * 1024
-
-            override fun writeTo(sink: BufferedSink) {
-                repeat(4 * 1024) { sink.write(ByteArray(1024)) }
-            }
-        }
+        val body = body(bytes = 4 * 1024 * 1024)
         val request = Request.Builder().url(server.url("/")).post(body).build()
 
         // OkHttp 5 resends the request, 3.14 and 4.x fail the call.
@@ -692,6 +676,19 @@ class CallRecordingTest {
         private fun unsupported(): Nothing = throw UnsupportedOperationException()
     }
 
+    private fun httpsClient() = client()
+        .sslSocketFactory(clientCertificates.sslSocketFactory(), clientCertificates.trustManager)
+
+    private fun body(bytes: Int) = object : RequestBody() {
+        override fun contentType(): MediaType? = null
+
+        override fun contentLength(): Long = bytes.toLong()
+
+        override fun writeTo(sink: BufferedSink) {
+            sink.write(ByteArray(bytes))
+        }
+    }
+
     private class SilentFirstSocket(private val silentConnect: CountDownLatch) : Socket() {
         private val closed = CountDownLatch(1)
 
@@ -724,8 +721,6 @@ class CallRecordingTest {
         const val LARGE_HEADER = 64 * 1024
         val LOOPBACK: InetAddress = InetAddress.getByName(LOOPBACK_IP)
         val SILENT: InetAddress = InetAddress.getByAddress(byteArrayOf(10, 0, 0, 1))
-
-        val SECOND_LOOPBACK: InetAddress = InetAddress.getByName("127.0.0.2")
 
         val root: HeldCertificate = HeldCertificate.Builder()
             .certificateAuthority(0)

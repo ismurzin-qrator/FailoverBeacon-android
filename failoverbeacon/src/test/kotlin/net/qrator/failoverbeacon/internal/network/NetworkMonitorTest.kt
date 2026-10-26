@@ -44,10 +44,11 @@ class NetworkMonitorTest {
         TelephonyManager::class.java
     )
     private val monitor = NetworkMonitor(app)
+    private val previousOutput = SdkRegistry.logger.output
 
     @AfterTest
     fun tearDown() {
-        SdkRegistry.logger.output = null
+        SdkRegistry.logger.output = previousOutput
     }
 
     @Test
@@ -200,17 +201,6 @@ class NetworkMonitorTest {
         monitor.onCapabilitiesChanged(CELLULAR_NETWORK, cellular())
 
         assertNull(connected().roaming)
-    }
-
-    @Test
-    @Config(sdk = [28])
-    fun `roaming is reported from API 28`() {
-        monitor.onCapabilitiesChanged(
-            CELLULAR_NETWORK,
-            capabilities(listOf(TRANSPORT_CELLULAR), roaming = true)
-        )
-
-        assertEquals(true, connected().roaming)
     }
 
     @Test

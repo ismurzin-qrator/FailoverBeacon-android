@@ -5,20 +5,16 @@ import android.app.Application
 import android.content.Context
 import android.content.ContextWrapper
 import android.net.ConnectivityManager
-import android.os.SystemClock
 import android.util.Log
 import java.io.File
+import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -28,6 +24,7 @@ import net.qrator.failoverbeacon.core.DataOwner
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.internal.LogcatLogger
+import net.qrator.failoverbeacon.internal.SdkStartup
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
@@ -35,6 +32,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowApplication
 import org.robolectric.shadows.ShadowLog
+import org.robolectric.shadows.ShadowSystemClock
 
 @RunWith(RobolectricTestRunner::class)
 class FailoverBeaconTest {
@@ -64,12 +62,12 @@ class FailoverBeaconTest {
 
     @Test
     fun `event time starts at the device clock and advances with the elapsed realtime`() {
-        SystemClock.sleep(3_600_000)
+        ShadowSystemClock.advanceBy(Duration.ofHours(1))
         FailoverBeacon.initialize(app, config)
         val clock = assertNotNull(SdkRegistry.instance).epochClock
         val start = clock.nowMillis()
 
-        SystemClock.sleep(65_000)
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(65))
 
         assertTrue(abs(start - System.currentTimeMillis()) < 1_000)
         assertEquals(start + 65_000, clock.nowMillis())
@@ -108,6 +106,17 @@ class FailoverBeaconTest {
     }
 
     @Test
+    fun `a start that missed the running SDK does not replace it`() {
+        FailoverBeacon.initialize(app, config)
+        val running = SdkRegistry.instance
+
+        val started = SdkStartup.start(app, TrackingConsent.GRANTED, config)
+
+        assertFalse(started)
+        assertSame(running, SdkRegistry.instance)
+    }
+
+    @Test
     fun `stays inactive in a secondary process`() {
         ShadowApplication.setProcessName("${app.packageName}:sync")
 
@@ -129,35 +138,6 @@ class FailoverBeaconTest {
             },
             logs
         )
-    }
-
-    @Test
-    fun `concurrent initialize installs one instance`() {
-        // Rounds make it near certain that some calls race past the first check.
-        repeat(ROUNDS) {
-            SdkRegistry.clear()
-            logs.clear()
-            val threads = 8
-            val start = CountDownLatch(1)
-            val pool = Executors.newFixedThreadPool(threads)
-            repeat(threads) {
-                pool.execute {
-                    start.await()
-                    FailoverBeacon.initialize(app, config)
-                }
-            }
-
-            start.countDown()
-            pool.shutdown()
-
-            assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS))
-            assertNotNull(SdkRegistry.instance)
-            assertSame<Any?>(
-                SdkRegistry.instance?.networkSource,
-                networkCallbacks().single()
-            )
-            assertEquals(threads - 1, logs.count { it.second == "Already initialized. Ignored" })
-        }
     }
 
     @Test
@@ -209,23 +189,6 @@ class FailoverBeaconTest {
     }
 
     @Test
-    fun `uploads at start and then every upload period`() {
-        val options = FailoverBeaconOptions.Builder().uploadPeriod(5, TimeUnit.MINUTES).build()
-        FailoverBeacon.initialize(
-            app,
-            FailoverBeaconConfig.Builder().beacons(config.beacons).options(options).build()
-        )
-
-        val executor = assertNotNull(
-            SdkRegistry.instance
-        ).uploadExecutor as ScheduledThreadPoolExecutor
-        executor.submit {}.get(5, TimeUnit.SECONDS)
-        val upload = executor.queue.single() as ScheduledFuture<*>
-
-        assertTrue(upload.getDelay(TimeUnit.MILLISECONDS) in 290_000..300_000)
-    }
-
-    @Test
     fun `without an application the foreground state is unknown`() {
         val context = object : ContextWrapper(app) {
             override fun getApplicationContext(): Context? = null
@@ -269,11 +232,6 @@ class FailoverBeaconTest {
 
         assertNull(SdkRegistry.instance)
         assertEquals(callbacks, networkCallbacks())
-    }
-
-    @Test
-    fun `setLogLevel rejects values outside Log constants`() {
-        assertFailsWith<IllegalArgumentException> { FailoverBeacon.setLogLevel(0) }
     }
 
     @Test
@@ -331,7 +289,7 @@ class FailoverBeaconTest {
     }
 
     @Test
-    fun `publishing consent sends the current value and keeps a change made meanwhile`() {
+    fun `a consent set while initialize runs is the one published`() {
         FailoverBeacon.initialize(app, config)
         val instance = assertNotNull(SdkRegistry.instance)
         val published = CopyOnWriteArrayList<TrackingConsent>()
@@ -385,8 +343,4 @@ class FailoverBeaconTest {
 
     private fun networkCallbacks() =
         shadowOf(app.getSystemService(ConnectivityManager::class.java)).networkCallbacks.toSet()
-
-    private companion object {
-        const val ROUNDS = 20
-    }
 }

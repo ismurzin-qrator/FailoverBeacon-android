@@ -56,15 +56,9 @@ class AndroidMainProcessDetectorTest {
     }
 
     @Test
-    @Config(sdk = [27])
-    fun `isolated process on API 27`() {
+    fun `an isolated process is not the main one`() {
         ShadowProcess.setUid(app.applicationInfo.uid + 1)
 
         assertFalse(detector.isMainProcess())
-    }
-
-    private fun setRunningProcess(name: String) {
-        val process = RunningAppProcessInfo(name, Process.myPid(), arrayOf(app.packageName))
-        shadowOf(app.getSystemService(ActivityManager::class.java)).setProcesses(listOf(process))
     }
 }

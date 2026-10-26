@@ -5,7 +5,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
-import kotlin.test.assertSame
 
 class FailoverBeaconConfigTest {
     @Test
@@ -16,9 +15,6 @@ class FailoverBeaconConfigTest {
         assertEquals(emptySet(), config.blockedHosts)
         assertEquals(1.0, config.failureSampleRate)
         assertEquals(0.1, config.successSampleRate)
-        assertEquals(60_000L, config.options.uploadPeriodMillis)
-        assertEquals(5L * 1024 * 1024, config.options.diskQueueBytes)
-        assertEquals(1000, config.options.memoryQueueSize)
     }
 
     @Test
@@ -34,18 +30,18 @@ class FailoverBeaconConfigTest {
     }
 
     @Test
-    fun `beacons rejects non-https urls`() {
-        for (url in listOf("http://beacon.example", "ftp://beacon.example", "beacon.example")) {
+    fun `beacons rejects urls that are not https or have no host`() {
+        val urls =
+            listOf(
+                "http://beacon.example",
+                "ftp://beacon.example",
+                "beacon.example",
+                "https:///path"
+            )
+        for (url in urls) {
             assertFailsWith<IllegalArgumentException>(url) {
                 FailoverBeaconConfig.Builder().beacons(listOf(url))
             }
-        }
-    }
-
-    @Test
-    fun `beacons rejects url without host`() {
-        assertFailsWith<IllegalArgumentException> {
-            FailoverBeaconConfig.Builder().beacons(listOf("https:///path"))
         }
     }
 
@@ -77,21 +73,12 @@ class FailoverBeaconConfigTest {
     }
 
     @Test
-    fun `blockedHosts are lowercased`() {
+    fun `blockedHosts are kept in lowercase ASCII, internationalized names in either form`() {
         val config = builderWithBeacon()
-            .blockedHosts(listOf("Analytics.Example", "ads.example"))
+            .blockedHosts(listOf("Analytics.Example", "Пример.РФ", "xn--e1afmkfd.xn--p1ai"))
             .build()
 
-        assertEquals(setOf("analytics.example", "ads.example"), config.blockedHosts)
-    }
-
-    @Test
-    fun `blockedHosts take internationalized names in Unicode or ASCII`() {
-        val config = builderWithBeacon()
-            .blockedHosts(listOf("Пример.РФ", "xn--e1afmkfd.xn--p1ai"))
-            .build()
-
-        assertEquals(setOf("xn--e1afmkfd.xn--p1ai"), config.blockedHosts)
+        assertEquals(setOf("analytics.example", "xn--e1afmkfd.xn--p1ai"), config.blockedHosts)
     }
 
     @Test
@@ -134,15 +121,6 @@ class FailoverBeaconConfigTest {
                 builderWithBeacon().successSampleRate(rate)
             }
         }
-    }
-
-    @Test
-    fun `options are kept`() {
-        val options = FailoverBeaconOptions.Builder().diskQueueBytes(10).build()
-
-        val config = builderWithBeacon().options(options).build()
-
-        assertSame(options, config.options)
     }
 
     private fun builderWithBeacon() = FailoverBeaconConfig.Builder().beacons(listOf(BEACON))

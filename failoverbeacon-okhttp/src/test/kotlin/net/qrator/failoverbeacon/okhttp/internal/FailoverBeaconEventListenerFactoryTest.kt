@@ -1,13 +1,14 @@
 package net.qrator.failoverbeacon.okhttp.internal
 
+import java.net.UnknownHostException
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import net.qrator.failoverbeacon.core.SdkRegistry
+import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.okhttp.fakes.RecordingEventListener
 import net.qrator.failoverbeacon.okhttp.fakes.installSdk
 import okhttp3.EventListener
@@ -54,24 +55,20 @@ class FailoverBeaconEventListenerFactoryTest {
     }
 
     @Test
-    fun `adds the SDK listener while the SDK is running`() {
-        installSdk({})
+    fun `records the call while the SDK is running, with or without an app listener`() {
+        val exchanges = CopyOnWriteArrayList<Exchange>()
+        installSdk({ exchanges += it })
         val appListener = RecordingEventListener()
 
-        val listener = FailoverBeaconEventListenerFactory { appListener }.create(call)
-        listener.callStart(call)
+        for (app in listOf(appListener, EventListener.NONE)) {
+            val listener = FailoverBeaconEventListenerFactory { app }.create(call)
+            listener.callStart(call)
+            listener.dnsStart(call, "example.test")
+            listener.callFailed(call, UnknownHostException("example.test"))
+        }
 
-        assertNotSame(appListener, listener)
-        assertEquals(listOf("callStart"), appListener.log)
-    }
-
-    @Test
-    fun `returns only the SDK listener when the app has none`() {
-        installSdk({})
-
-        val listener = FailoverBeaconEventListenerFactory { EventListener.NONE }.create(call)
-
-        assertIs<CallRecordingEventListener>(listener)
+        assertEquals(2, exchanges.size)
+        assertEquals(listOf("callStart", "dnsStart", "callFailed"), appListener.log)
     }
 
     @Test

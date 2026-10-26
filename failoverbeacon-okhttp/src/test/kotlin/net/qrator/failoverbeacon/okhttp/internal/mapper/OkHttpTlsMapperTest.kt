@@ -1,10 +1,8 @@
 package net.qrator.failoverbeacon.okhttp.internal.mapper
 
-import java.net.Socket
 import javax.net.ssl.SSLSocketFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import net.qrator.failoverbeacon.core.call.model.ExchangeTls
 import okhttp3.CipherSuite
 import okhttp3.Handshake
 import okhttp3.TlsVersion

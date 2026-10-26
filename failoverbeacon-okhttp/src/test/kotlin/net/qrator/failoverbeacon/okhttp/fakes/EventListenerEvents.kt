@@ -22,10 +22,6 @@ val eventListenerEvents: List<Method> = EventListener::class.java.declaredMethod
     .filter { it.returnType == Void.TYPE && !Modifier.isStatic(it.modifiers) }
     .sortedBy { it.name }
 
-fun Class<out EventListener>.notOverriddenEvents(): List<String> = eventListenerEvents
-    .filter { runCatching { getDeclaredMethod(it.name, *it.parameterTypes) }.isFailure }
-    .map { it.name }
-
 /** Calls [event] on [listener] with test arguments and rethrows what the listener throws. */
 fun sendEvent(listener: EventListener, event: Method) {
     val arguments = event.parameterTypes.map { argumentOf(it) }.toTypedArray()
