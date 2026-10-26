@@ -13,6 +13,7 @@ import net.qrator.failoverbeacon.core.logging.warn
 import net.qrator.failoverbeacon.telemetry.filter.EventFilter
 import net.qrator.failoverbeacon.telemetry.filter.Sampler
 import net.qrator.failoverbeacon.telemetry.mapper.TelemetryEventMapper
+import net.qrator.failoverbeacon.telemetry.model.TelemetryEvent
 import net.qrator.failoverbeacon.telemetry.serialization.TelemetryEventSerializer
 import net.qrator.failoverbeacon.telemetry.storage.EventStorage
 
@@ -35,6 +36,9 @@ internal class TelemetryCollector(
 
     override fun onExchange(exchange: Exchange) {
         if (!filter.consentAllows()) return
+        val event = eventMapper.toEvent(exchange)
+        if (!filter.accepts(event)) return
+        val samplingFraction = sampler.sample(event) ?: return
         if (!memoryQueueSlots.tryAcquire()) {
             dropped.addToAll(DropReason.MEMORY_OVERFLOW, 1)
             SdkRegistry.logger.warn(onlyOnce = true) { "Memory queue is full. Events are dropped" }
@@ -42,7 +46,7 @@ internal class TelemetryCollector(
         }
         executor.execute {
             try {
-                collect(exchange)
+                store(event, samplingFraction)
             } finally {
                 memoryQueueSlots.release()
             }
@@ -60,10 +64,8 @@ internal class TelemetryCollector(
         }
     }
 
-    private fun collect(exchange: Exchange) {
-        val event = eventMapper.toEvent(exchange)
-        if (!filter.accepts(event)) return
-        val samplingFraction = sampler.sample(event) ?: return
+    private fun store(event: TelemetryEvent, samplingFraction: Double) {
+        if (!filter.consentAllows()) return
         val json = serializer.toJson(event, samplingFraction)
         storage.write(json)
         SdkRegistry.logger.debug { "Telemetry event $json" }

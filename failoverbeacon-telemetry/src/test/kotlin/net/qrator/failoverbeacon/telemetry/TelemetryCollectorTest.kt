@@ -63,8 +63,10 @@ class TelemetryCollectorTest {
     }
 
     @Test
-    fun `drops events beyond the memory queue size and logs it once`() {
+    fun `drops stored events beyond the memory queue size and logs it once`() {
         repeat(4) { collector.onExchange(failure()) }
+        collector.onExchange(exchange(callId = DROPPED))
+        collector.onExchange(failure(host = "blocked.com"))
         val queuedWhenFull = tasks.size
         tasks.removeFirst().run()
         collector.onExchange(failure())

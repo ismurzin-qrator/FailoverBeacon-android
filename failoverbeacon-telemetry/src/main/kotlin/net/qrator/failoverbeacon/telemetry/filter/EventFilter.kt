@@ -10,5 +10,5 @@ internal class EventFilter(
 ) {
     fun consentAllows(): Boolean = consentSource.consent != TrackingConsent.NOT_GRANTED
 
-    fun accepts(event: TelemetryEvent): Boolean = consentAllows() && event.host !in blockedHosts
+    fun accepts(event: TelemetryEvent): Boolean = event.host !in blockedHosts
 }

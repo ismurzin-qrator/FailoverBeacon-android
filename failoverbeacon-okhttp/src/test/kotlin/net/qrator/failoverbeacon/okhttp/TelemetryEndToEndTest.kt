@@ -107,7 +107,25 @@ class TelemetryEndToEndTest {
     }
 
     @Test
-    fun `uploadPeriod sets how long a batch file takes events`() {
+    fun `a batch file takes events for at most 10 seconds`() {
+        restart(FailoverBeaconOptions.Builder().build())
+
+        execute("a.test")
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(9))
+        execute("a.test")
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(1))
+        execute("a.test")
+
+        assertEquals(
+            listOf(2, 1),
+            beaconDir().listFiles()!!.sortedBy {
+                it.name
+            }.map { it.readLines().size }
+        )
+    }
+
+    @Test
+    fun `a shorter upload period sets how long a batch file takes events`() {
         restart(everySecond)
 
         execute("a.test")

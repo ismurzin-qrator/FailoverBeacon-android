@@ -20,7 +20,7 @@ class Telemetry(
         cacheDir = sdk.appContext::getCacheDir,
         beacons = beacons,
         clock = sdk.epochClock,
-        batchWindowMillis = uploadPeriodMillis,
+        batchWindowMillis = minOf(uploadPeriodMillis, MAX_BATCH_WINDOW_MILLIS),
         maxBytes = diskQueueBytes,
         dropped = dropped
     )
@@ -56,5 +56,9 @@ class Telemetry(
             uploadPeriodMillis,
             TimeUnit.MILLISECONDS
         )
+    }
+
+    private companion object {
+        const val MAX_BATCH_WINDOW_MILLIS = 10_000L
     }
 }
