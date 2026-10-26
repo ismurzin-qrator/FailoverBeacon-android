@@ -6,6 +6,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.ConsentSource
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
@@ -59,7 +60,14 @@ class TelemetryCollectorTest {
 
         val line = storedLines().single()
         assertEquals("a.com", JSONObject(line).getString("host"))
-        assertEquals(listOf(Log.DEBUG to "Telemetry event $line"), logs)
+        assertEquals(
+            listOf(Log.DEBUG to "[Telemetry] Event $line"),
+            logs.filter { it.second.startsWith("[Telemetry] Event ") }
+        )
+        assertTrue(
+            logs.indexOfFirst { it.second.startsWith("[Telemetry] Event ") } <
+                logs.indexOfFirst { it.second.startsWith("[Storage] Event stored: ") }
+        )
     }
 
     @Test
@@ -75,6 +83,13 @@ class TelemetryCollectorTest {
         assertEquals(2, tasks.size)
         assertEquals(1, logs.count { it.first == Log.WARN })
         assertEquals(mapOf(DropReason.MEMORY_OVERFLOW to 2L), dropped.snapshot(BEACON))
+        assertEquals(
+            2,
+            logs.count {
+                it.second ==
+                    "[Telemetry] Events dropped: beacons=all, reason=memory_overflow, count=1"
+            }
+        )
     }
 
     @Test

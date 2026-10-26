@@ -23,7 +23,7 @@ class SdkExecutor(name: String) :
 
     private fun logFailure(failure: Throwable) {
         SdkRegistry.logger.error(failure, onlyOnce = true) {
-            "SDK task failed. Further failures are not logged"
+            "[Core] SDK task failed. Further failures are not logged"
         }
     }
 }

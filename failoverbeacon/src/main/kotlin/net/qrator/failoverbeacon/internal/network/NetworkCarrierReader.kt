@@ -27,7 +27,7 @@ internal class NetworkCarrierReader(private val context: Context) {
                 networkType = networkType(manager)
             )
         } catch (e: Exception) {
-            SdkRegistry.logger.debug(e) { "Cannot read the carrier" }
+            SdkRegistry.logger.debug(e) { "[Network] Cannot read the carrier" }
             null
         }
     }

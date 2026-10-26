@@ -12,6 +12,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.logging.LogOutput
@@ -46,18 +47,26 @@ class TelemetryUploaderTest {
     private val storage = storage(listOf(beacon))
     private val uploader = uploader(listOf(beacon), storage)
     private val previousOutput = SdkRegistry.logger.output
+    private val previousLevel = SdkRegistry.logger.minLevel
     private val warnings = CopyOnWriteArrayList<String>()
+    private val debug = CopyOnWriteArrayList<String>()
 
     @BeforeTest
     fun setUp() {
-        SdkRegistry.logger.output =
-            LogOutput { level, message, _ -> if (level == Log.WARN) warnings += message }
+        SdkRegistry.logger.minLevel = Log.WARN
+        SdkRegistry.logger.output = LogOutput { level, message, _ ->
+            when (level) {
+                Log.WARN -> warnings += message
+                Log.DEBUG -> debug += message
+            }
+        }
     }
 
     @AfterTest
     fun tearDown() {
         server.shutdown()
         SdkRegistry.logger.output = previousOutput
+        SdkRegistry.logger.minLevel = previousLevel
         SdkRegistry.clear()
     }
 
@@ -74,6 +83,7 @@ class TelemetryUploaderTest {
         assertEquals(listOf(listOf(metadata, "one", "two")), requests().map { it.lines })
         assertEquals(emptyList(), storedFiles())
         assertEquals(emptyMap(), dropped.snapshot(beacon))
+        assertEquals(emptyList(), debug)
     }
 
     @Test
@@ -200,6 +210,7 @@ class TelemetryUploaderTest {
 
     @Test
     fun `rejected events are dropped, logged and counted as send errors`() {
+        SdkRegistry.logger.minLevel = Log.DEBUG
         respond(400, 307, 202)
 
         listOf("one", "two", "three").forEach { line ->
@@ -215,16 +226,32 @@ class TelemetryUploaderTest {
         assertEquals(emptyList(), storedFiles())
         assertEquals(
             listOf(
-                "Beacon ${server.hostName} rejected events with code 400. Events are dropped",
-                "Beacon ${server.hostName} rejected events with code 307. Events are dropped"
+                "[Upload] Beacon ${server.hostName} rejected events with code 400",
+                "[Upload] Beacon ${server.hostName} rejected events with code 307"
             ),
             warnings
+        )
+        assertEquals(
+            1,
+            (debug + warnings).count {
+                it.contains("code 400") ||
+                    it.contains("code=400")
+            }
+        )
+        assertEquals(
+            3,
+            debug.count {
+                it.startsWith("[Storage] Batch deletion:") &&
+                    it.endsWith("deleted=true")
+            }
         )
     }
 
     @Test
     fun `a gone beacon gets nothing more`() {
+        SdkRegistry.logger.minLevel = Log.DEBUG
         writeInNewBatches("one")
+        val directory = assertNotNull(storedFiles().single().parentFile).name
         respond(410)
 
         uploader.upload()
@@ -234,8 +261,13 @@ class TelemetryUploaderTest {
         assertEquals(1, server.requestCount)
         assertEquals(emptyList(), storedFiles())
         assertEquals(
-            listOf("Beacon ${server.hostName} is gone. Events are no longer sent to it"),
+            listOf("[Upload] Beacon ${server.hostName} is gone. Events are no longer sent to it"),
             warnings
+        )
+        assertTrue(
+            debug.contains(
+                "[Storage] Directory removed: directory=$directory, deleted=true"
+            )
         )
     }
 
@@ -308,6 +340,7 @@ class TelemetryUploaderTest {
 
     @Test
     fun `an interrupted thread sends nothing`() {
+        SdkRegistry.logger.minLevel = Log.DEBUG
         writeInNewBatches("one")
 
         Thread.currentThread().interrupt()
@@ -318,6 +351,105 @@ class TelemetryUploaderTest {
         }
 
         assertEquals(0, server.requestCount)
+        assertTrue(
+            debug.contains("[Upload] Paused: reason=interrupted")
+        )
+    }
+
+    @Test
+    fun `debug links stored files and reported losses to their upload and deletion`() {
+        writeInNewBatches("one", "two")
+        val files = storedFiles().sortedBy {
+            it.name
+        }.map { "${assertNotNull(it.parentFile).name}/${it.name}" }
+        dropped.add(beacon, DropReason.EXPIRED, 3)
+        respond(202)
+        SdkRegistry.logger.minLevel = Log.DEBUG
+
+        uploader.upload()
+
+        assertTrue(
+            debug.contains(
+                "[Upload] Batch: host=${server.hostName}, files=$files, events=2, reported_dropped={expired=3}"
+            )
+        )
+        assertEquals(
+            2,
+            debug.count {
+                it.startsWith("[Storage] Batch deletion:") &&
+                    it.endsWith("deleted=true")
+            }
+        )
+        assertEquals(
+            listOf("[Upload] Accepted: host=${server.hostName}, code=202"),
+            debug.filter {
+                it.contains("code=")
+            }
+        )
+        assertEquals(emptyList(), storedFiles())
+        assertEquals(listOf("one", "two"), requests().single().events)
+        assertTrue(debug.none { it.contains("/events") })
+    }
+
+    @Test
+    fun `debug explains empty queue, network, consent and retry waits`() {
+        SdkRegistry.logger.minLevel = Log.DEBUG
+        uploader.upload()
+        writeInNewBatches("one")
+        network = NetworkSnapshot.None
+        uploader.upload()
+        network = NetworkSnapshot.Unknown
+        consent.consent = TrackingConsent.PENDING
+        uploader.upload()
+        consent.consent = TrackingConsent.GRANTED
+        respond(503, 503)
+
+        repeat(3) { uploader.upload() }
+
+        for (reason in listOf("no_ready_batches", "backoff")) {
+            assertTrue(debug.contains("[Upload] Skipped: host=${server.hostName}, reason=$reason"))
+        }
+        for (reason in listOf("network_unavailable", "consent")) {
+            assertTrue(debug.contains("[Upload] Paused: reason=$reason"))
+        }
+        assertEquals(
+            2,
+            debug.count {
+                it == "[Upload] Retained: host=${server.hostName}, code=503"
+            }
+        )
+        assertEquals(2, debug.count { it.contains("code=") })
+        assertEquals(2, server.requestCount)
+        assertEquals(1, storedFiles().size)
+        assertTrue(debug.none { it.startsWith("[Storage] Batch deletion:") })
+    }
+
+    @Test
+    fun `debug distinguishes two beacon paths on the same host`() {
+        val beacons = listOf(beacon, server.url("/other?token=private").toString())
+        val storage = storage(beacons)
+        val uploader = uploader(beacons, storage)
+        writeInNewBatches("one", storage = storage)
+        val files = storedFiles().map { "${assertNotNull(it.parentFile).name}/${it.name}" }
+        respond(202, 202)
+        SdkRegistry.logger.minLevel = Log.DEBUG
+
+        uploader.upload()
+
+        assertEquals(2, server.requestCount)
+        for (file in files) {
+            assertEquals(1, debug.count { it.startsWith("[Upload] Batch:") && it.contains(file) })
+        }
+        assertEquals(
+            listOf("/events", "/other?token=private"),
+            List(2) { assertNotNull(server.takeRequest(5, TimeUnit.SECONDS)).path }
+        )
+        assertTrue(
+            debug.none {
+                it.contains("/events") || it.contains("other") ||
+                    it.contains("private")
+            }
+        )
     }
 
     private fun storage(beacons: List<String>) =

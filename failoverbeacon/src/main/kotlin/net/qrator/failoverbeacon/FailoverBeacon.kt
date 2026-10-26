@@ -42,19 +42,21 @@ public object FailoverBeacon {
         val appContext = context.applicationContext ?: context
         val processDetector = AndroidMainProcessDetector(appContext)
         if (!processDetector.isMainProcess()) {
-            SdkRegistry.logger.warn { "Not the main process. SDK is inactive" }
+            SdkRegistry.logger.warn { "[SDK] Not in the main process. SDK is inactive" }
             return
         }
         var started: Boolean? = null
         catchSdkFailure(
-            onFailure = { SdkRegistry.logger.error(it) { "Cannot start the SDK. SDK is inactive" } }
+            onFailure = {
+                SdkRegistry.logger.error(it) { "[SDK] Cannot start the SDK. SDK is inactive" }
+            }
         ) {
             started = SdkStartup.start(appContext, toTrackingConsent(consent), config)
         }
         when (started) {
             null -> return
             false -> SdkRegistry.logger.warn { ALREADY_INITIALIZED }
-            true -> SdkRegistry.logger.info { "SDK initialized" }
+            true -> SdkRegistry.logger.info { "[SDK] Initialized" }
         }
     }
 
@@ -66,7 +68,7 @@ public object FailoverBeacon {
     public fun setConsent(consent: Consent) {
         val instance = SdkRegistry.instance
         if (instance == null) {
-            SdkRegistry.logger.warn { "SDK is not running. setConsent ignored" }
+            SdkRegistry.logger.warn { "[SDK] Not running. setConsent ignored" }
             return
         }
         instance.applyConsent(toTrackingConsent(consent))
@@ -77,7 +79,7 @@ public object FailoverBeacon {
     public fun clearAllData() {
         val instance = SdkRegistry.instance
         if (instance == null) {
-            SdkRegistry.logger.warn { "SDK is not running. clearAllData ignored" }
+            SdkRegistry.logger.warn { "[SDK] Not running. clearAllData ignored" }
             return
         }
         instance.clearData()
@@ -91,7 +93,7 @@ public object FailoverBeacon {
     @JvmStatic
     public fun stop() {
         if (SdkRegistry.instance == null) {
-            SdkRegistry.logger.warn { "SDK is not running. stop ignored" }
+            SdkRegistry.logger.warn { "[SDK] Not running. stop ignored" }
             return
         }
         SdkRegistry.clear()
@@ -124,5 +126,5 @@ public object FailoverBeacon {
         Consent.NOT_GRANTED -> TrackingConsent.NOT_GRANTED
     }
 
-    private const val ALREADY_INITIALIZED = "Already initialized. Ignored"
+    private const val ALREADY_INITIALIZED = "[SDK] Already initialized. Ignored"
 }

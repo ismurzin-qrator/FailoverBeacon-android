@@ -41,7 +41,12 @@ internal class TelemetryCollector(
         val samplingFraction = sampler.sample(event) ?: return
         if (!memoryQueueSlots.tryAcquire()) {
             dropped.addToAll(DropReason.MEMORY_OVERFLOW, 1)
-            SdkRegistry.logger.warn(onlyOnce = true) { "Memory queue is full. Events are dropped" }
+            SdkRegistry.logger.debug {
+                "[Telemetry] Events dropped: beacons=all, reason=memory_overflow, count=1"
+            }
+            SdkRegistry.logger.warn(onlyOnce = true) {
+                "[Telemetry] Memory queue is full. Events are dropped"
+            }
             return
         }
         executor.execute {
@@ -67,7 +72,7 @@ internal class TelemetryCollector(
     private fun store(event: TelemetryEvent, samplingFraction: Double) {
         if (!filter.consentAllows()) return
         val json = serializer.toJson(event, samplingFraction)
+        SdkRegistry.logger.debug { "[Telemetry] Event $json" }
         storage.write(json)
-        SdkRegistry.logger.debug { "Telemetry event $json" }
     }
 }

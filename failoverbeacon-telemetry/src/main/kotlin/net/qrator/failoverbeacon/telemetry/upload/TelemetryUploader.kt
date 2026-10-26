@@ -39,19 +39,34 @@ internal class TelemetryUploader(
     }
 
     private fun upload(beacon: String) {
+        val host = hosts.getValue(beacon)
         val backoff = backoff.getValue(beacon)
-        if (!backoff.canAttempt(pass)) return
+        if (!backoff.canAttempt(pass)) {
+            SdkRegistry.logger.debug { "[Upload] Skipped: host=$host, reason=backoff" }
+            return
+        }
         var batches = storage.readyBatches(beacon)
+        if (batches.isEmpty()) {
+            SdkRegistry.logger.debug { "[Upload] Skipped: host=$host, reason=no_ready_batches" }
+        }
         while (batches.isNotEmpty() && canSend()) {
             val request = nextRequest(batches)
             val events = request.map(storage::read).filter { it.isNotEmpty() }
             if (events.isNotEmpty()) {
                 val reported = dropped.snapshot(beacon)
+                SdkRegistry.logger.debug {
+                    "[Upload] Batch: host=$host, " +
+                        "files=${request.map { "${it.parentFile?.name}/${it.name}" }}, " +
+                        "events=${events.sumOf { it.lineCount() }}, " +
+                        "reported_dropped=${reported.mapKeys { it.key.code }}"
+                }
                 val code = client.post(beacon, body(events, reported))
-                SdkRegistry.logger.debug { "Events sent to ${hosts[beacon]}: $code" }
                 when {
                     code == null || isRetryable(code) -> {
                         backoff.onFailure(pass)
+                        SdkRegistry.logger.debug {
+                            "[Upload] Retained: host=$host, code=$code"
+                        }
                         return
                     }
 
@@ -63,10 +78,13 @@ internal class TelemetryUploader(
                     code in HTTP_SUCCESS -> {
                         dropped.subtract(beacon, reported)
                         backoff.onSuccess()
+                        SdkRegistry.logger.debug { "[Upload] Accepted: host=$host, code=$code" }
                     }
 
                     else -> reject(beacon, code, events)
                 }
+            } else {
+                SdkRegistry.logger.debug { "[Upload] Skipped: host=$host, reason=empty_batches" }
             }
             storage.delete(request)
             batches = batches.drop(request.size)
@@ -79,7 +97,7 @@ internal class TelemetryUploader(
     private fun reject(beacon: String, code: Int, events: List<ByteArray>) {
         dropped.add(beacon, DropReason.SEND_ERROR, events.sumOf { it.lineCount() }.toLong())
         SdkRegistry.logger.warn(onlyOnce = true) {
-            "Beacon ${hosts[beacon]} rejected events with code $code. Events are dropped"
+            "[Upload] Beacon ${hosts[beacon]} rejected events with code $code"
         }
     }
 
@@ -88,13 +106,20 @@ internal class TelemetryUploader(
     private fun removeBeacon(beacon: String) {
         storageExecutor.execute { storage.removeBeacon(beacon) }
         SdkRegistry.logger.warn(onlyOnce = true) {
-            "Beacon ${hosts[beacon]} is gone. Events are no longer sent to it"
+            "[Upload] Beacon ${hosts[beacon]} is gone. Events are no longer sent to it"
         }
     }
 
-    private fun canSend(): Boolean = consentSource.consent == TrackingConsent.GRANTED &&
-        hasNetwork() &&
-        !Thread.currentThread().isInterrupted
+    private fun canSend(): Boolean {
+        val reason = when {
+            consentSource.consent != TrackingConsent.GRANTED -> "consent"
+            !hasNetwork() -> "network_unavailable"
+            Thread.currentThread().isInterrupted -> "interrupted"
+            else -> return true
+        }
+        SdkRegistry.logger.debug { "[Upload] Paused: reason=$reason" }
+        return false
+    }
 
     private fun hasNetwork(): Boolean = when (val network = networkSource.currentNetwork()) {
         NetworkSnapshot.None -> false

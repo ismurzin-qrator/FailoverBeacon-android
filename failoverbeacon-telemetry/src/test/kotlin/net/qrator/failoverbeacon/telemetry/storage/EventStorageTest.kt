@@ -6,6 +6,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.LogOutput
@@ -19,19 +20,26 @@ class EventStorageTest {
     val temp = TemporaryFolder()
 
     private val previousOutput = SdkRegistry.logger.output
+    private val previousLevel = SdkRegistry.logger.minLevel
     private val logged = mutableListOf<Int>()
+    private val messages = mutableListOf<String>()
     private var now = START
     private val dropped = DroppedEvents(listOf(A, B))
     private val storage = newStorage(A, B)
 
     @BeforeTest
     fun setUp() {
-        SdkRegistry.logger.output = LogOutput { level, _, _ -> logged += level }
+        SdkRegistry.logger.minLevel = Log.WARN
+        SdkRegistry.logger.output = LogOutput { level, message, _ ->
+            logged += level
+            messages += message
+        }
     }
 
     @AfterTest
     fun tearDown() {
         SdkRegistry.logger.output = previousOutput
+        SdkRegistry.logger.minLevel = previousLevel
         SdkRegistry.clear()
     }
 
@@ -230,6 +238,90 @@ class EventStorageTest {
         assertEquals(setOf(B_DIR), rootDir().list()?.toSet())
         assertEquals(listOf(listOf("one", "two")), batches(B_DIR))
         assertEquals(emptyList(), storage.readyBatches(A))
+    }
+
+    @Test
+    fun `debug writes distinguish beacons on one host and name the actual files`() {
+        SdkRegistry.logger.minLevel = Log.DEBUG
+        val first = "https://same.example/a?token=private"
+        val second = "https://same.example/b?token=private"
+        val storage = newStorage(first, second)
+
+        storage.write("one")
+
+        val directories = rootDir().listFiles()!!.map { it.name }
+        assertEquals(2, directories.size)
+        for (id in directories) {
+            val batch = files(id).single()
+            assertEquals("one\n", batch.readText())
+            assertTrue(
+                messages.contains(
+                    "[Storage] Event stored: file=$id/${batch.name}, bytes=4, batch_bytes=4"
+                )
+            )
+        }
+        assertFalse(messages.any { it.contains("same.example") || it.contains("private") })
+    }
+
+    @Test
+    fun `a failed write has no stored confirmation for that beacon`() {
+        storage.write("one")
+        val batch = files(A_DIR).single()
+        batch.delete()
+        batch.mkdir()
+        SdkRegistry.logger.minLevel = Log.DEBUG
+        messages.clear()
+
+        storage.write("two")
+
+        assertFalse(messages.any { it.startsWith("[Storage] Event stored: file=$A_DIR/") })
+        assertTrue(messages.any { it.startsWith("[Storage] Event stored: file=$B_DIR/") })
+        assertEquals(listOf(listOf("one", "two")), batches(B_DIR))
+    }
+
+    @Test
+    fun `deletion diagnostics reflect success and failure`() {
+        storage.write("one")
+        val batch = files(A_DIR).single()
+        val failing = object : File(batch.path) {
+            override fun delete(): Boolean = false
+        }
+        SdkRegistry.logger.minLevel = Log.DEBUG
+        messages.clear()
+
+        storage.delete(listOf(failing))
+
+        assertTrue(batch.exists())
+        assertTrue(messages.contains("[Storage] Cannot delete a stored batch"))
+        assertTrue(
+            messages.contains(
+                "[Storage] Batch deletion: file=$A_DIR/${batch.name}, deleted=false"
+            )
+        )
+        assertFalse(messages.any { it.contains("deleted=true") })
+
+        storage.delete(listOf(batch))
+
+        assertFalse(batch.exists())
+        assertTrue(messages.last().endsWith("deleted=true"))
+    }
+
+    @Test
+    fun `expired batch diagnostics report the actual discarded line count`() {
+        val dir = File(rootDir(), A_DIR).apply { mkdirs() }
+        val expired = File(dir, (START - EIGHTEEN_HOURS).toString())
+        expired.writeText("one\ntwo\n")
+        SdkRegistry.logger.minLevel = Log.DEBUG
+
+        storage.write("new")
+
+        assertFalse(expired.exists())
+        assertEquals(mapOf(DropReason.EXPIRED to 2L), dropped.snapshot(A))
+        assertTrue(
+            messages.contains(
+                "[Storage] Events dropped: file=$A_DIR/${expired.name}, reason=expired, count=2"
+            )
+        )
     }
 
     private fun newStorage(vararg beacons: String, maxBytes: Long = 5L * 1024 * 1024) =

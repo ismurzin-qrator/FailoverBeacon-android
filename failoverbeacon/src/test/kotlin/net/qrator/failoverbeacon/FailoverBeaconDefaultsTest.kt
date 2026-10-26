@@ -18,6 +18,6 @@ class FailoverBeaconDefaultsTest {
 
         val log = ShadowLog.getLogsForTag("FailoverBeacon").single()
         assertEquals(Log.WARN, log.type)
-        assertEquals("SDK is not running. setConsent ignored", log.msg)
+        assertEquals("[SDK] Not running. setConsent ignored", log.msg)
     }
 }

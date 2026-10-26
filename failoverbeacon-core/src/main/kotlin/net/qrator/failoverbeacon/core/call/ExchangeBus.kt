@@ -31,7 +31,7 @@ class ExchangeBus :
 
     private fun logFailure(failure: Throwable) {
         SdkRegistry.logger.error(failure, onlyOnce = true) {
-            "Exchange subscriber failed. Further failures are not logged"
+            "[Core] Exchange subscriber failed. Further failures are not logged"
         }
     }
 }

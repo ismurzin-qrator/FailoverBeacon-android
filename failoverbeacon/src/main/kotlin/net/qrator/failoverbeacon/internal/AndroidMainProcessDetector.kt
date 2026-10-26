@@ -19,7 +19,7 @@ internal class AndroidMainProcessDetector(private val context: Context) {
         if (Process.myUid() != context.applicationInfo.uid) return false
         val current = currentProcessName()
         if (current == null) {
-            SdkRegistry.logger.debug { "Process name is unknown. Assuming the main process" }
+            SdkRegistry.logger.debug { "[SDK] Process name is unknown. Assuming the main process" }
             return true
         }
         return current == context.applicationInfo.processName
@@ -34,7 +34,7 @@ internal class AndroidMainProcessDetector(private val context: Context) {
                 ?.firstOrNull { it.pid == pid }
                 ?.processName
         } catch (e: Exception) {
-            SdkRegistry.logger.debug(e) { "Cannot read running app processes" }
+            SdkRegistry.logger.debug(e) { "[SDK] Cannot read running app processes" }
             null
         }
     }

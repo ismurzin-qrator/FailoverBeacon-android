@@ -188,8 +188,8 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
         )
     }
 
+    // NEL names protocols by ALPN ID.
     private fun Protocol.alpnId(): String =
-        // NEL names protocols by ALPN ID
         if (this == Protocol.H2_PRIOR_KNOWLEDGE) Protocol.HTTP_2.toString() else toString()
 
     /** Whether this thread was in a handshake, which has now ended. */
@@ -208,11 +208,11 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
         if (failure is LinkageError) {
             incompatible = true
             SdkRegistry.logger.error(failure, onlyOnce = true) {
-                "OkHttp version is incompatible with the SDK. New calls are not observed"
+                "[OkHttp] Version is incompatible with the SDK. New calls are not observed"
             }
         } else {
             SdkRegistry.logger.error(failure, onlyOnce = true) {
-                "Recording an OkHttp call failed. Further failures are not logged"
+                "[OkHttp] Recording a call failed. Further failures are not logged"
             }
         }
     }

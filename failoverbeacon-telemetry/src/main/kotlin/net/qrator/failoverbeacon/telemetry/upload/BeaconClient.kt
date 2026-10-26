@@ -13,6 +13,9 @@ internal class BeaconClient {
         val gzipped = gzip(body)
         var connection: HttpURLConnection? = null
         val url = URL(url)
+        SdkRegistry.logger.debug {
+            "[Upload] Body: bytes=${body.size}, gzip_bytes=${gzipped.size}"
+        }
         return try {
             connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
@@ -26,7 +29,7 @@ internal class BeaconClient {
             connection.outputStream.use { it.write(gzipped) }
             connection.responseCode.also { connection.closeResponse(it) }
         } catch (e: IOException) {
-            SdkRegistry.logger.debug(e) { "Cannot send events to ${url.host}" }
+            SdkRegistry.logger.debug(e) { "[Upload] Cannot send events to ${url.host}" }
             null
         } finally {
             connection?.disconnect()
@@ -43,7 +46,7 @@ internal class BeaconClient {
         try {
             (if (code < HTTP_BAD_REQUEST) inputStream else errorStream)?.close()
         } catch (e: IOException) {
-            SdkRegistry.logger.debug(e) { "Cannot close the response of ${url.host}" }
+            SdkRegistry.logger.debug(e) { "[Upload] Cannot close the response of ${url.host}" }
         }
     }
 

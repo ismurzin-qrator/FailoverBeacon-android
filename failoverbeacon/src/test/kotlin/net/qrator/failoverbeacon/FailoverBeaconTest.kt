@@ -102,7 +102,7 @@ class FailoverBeaconTest {
         assertSame(first, SdkRegistry.instance)
         assertEquals(TrackingConsent.PENDING, SdkRegistry.instance?.consent)
         assertSame<Any?>(first?.networkSource, networkCallbacks().single())
-        assertEquals(listOf(Log.WARN to "Already initialized. Ignored"), logs)
+        assertEquals(listOf(Log.WARN to "[SDK] Already initialized. Ignored"), logs)
     }
 
     @Test
@@ -123,7 +123,7 @@ class FailoverBeaconTest {
         FailoverBeacon.initialize(app, config)
 
         assertNull(SdkRegistry.instance)
-        assertEquals(listOf(Log.WARN to "Not the main process. SDK is inactive"), logs)
+        assertEquals(listOf(Log.WARN to "[SDK] Not in the main process. SDK is inactive"), logs)
     }
 
     @Test
@@ -134,7 +134,7 @@ class FailoverBeaconTest {
 
         assertEquals(
             listOf("setConsent", "clearAllData", "stop").map {
-                Log.WARN to "SDK is not running. $it ignored"
+                Log.WARN to "[SDK] Not running. $it ignored"
             },
             logs
         )
@@ -211,7 +211,10 @@ class FailoverBeaconTest {
         FailoverBeacon.initialize(context, config)
 
         assertNull(SdkRegistry.instance)
-        assertTrue(logs.contains(Log.ERROR to "Cannot start the SDK. SDK is inactive"), "$logs")
+        assertTrue(
+            logs.contains(Log.ERROR to "[SDK] Cannot start the SDK. SDK is inactive"),
+            "$logs"
+        )
     }
 
     @Test

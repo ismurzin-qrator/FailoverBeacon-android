@@ -49,7 +49,7 @@ class TelemetryEndToEndTest {
         server.start(LOOPBACK, 0)
         FailoverBeacon.setLogLevel(Log.DEBUG)
         FailoverBeacon.setLogger { _, message, _ ->
-            if (message.startsWith(EVENT_PREFIX)) events += message
+            if (message.startsWith("$EVENT_PREFIX ")) events += message
         }
         val config = FailoverBeaconConfig.Builder()
             .beacons(listOf("https://beacon.example"))
@@ -286,7 +286,7 @@ class TelemetryEndToEndTest {
     }
 
     private companion object {
-        const val EVENT_PREFIX = "Telemetry event"
+        const val EVENT_PREFIX = "[Telemetry] Event"
         const val EXAMPLE_BEACON_DIR = "2f7cbe9a31e83f24"
         const val SECRET = "s3cr3t"
         val LOOPBACK: InetAddress = InetAddress.getByName("127.0.0.1")

@@ -85,7 +85,7 @@ class CallRecordingEventListenerTest {
 
         assertTrue(CallRecordingEventListener.incompatible)
         assertEquals(
-            "OkHttp version is incompatible with the SDK. New calls are not observed",
+            "[OkHttp] Version is incompatible with the SDK. New calls are not observed",
             logs.single().first
         )
     }

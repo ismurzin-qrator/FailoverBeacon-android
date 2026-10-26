@@ -37,7 +37,7 @@ internal class EventStorage(
             } catch (e: Exception) {
                 openBatches.remove(beacon)
                 SdkRegistry.logger.warn(e, onlyOnce = true) {
-                    "Cannot write an event to disk"
+                    "[Storage] Cannot write an event to disk"
                 }
             }
         }
@@ -57,26 +57,30 @@ internal class EventStorage(
         val bytes = try {
             batch.readBytes()
         } catch (e: IOException) {
-            SdkRegistry.logger.debug(e) { "Cannot read stored events" }
+            SdkRegistry.logger.debug(e) { "[Storage] Cannot read stored events" }
             return ByteArray(0)
         }
         return bytes.copyOf(bytes.lastIndexOf(NEW_LINE) + 1)
     }
 
-    fun delete(batches: List<File>) {
-        batches.forEach(File::delete)
-    }
+    fun delete(batches: List<File>) = batches.forEach { deleteBatch(it) }
 
     fun removeBeacon(beacon: String) {
         writtenBeacons -= beacon
         openBatches.remove(beacon)
-        beaconDir(beacon).deleteRecursively()
+        val dir = beaconDir(beacon)
+        val deleted = dir.deleteRecursively()
+        SdkRegistry.logger.debug {
+            "[Storage] Directory removed: directory=${dir.name}, deleted=$deleted"
+        }
     }
 
     fun clear() {
         openBatches.clear()
-        if (!rootDir.deleteRecursively()) {
-            SdkRegistry.logger.warn { "Cannot delete the stored events" }
+        val deleted = rootDir.deleteRecursively()
+        SdkRegistry.logger.debug { "[Storage] Cleared: deleted=$deleted" }
+        if (!deleted) {
+            SdkRegistry.logger.warn { "[Storage] Cannot delete the stored events" }
         }
     }
 
@@ -94,6 +98,10 @@ internal class EventStorage(
             }
         }
         batch.size += bytes.size
+        SdkRegistry.logger.debug {
+            "[Storage] Event stored: file=${batch.file.parentFile?.name}/${batch.file.name}, " +
+                "bytes=${bytes.size}, batch_bytes=${batch.size}"
+        }
     }
 
     private fun newBatchFile(beacon: String, now: Long): File {
@@ -114,25 +122,40 @@ internal class EventStorage(
                 now - created >= MAX_AGE_MILLIS ||
                 created - now > CLOCK_TOLERANCE_MILLIS
             if (!expired && size + maxBatchBytes <= beaconMaxBytes) continue
-            size -= batch.length()
+            val bytes = batch.length()
             val lines = read(batch).count { it == NEW_LINE }.toLong()
-            batch.delete()
-            dropped.add(
-                beacon,
-                if (expired) DropReason.EXPIRED else DropReason.DISK_OVERFLOW,
-                lines
-            )
+            val reason = if (expired) DropReason.EXPIRED else DropReason.DISK_OVERFLOW
+            if (!deleteBatch(batch)) continue
+            size -= bytes
+            dropped.add(beacon, reason, lines)
             SdkRegistry.logger.debug {
-                if (expired) "Expired events dropped" else "Disk queue is full. Old events dropped"
+                "[Storage] Events dropped: file=${batch.parentFile?.name}/${batch.name}, " +
+                    "reason=${reason.code}, count=$lines"
             }
         }
+    }
+
+    private fun deleteBatch(batch: File): Boolean {
+        val deleted = batch.delete()
+        SdkRegistry.logger.debug {
+            "[Storage] Batch deletion: file=${batch.parentFile?.name}/${batch.name}, deleted=$deleted"
+        }
+        if (!deleted) {
+            SdkRegistry.logger.warn(onlyOnce = true) { "[Storage] Cannot delete a stored batch" }
+        }
+        return deleted
     }
 
     private fun beaconDir(beacon: String) = File(rootDir, beaconDirNames.getValue(beacon))
 
     private fun deleteRemovedBeacons(root: File) {
         val kept = beaconDirNames.values.toSet()
-        root.listFiles()?.filter { it.name !in kept }?.forEach { it.deleteRecursively() }
+        root.listFiles()?.filter { it.name !in kept }?.forEach { dir ->
+            val deleted = dir.deleteRecursively()
+            SdkRegistry.logger.debug {
+                "[Storage] Directory removed: directory=${dir.name}, deleted=$deleted"
+            }
+        }
     }
 
     private inner class OpenBatch(val file: File) {

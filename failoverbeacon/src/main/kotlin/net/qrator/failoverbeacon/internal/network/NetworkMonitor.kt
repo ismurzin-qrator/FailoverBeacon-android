@@ -29,7 +29,9 @@ internal class NetworkMonitor(context: Context) :
     fun register() {
         val manager = connectivityManager
         if (manager == null) {
-            SdkRegistry.logger.warn { "Cannot watch the network. ConnectivityManager is null" }
+            SdkRegistry.logger.warn {
+                "[Network] Cannot watch the network. ConnectivityManager is null"
+            }
             return
         }
         try {
@@ -37,7 +39,7 @@ internal class NetworkMonitor(context: Context) :
             manager.registerDefaultNetworkCallback(this)
             if (offline) snapshot.compareAndSet(NetworkSnapshot.Unknown, NetworkSnapshot.None)
         } catch (e: Exception) {
-            SdkRegistry.logger.warn(e) { "Cannot watch the network. Network is unknown" }
+            SdkRegistry.logger.warn(e) { "[Network] Cannot watch the network. Network is unknown" }
         }
     }
 
@@ -70,7 +72,7 @@ internal class NetworkMonitor(context: Context) :
         try {
             connectivityManager?.unregisterNetworkCallback(this)
         } catch (e: Exception) {
-            SdkRegistry.logger.warn(e) { "Cannot stop watching the network" }
+            SdkRegistry.logger.warn(e) { "[Network] Cannot stop watching the network" }
         }
     }
 }
