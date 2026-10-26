@@ -4,6 +4,7 @@ import java.net.URISyntaxException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 
 class FailoverBeaconConfigTest {
@@ -43,6 +44,15 @@ class FailoverBeaconConfigTest {
                 FailoverBeaconConfig.Builder().beacons(listOf(url))
             }
         }
+    }
+
+    @Test
+    fun `beacons rejects user info without repeating it`() {
+        val e = assertFailsWith<IllegalArgumentException> {
+            FailoverBeaconConfig.Builder().beacons(listOf("https://user:s3cr3t@beacon.example"))
+        }
+
+        assertFalse("s3cr3t" in e.message.orEmpty(), e.message)
     }
 
     @Test

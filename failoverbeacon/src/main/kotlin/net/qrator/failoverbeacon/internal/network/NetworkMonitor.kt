@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
+import java.util.concurrent.atomic.AtomicReference
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.warn
 import net.qrator.failoverbeacon.core.network.NetworkSource
@@ -20,11 +21,10 @@ internal class NetworkMonitor(context: Context) :
     private val carrierReader = NetworkCarrierReader(context)
     private val snapshotMapper = NetworkSnapshotMapper()
 
-    @Volatile
-    private var snapshot: NetworkSnapshot = NetworkSnapshot.Unknown
+    private val snapshot = AtomicReference<NetworkSnapshot>(NetworkSnapshot.Unknown)
     private var state = NetworkState()
 
-    override fun currentNetwork(): NetworkSnapshot = snapshot
+    override fun currentNetwork(): NetworkSnapshot = snapshot.get()
 
     fun register() {
         val manager = connectivityManager
@@ -33,7 +33,9 @@ internal class NetworkMonitor(context: Context) :
             return
         }
         try {
+            val offline = manager.activeNetwork == null
             manager.registerDefaultNetworkCallback(this)
+            if (offline) snapshot.compareAndSet(NetworkSnapshot.Unknown, NetworkSnapshot.None)
         } catch (e: Exception) {
             SdkRegistry.logger.warn(e) { "Cannot watch the network. Network is unknown" }
         }
@@ -51,17 +53,17 @@ internal class NetworkMonitor(context: Context) :
         state.capabilities = capabilities
         val cellular = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
         state.carrier = if (cellular) carrierReader.read() else null
-        snapshot = snapshotMapper.toSnapshot(state)
+        snapshot.set(snapshotMapper.toSnapshot(state))
     }
 
     override fun onBlockedStatusChanged(network: Network, blocked: Boolean) {
         state.blocked = blocked
-        snapshot = snapshotMapper.toSnapshot(state)
+        snapshot.set(snapshotMapper.toSnapshot(state))
     }
 
     override fun onLost(network: Network) {
         state = NetworkState()
-        snapshot = NetworkSnapshot.None
+        snapshot.set(NetworkSnapshot.None)
     }
 
     override fun close() {

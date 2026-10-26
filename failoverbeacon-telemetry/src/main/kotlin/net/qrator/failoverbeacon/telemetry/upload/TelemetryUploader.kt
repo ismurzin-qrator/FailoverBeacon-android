@@ -3,6 +3,7 @@ package net.qrator.failoverbeacon.telemetry.upload
 import android.net.TrafficStats
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.net.URI
 import java.util.concurrent.Executor
 import net.qrator.failoverbeacon.core.ConsentSource
 import net.qrator.failoverbeacon.core.SdkRegistry
@@ -28,6 +29,7 @@ internal class TelemetryUploader(
 ) {
     private val client = BeaconClient()
     private val backoff = beacons.associateWith { BeaconBackoff() }
+    private val hosts = beacons.associateWith { URI(it).host }
     private var pass = 0L
 
     fun upload() {
@@ -46,7 +48,7 @@ internal class TelemetryUploader(
             if (events.isNotEmpty()) {
                 val reported = dropped.snapshot(beacon)
                 val code = client.post(beacon, body(events, reported))
-                SdkRegistry.logger.debug { "Events sent to $beacon: $code" }
+                SdkRegistry.logger.debug { "Events sent to ${hosts[beacon]}: $code" }
                 when {
                     code == null || isRetryable(code) -> {
                         backoff.onFailure(pass)
@@ -77,7 +79,7 @@ internal class TelemetryUploader(
     private fun reject(beacon: String, code: Int, events: List<ByteArray>) {
         dropped.add(beacon, DropReason.SEND_ERROR, events.sumOf { it.lineCount() }.toLong())
         SdkRegistry.logger.warn(onlyOnce = true) {
-            "Beacon $beacon rejected events with code $code. Events are dropped"
+            "Beacon ${hosts[beacon]} rejected events with code $code. Events are dropped"
         }
     }
 
@@ -86,7 +88,7 @@ internal class TelemetryUploader(
     private fun removeBeacon(beacon: String) {
         storageExecutor.execute { storage.removeBeacon(beacon) }
         SdkRegistry.logger.warn(onlyOnce = true) {
-            "Beacon $beacon is gone. Events are no longer sent to it"
+            "Beacon ${hosts[beacon]} is gone. Events are no longer sent to it"
         }
     }
 

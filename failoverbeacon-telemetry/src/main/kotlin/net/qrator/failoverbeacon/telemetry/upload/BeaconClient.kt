@@ -12,8 +12,9 @@ internal class BeaconClient {
     fun post(url: String, body: ByteArray): Int? {
         val gzipped = gzip(body)
         var connection: HttpURLConnection? = null
+        val url = URL(url)
         return try {
-            connection = URL(url).openConnection() as HttpURLConnection
+            connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.connectTimeout = CONNECT_TIMEOUT_MILLIS
             connection.readTimeout = READ_TIMEOUT_MILLIS
@@ -25,7 +26,7 @@ internal class BeaconClient {
             connection.outputStream.use { it.write(gzipped) }
             connection.responseCode.also { connection.closeResponse(it) }
         } catch (e: IOException) {
-            SdkRegistry.logger.debug(e) { "Cannot send events to $url" }
+            SdkRegistry.logger.debug(e) { "Cannot send events to ${url.host}" }
             null
         } finally {
             connection?.disconnect()
@@ -42,7 +43,7 @@ internal class BeaconClient {
         try {
             (if (code < HTTP_BAD_REQUEST) inputStream else errorStream)?.close()
         } catch (e: IOException) {
-            SdkRegistry.logger.debug(e) { "Cannot close the response of $url" }
+            SdkRegistry.logger.debug(e) { "Cannot close the response of ${url.host}" }
         }
     }
 

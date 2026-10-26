@@ -215,8 +215,8 @@ class TelemetryUploaderTest {
         assertEquals(emptyList(), storedFiles())
         assertEquals(
             listOf(
-                "Beacon $beacon rejected events with code 400. Events are dropped",
-                "Beacon $beacon rejected events with code 307. Events are dropped"
+                "Beacon ${server.hostName} rejected events with code 400. Events are dropped",
+                "Beacon ${server.hostName} rejected events with code 307. Events are dropped"
             ),
             warnings
         )
@@ -233,7 +233,10 @@ class TelemetryUploaderTest {
 
         assertEquals(1, server.requestCount)
         assertEquals(emptyList(), storedFiles())
-        assertEquals(listOf("Beacon $beacon is gone. Events are no longer sent to it"), warnings)
+        assertEquals(
+            listOf("Beacon ${server.hostName} is gone. Events are no longer sent to it"),
+            warnings
+        )
     }
 
     @Test

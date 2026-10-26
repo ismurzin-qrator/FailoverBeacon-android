@@ -36,7 +36,7 @@ public class FailoverBeaconConfig private constructor(
          * independently of the others. Duplicate URLs are ignored.
          *
          * @throws IllegalArgumentException if [beacons] is empty or contains a URL that is not an
-         *     `https://` URL with a host.
+         *     `https://` URL with a host, or that contains user info.
          */
         public fun beacons(beacons: List<String>): Builder = apply {
             require(beacons.isNotEmpty()) { "beacons must not be empty" }
@@ -109,6 +109,7 @@ public class FailoverBeaconConfig private constructor(
                 } catch (e: URISyntaxException) {
                     throw IllegalArgumentException("Invalid beacon URL: $url", e)
                 }
+                require(uri.rawUserInfo == null) { "Beacon URL must not contain user info" }
                 require(uri.scheme.equals("https", ignoreCase = true)) {
                     "Beacon URL must use https: $url"
                 }

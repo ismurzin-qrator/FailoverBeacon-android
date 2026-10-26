@@ -280,6 +280,22 @@ class NetworkMonitorTest {
     }
 
     @Test
+    fun `without a default network at start the network is none, with one it waits for it`() {
+        val connectivity = shadowOf(app.getSystemService(ConnectivityManager::class.java))
+        monitor.register()
+        val withNetwork = monitor.currentNetwork()
+        monitor.close()
+        connectivity.setActiveNetworkInfo(null)
+        val offline = NetworkMonitor(app)
+
+        offline.register()
+
+        assertEquals(NetworkSnapshot.Unknown, withNetwork)
+        assertEquals(NetworkSnapshot.None, offline.currentNetwork())
+        offline.close()
+    }
+
+    @Test
     @Config(shadows = [RefusingConnectivityManager::class])
     fun `a refused registration leaves the network unknown and is logged`() {
         val logged = mutableListOf<Throwable?>()
