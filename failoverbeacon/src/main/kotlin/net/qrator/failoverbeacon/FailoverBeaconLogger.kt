@@ -3,8 +3,9 @@ package net.qrator.failoverbeacon
 /**
  * Receives log messages from the SDK in place of Logcat.
  *
- * Messages never contain request paths, query strings, headers, or bodies. At
- * [android.util.Log.DEBUG] they may contain host names, server IP addresses, and error types.
+ * Messages never contain request paths, query strings, headers, or bodies. Warnings may name a
+ * beacon host. At [android.util.Log.DEBUG] the SDK also logs each event it stores, in full: host
+ * names, IP addresses, DNS answers, TLS details, network type and carrier.
  */
 public fun interface FailoverBeaconLogger {
     /**

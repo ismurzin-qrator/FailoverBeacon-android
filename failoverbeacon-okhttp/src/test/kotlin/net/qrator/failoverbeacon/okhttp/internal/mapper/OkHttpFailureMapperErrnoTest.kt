@@ -11,7 +11,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [24, 36])
+@Config(sdk = [24, 37])
 class OkHttpFailureMapperErrnoTest {
     @Test
     fun `maps errno as Chromium does`() {
