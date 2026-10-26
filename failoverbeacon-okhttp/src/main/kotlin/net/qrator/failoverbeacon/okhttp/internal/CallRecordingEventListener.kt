@@ -182,11 +182,15 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
             scheme = route.address.url.scheme,
             serverAddress = route.address.url.host,
             serverPort = route.address.url.port,
-            protocol = connection.protocol().toString(),
+            protocol = connection.protocol().alpnId(),
             proxy = proxyTypeMapper.toProxyType(route.proxy),
             tls = connection.handshake()?.let { tlsMapper.toTls(it, connection.socket()) }
         )
     }
+
+    private fun Protocol.alpnId(): String =
+        // NEL names protocols by ALPN ID
+        if (this == Protocol.H2_PRIOR_KNOWLEDGE) Protocol.HTTP_2.toString() else toString()
 
     /** Whether this thread was in a handshake, which has now ended. */
     private fun endHandshake(): Boolean {

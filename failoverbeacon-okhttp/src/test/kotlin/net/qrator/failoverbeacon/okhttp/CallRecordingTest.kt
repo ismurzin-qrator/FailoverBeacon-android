@@ -385,6 +385,19 @@ class CallRecordingTest {
     }
 
     @Test
+    fun `HTTP 2 without TLS is recorded as h2`() {
+        server.protocols = listOf(Protocol.H2_PRIOR_KNOWLEDGE)
+        server.enqueue(MockResponse().setBody("ok"))
+        val client = client().protocols(listOf(Protocol.H2_PRIOR_KNOWLEDGE)).build()
+
+        execute(client)
+
+        val exchange = exchanges.single()
+        assertEquals("h2", exchange.connection?.protocol)
+        assertEquals("http", exchange.request.scheme)
+    }
+
+    @Test
     fun `an HTTPS call records the handshake`() {
         server.useHttps(serverCertificates.sslSocketFactory(), false)
         server.enqueue(MockResponse().setBody("secure"))
