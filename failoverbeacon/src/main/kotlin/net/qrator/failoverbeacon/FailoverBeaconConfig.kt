@@ -1,9 +1,8 @@
 package net.qrator.failoverbeacon
 
-import java.net.IDN
 import java.net.URI
 import java.net.URISyntaxException
-import java.util.Locale
+import net.qrator.failoverbeacon.internal.util.canonicalHost
 
 /**
  * SDK configuration passed to `FailoverBeacon.initialize`.
@@ -49,13 +48,17 @@ public class FailoverBeaconConfig private constructor(
         /**
          * Sets hosts whose requests are never reported, for example
          * `listOf("analytics.example")`. Names match exactly and ignore case; subdomains don't
-         * match. Pass host names without a port: `"analytics.example:443"` never matches.
-         * By default, no hosts are blocked.
+         * match. IPv4 addresses are allowed. By default, no hosts are blocked.
          *
-         * @throws IllegalArgumentException if a host is blank, is a URL or is not a valid name.
+         * @throws IllegalArgumentException if a host is blank, is a URL, has a port or is not a
+         * valid name.
          */
         public fun blockedHosts(hosts: List<String>): Builder = apply {
-            blockedHosts = hosts.mapTo(LinkedHashSet(), ::toAsciiHost)
+            blockedHosts = hosts.mapTo(LinkedHashSet()) {
+                requireNotNull(canonicalHost(it)) {
+                    "blockedHosts must contain host names without port, was \"$it\""
+                }
+            }
         }
 
         /**
@@ -134,13 +137,6 @@ public class FailoverBeaconConfig private constructor(
                     "Beacon URL must use https: $url"
                 }
                 require(!uri.host.isNullOrEmpty()) { "Beacon URL must have a host: $url" }
-            }
-
-            private fun toAsciiHost(host: String): String {
-                require(host.isNotBlank() && host.none { it == '/' || it.isWhitespace() }) {
-                    "blockedHosts must contain host names, was \"$host\""
-                }
-                return IDN.toASCII(host).lowercase(Locale.ROOT)
             }
 
             private fun checkSampleRate(name: String, rate: Double): Double {
