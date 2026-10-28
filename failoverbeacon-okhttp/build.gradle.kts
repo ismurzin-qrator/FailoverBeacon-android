@@ -13,6 +13,7 @@ dependencies {
     implementation(project(":failoverbeacon-core"))
     compileOnly(libs.squareup.okhttp)
 
+    testImplementation(project(":failoverbeacon-telemetry"))
     testImplementation(libs.squareup.mockwebserver)
     testImplementation(libs.squareup.okhttp.tls)
 }

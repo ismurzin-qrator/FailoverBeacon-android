@@ -7,8 +7,6 @@ import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.call.ExchangeBus
 import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
 import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
-import net.qrator.failoverbeacon.core.thread.SdkExecutor
-import net.qrator.failoverbeacon.core.thread.SdkScheduledExecutor
 
 /** Installs an SDK whose exchanges go to [subscribers]; without one, calls are not recorded. */
 fun installSdk(
@@ -27,9 +25,7 @@ fun installSdk(
             epochClock = { startTimeMillis },
             exchangeBus = bus,
             networkSource = { network },
-            foregroundSource = { foreground },
-            storageExecutor = SdkExecutor("test"),
-            uploadExecutor = SdkScheduledExecutor("test-upload")
+            foregroundSource = { foreground }
         )
     )
 }

@@ -8,8 +8,6 @@ import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.app.ForegroundSource
 import net.qrator.failoverbeacon.core.call.ExchangeBus
-import net.qrator.failoverbeacon.core.thread.SdkExecutor
-import net.qrator.failoverbeacon.core.thread.SdkScheduledExecutor
 import net.qrator.failoverbeacon.internal.app.ForegroundMonitor
 import net.qrator.failoverbeacon.internal.network.NetworkMonitor
 import net.qrator.failoverbeacon.internal.time.ElapsedRealtimeEpochClock
@@ -32,9 +30,7 @@ internal object SdkStartup {
             epochClock = ElapsedRealtimeEpochClock(),
             exchangeBus = ExchangeBus(),
             networkSource = networkMonitor,
-            foregroundSource = foregroundMonitor ?: ForegroundSource { null },
-            storageExecutor = SdkExecutor("storage"),
-            uploadExecutor = SdkScheduledExecutor("upload")
+            foregroundSource = foregroundMonitor ?: ForegroundSource { null }
         )
         val telemetry = Telemetry(
             sdk = sdk,

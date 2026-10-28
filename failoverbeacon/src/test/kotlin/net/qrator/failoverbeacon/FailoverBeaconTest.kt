@@ -20,11 +20,12 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
-import net.qrator.failoverbeacon.core.DataOwner
+import net.qrator.failoverbeacon.core.SdkFeature
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.internal.LogcatLogger
 import net.qrator.failoverbeacon.internal.SdkStartup
+import net.qrator.failoverbeacon.telemetry.Telemetry
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
@@ -170,8 +171,8 @@ class FailoverBeaconTest {
     fun `stop stops the SDK thread and the watchers until the next initialize`() {
         FailoverBeacon.initialize(app, config)
         val foreground = SdkRegistry.instance?.foregroundSource
-        val executor = SdkRegistry.instance?.storageExecutor
-        val uploadExecutor = SdkRegistry.instance?.uploadExecutor
+        val executor = telemetry().storageExecutor
+        val uploadExecutor = telemetry().uploadExecutor
 
         FailoverBeacon.stop()
         Robolectric.buildActivity(Activity::class.java).setup()
@@ -180,12 +181,30 @@ class FailoverBeaconTest {
         FailoverBeacon.initialize(app, config)
 
         assertNull(stopped)
-        assertEquals(true, executor?.isShutdown)
-        assertEquals(true, uploadExecutor?.isShutdown)
+        assertEquals(true, executor.isShutdown)
+        assertEquals(true, uploadExecutor.isShutdown)
         assertEquals(emptySet(), callbacksAfterStop)
         assertEquals(false, foreground?.isForeground())
         assertNotNull(SdkRegistry.instance)
         assertEquals(1, networkCallbacks().size)
+    }
+
+    @Test
+    fun `stop finishes when a feature fails to close`() {
+        FailoverBeacon.initialize(app, config)
+        val instance = assertNotNull(SdkRegistry.instance)
+        val executor = telemetry().storageExecutor
+        instance.addFeature(
+            object : SdkFeature {
+                override fun close(): Unit = throw IllegalStateException("broken feature")
+            }
+        )
+
+        FailoverBeacon.stop()
+
+        assertNull(SdkRegistry.instance)
+        assertTrue(executor.isShutdown)
+        assertEquals(emptySet(), networkCallbacks())
     }
 
     @Test
@@ -279,7 +298,7 @@ class FailoverBeaconTest {
     fun `withdrawn consent right before stop still deletes stored events`() {
         FailoverBeacon.initialize(app, config)
         val event = storeEvent()
-        val executor = assertNotNull(SdkRegistry.instance).storageExecutor
+        val executor = telemetry().storageExecutor
         val release = CountDownLatch(1)
         executor.execute { release.await() }
 
@@ -296,13 +315,11 @@ class FailoverBeaconTest {
         FailoverBeacon.initialize(app, config)
         val instance = assertNotNull(SdkRegistry.instance)
         val published = CopyOnWriteArrayList<TrackingConsent>()
-        instance.addDataOwner(
-            object : DataOwner {
+        instance.addFeature(
+            object : SdkFeature {
                 override fun onConsentChanged(consent: TrackingConsent) {
                     published += consent
                 }
-
-                override fun clearData() = Unit
             }
         )
 
@@ -341,8 +358,11 @@ class FailoverBeaconTest {
         }
 
     private fun awaitSdkThread() {
-        assertNotNull(SdkRegistry.instance).storageExecutor.submit {}.get(5, TimeUnit.SECONDS)
+        telemetry().storageExecutor.submit {}.get(5, TimeUnit.SECONDS)
     }
+
+    private fun telemetry() =
+        assertNotNull(SdkRegistry.instance).features.filterIsInstance<Telemetry>().single()
 
     private fun networkCallbacks() =
         shadowOf(app.getSystemService(ConnectivityManager::class.java)).networkCallbacks.toSet()

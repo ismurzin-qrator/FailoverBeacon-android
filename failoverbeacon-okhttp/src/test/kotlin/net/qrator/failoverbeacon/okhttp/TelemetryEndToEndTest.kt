@@ -21,6 +21,7 @@ import net.qrator.failoverbeacon.FailoverBeacon
 import net.qrator.failoverbeacon.FailoverBeaconConfig
 import net.qrator.failoverbeacon.FailoverBeaconOptions
 import net.qrator.failoverbeacon.core.SdkRegistry
+import net.qrator.failoverbeacon.telemetry.Telemetry
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
@@ -96,7 +97,7 @@ class TelemetryEndToEndTest {
     fun `keeps at most memoryQueueSize events waiting for the SDK thread`() {
         restart(FailoverBeaconOptions.Builder().memoryQueueSize(1).build())
         val release = CountDownLatch(1)
-        assertNotNull(SdkRegistry.instance).storageExecutor.execute { release.await() }
+        telemetry().storageExecutor.execute { release.await() }
 
         call("a.test")
         call("a.test")
@@ -276,12 +277,15 @@ class TelemetryEndToEndTest {
         File(app.cacheDir, "failoverbeacon").walk().filter { it.isFile }.toList()
 
     private fun awaitSdkThread() {
-        val executor = assertNotNull(SdkRegistry.instance).storageExecutor
+        val executor = telemetry().storageExecutor
         executor.submit {}.get(5, TimeUnit.SECONDS)
     }
 
+    private fun telemetry() =
+        assertNotNull(SdkRegistry.instance).features.filterIsInstance<Telemetry>().single()
+
     private fun awaitUploadThread() {
-        val executor = assertNotNull(SdkRegistry.instance).uploadExecutor
+        val executor = telemetry().uploadExecutor
         executor.submit {}.get(5, TimeUnit.SECONDS)
     }
 

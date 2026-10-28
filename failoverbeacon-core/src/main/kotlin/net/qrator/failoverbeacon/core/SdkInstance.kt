@@ -1,15 +1,15 @@
 package net.qrator.failoverbeacon.core
 
 import android.content.Context
-import java.io.Closeable
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.ScheduledExecutorService
 import net.qrator.failoverbeacon.core.app.ForegroundSource
 import net.qrator.failoverbeacon.core.call.ExchangeBus
+import net.qrator.failoverbeacon.core.logging.error
 import net.qrator.failoverbeacon.core.network.NetworkSource
 import net.qrator.failoverbeacon.core.time.EpochClock
 import net.qrator.failoverbeacon.core.time.MonotonicClock
+import net.qrator.failoverbeacon.core.util.catchSdkFailure
+import java.io.Closeable
+import java.util.concurrent.CopyOnWriteArrayList
 
 class SdkInstance(
     val appContext: Context,
@@ -18,19 +18,19 @@ class SdkInstance(
     val epochClock: EpochClock,
     val exchangeBus: ExchangeBus,
     val networkSource: NetworkSource,
-    val foregroundSource: ForegroundSource,
-    val storageExecutor: ExecutorService,
-    val uploadExecutor: ScheduledExecutorService
+    val foregroundSource: ForegroundSource
 ) : ConsentSource,
     Closeable {
     @Volatile
     override var consent: TrackingConsent = consent
         private set
 
-    private val dataOwners = CopyOnWriteArrayList<DataOwner>()
+    private val featureList = CopyOnWriteArrayList<SdkFeature>()
 
-    fun addDataOwner(owner: DataOwner) {
-        dataOwners += owner
+    val features: List<SdkFeature> get() = featureList
+
+    fun addFeature(feature: SdkFeature) {
+        featureList += feature
     }
 
     fun applyConsent(consent: TrackingConsent) {
@@ -40,18 +40,23 @@ class SdkInstance(
 
     fun publishConsent() {
         val consent = consent
-        dataOwners.forEach { it.onConsentChanged(consent) }
+        featureList.forEach { it.onConsentChanged(consent) }
     }
 
     fun clearData() {
-        dataOwners.forEach { it.clearData() }
+        featureList.forEach { it.clearData() }
     }
 
     override fun close() {
         exchangeBus.close()
-        storageExecutor.shutdown()
-        uploadExecutor.shutdownNow()
+        featureList.forEach { feature ->
+            catchSdkFailure(::logStopFailure) { feature.close() }
+        }
         networkSource.close()
         foregroundSource.close()
+    }
+
+    private fun logStopFailure(failure: Throwable) {
+        SdkRegistry.logger.error(failure) { "[Core] Cannot stop an SDK feature" }
     }
 }

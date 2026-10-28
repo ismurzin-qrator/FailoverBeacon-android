@@ -3,7 +3,6 @@ package net.qrator.failoverbeacon.telemetry
 import java.util.concurrent.Executor
 import java.util.concurrent.Semaphore
 import net.qrator.failoverbeacon.core.ConsentSource
-import net.qrator.failoverbeacon.core.DataOwner
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
@@ -26,8 +25,7 @@ internal class TelemetryCollector(
     private val executor: Executor,
     private val storage: EventStorage,
     private val dropped: DroppedEvents
-) : ExchangeSubscriber,
-    DataOwner {
+) : ExchangeSubscriber {
     private val eventMapper = TelemetryEventMapper()
     private val filter = EventFilter(consentSource, blockedHosts)
     private val sampler = Sampler(failureSampleRate, successSampleRate)
@@ -58,11 +56,11 @@ internal class TelemetryCollector(
         }
     }
 
-    override fun onConsentChanged(consent: TrackingConsent) {
+    fun onConsentChanged(consent: TrackingConsent) {
         if (consent == TrackingConsent.NOT_GRANTED) clearData()
     }
 
-    override fun clearData() {
+    fun clearData() {
         executor.execute {
             storage.clear()
             dropped.clear()
