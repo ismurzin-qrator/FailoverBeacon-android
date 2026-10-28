@@ -16,6 +16,7 @@ class FailoverBeaconConfigTest {
         assertEquals(emptySet(), config.blockedHosts)
         assertEquals(1.0, config.failureSampleRate)
         assertEquals(0.1, config.successSampleRate)
+        assertEquals(emptyList(), config.failoverHosts)
     }
 
     @Test
@@ -107,6 +108,31 @@ class FailoverBeaconConfigTest {
             assertFailsWith<IllegalArgumentException>(host) {
                 builderWithBeacon().blockedHosts(listOf(host))
             }
+        }
+    }
+
+    @Test
+    fun `failoverHosts keeps hosts in order and is a copy of the given list`() {
+        val api = FailoverHost("api.example")
+        val cdn = FailoverHost("cdn.example", 8443)
+        val hosts = mutableListOf(api, cdn)
+
+        val config = builderWithBeacon().failoverHosts(hosts).build()
+        hosts.clear()
+
+        assertEquals(listOf(api, cdn), config.failoverHosts)
+    }
+
+    @Test
+    fun `failoverHosts rejects the same host twice in any form`() {
+        val repeats =
+            listOf(
+                listOf(FailoverHost("api.example"), FailoverHost("api.example", 8443)),
+                listOf(FailoverHost("api.example"), FailoverHost("API.example")),
+                listOf(FailoverHost("Пример.рф"), FailoverHost("xn--e1afmkfd.xn--p1ai"))
+            )
+        for (hosts in repeats) {
+            assertFailsWith<IllegalArgumentException> { builderWithBeacon().failoverHosts(hosts) }
         }
     }
 

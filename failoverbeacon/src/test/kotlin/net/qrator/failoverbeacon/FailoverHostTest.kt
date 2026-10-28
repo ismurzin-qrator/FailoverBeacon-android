@@ -1,0 +1,115 @@
+package net.qrator.failoverbeacon
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+
+class FailoverHostTest {
+    @Test
+    fun `defaults match documented values`() {
+        val host = FailoverHost("api.example")
+
+        assertEquals("api.example", host.host)
+        assertEquals(443, host.port)
+        assertEquals(emptyList(), host.additionalAddresses)
+        assertTrue(host.probeConnections)
+    }
+
+    @Test
+    fun `host is kept in lowercase ASCII, internationalized names in either form`() {
+        assertEquals("api.example", FailoverHost("Api.EXAMPLE").host)
+        assertEquals("xn--e1afmkfd.xn--p1ai", FailoverHost("Пример.РФ").host)
+        assertEquals("xn--e1afmkfd.xn--p1ai", FailoverHost("xn--e1afmkfd.xn--p1ai").host)
+    }
+
+    @Test
+    fun `host rejects urls, ports, paths, user info and malformed names`() {
+        val hosts =
+            listOf(
+                "",
+                " ",
+                " api.example",
+                "https://api.example",
+                "api.example:443",
+                "api.example/path",
+                "user@api.example",
+                "api example",
+                "api<1>.example",
+                "api^.example",
+                "api|.example",
+                "api.example.",
+                ".api.example",
+                "api..example",
+                "a".repeat(64) + ".example",
+                "a.".repeat(127) + "example"
+            )
+        for (host in hosts) {
+            assertFailsWith<IllegalArgumentException>(host) { FailoverHost(host) }
+        }
+    }
+
+    @Test
+    fun `host rejects IP addresses`() {
+        for (host in listOf("192.0.2.10", "1.2.3", "api.0x1F", "[::1]", "::1")) {
+            assertFailsWith<IllegalArgumentException>(host) { FailoverHost(host) }
+        }
+    }
+
+    @Test
+    fun `port accepts 1 to 65535`() {
+        assertEquals(1, FailoverHost("api.example", 1).port)
+        assertEquals(65535, FailoverHost("api.example", 65535).port)
+        for (port in listOf(0, -1, 65536)) {
+            assertFailsWith<IllegalArgumentException>("$port") { FailoverHost("api.example", port) }
+        }
+    }
+
+    @Test
+    fun `additionalAddresses accepts IPv4 and drops duplicates in order`() {
+        val host = FailoverHost(
+            "api.example",
+            additionalAddresses = listOf("192.0.2.10", "0.0.0.0", "255.255.255.255", "192.0.2.10")
+        )
+
+        assertEquals(
+            listOf<String?>("192.0.2.10", "0.0.0.0", "255.255.255.255"),
+            host.additionalAddresses.map { it.hostAddress }
+        )
+        assertTrue(host.additionalAddresses.all { it.hostName == "api.example" })
+    }
+
+    @Test
+    fun `additionalAddresses rejects values that are not IPv4 addresses`() {
+        val addresses =
+            listOf(
+                "",
+                "256.0.0.1",
+                "1.2.3",
+                "1.2.3.4.5",
+                "01.2.3.4",
+                "1.2.3.4:443",
+                " 1.2.3.4",
+                "+1.2.3.4",
+                "::1",
+                "2001:db8::1",
+                "api.example",
+                "١.٢.٣.٤"
+            )
+        for (address in addresses) {
+            assertFailsWith<IllegalArgumentException>(address) {
+                FailoverHost("api.example", additionalAddresses = listOf(address))
+            }
+        }
+    }
+
+    @Test
+    fun `additionalAddresses is a copy of the given list`() {
+        val addresses = mutableListOf("192.0.2.10")
+        val host = FailoverHost("api.example", additionalAddresses = addresses)
+
+        addresses += "192.0.2.11"
+
+        assertEquals(listOf<String?>("192.0.2.10"), host.additionalAddresses.map { it.hostAddress })
+    }
+}

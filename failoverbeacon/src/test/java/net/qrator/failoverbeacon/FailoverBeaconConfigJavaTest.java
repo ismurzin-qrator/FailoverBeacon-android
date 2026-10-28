@@ -2,6 +2,7 @@ package net.qrator.failoverbeacon;
 
 import static org.junit.Assert.assertThrows;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 import org.junit.Test;
@@ -20,6 +21,13 @@ public final class FailoverBeaconConfigJavaTest {
                 .blockedHosts(Collections.singletonList("analytics.example"))
                 .failureSampleRate(1.0)
                 .successSampleRate(0.05)
+                .failoverHosts(Arrays.asList(
+                        new FailoverHost("api.example"),
+                        new FailoverHost("api2.example", 8443),
+                        new FailoverHost("api3.example", 443,
+                                Collections.singletonList("192.0.2.10")),
+                        new FailoverHost("partner.example", 443,
+                                Collections.<String>emptyList(), false)))
                 .options(options)
                 .build();
     }
@@ -31,5 +39,6 @@ public final class FailoverBeaconConfigJavaTest {
         assertThrows(IllegalArgumentException.class,
                 () -> builder.beacons(Collections.singletonList("http://beacon.example")));
         assertThrows(IllegalArgumentException.class, builder::build);
+        assertThrows(IllegalArgumentException.class, () -> new FailoverHost("api.example", 0));
     }
 }

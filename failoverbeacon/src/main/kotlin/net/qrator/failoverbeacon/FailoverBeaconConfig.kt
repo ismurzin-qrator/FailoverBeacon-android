@@ -20,6 +20,7 @@ public class FailoverBeaconConfig private constructor(
     internal val blockedHosts: Set<String>,
     internal val failureSampleRate: Double,
     internal val successSampleRate: Double,
+    internal val failoverHosts: List<FailoverHost>,
     internal val options: FailoverBeaconOptions
 ) {
     /** Builds [FailoverBeaconConfig]. [beacons] is required; other setters are optional. */
@@ -28,6 +29,7 @@ public class FailoverBeaconConfig private constructor(
         private var blockedHosts: Set<String> = emptySet()
         private var failureSampleRate = DEFAULT_FAILURE_SAMPLE_RATE
         private var successSampleRate = DEFAULT_SUCCESS_SAMPLE_RATE
+        private var failoverHosts: List<FailoverHost> = emptyList()
         private var options: FailoverBeaconOptions? = null
 
         /**
@@ -81,6 +83,20 @@ public class FailoverBeaconConfig private constructor(
             successSampleRate = checkSampleRate("successSampleRate", rate)
         }
 
+        /**
+         * Sets hosts for connection optimization and failover, for example
+         * `listOf(FailoverHost("api.example.com"))`. By default, the list is empty.
+         *
+         * @throws IllegalArgumentException if [hosts] contains duplicate host names.
+         */
+        public fun failoverHosts(hosts: List<FailoverHost>): Builder = apply {
+            val names = HashSet<String>()
+            hosts.forEach {
+                require(names.add(it.host)) { "failoverHosts contains \"${it.host}\" twice" }
+            }
+            failoverHosts = hosts.toList()
+        }
+
         /** Sets additional options. By default, every option has its default value. */
         public fun options(options: FailoverBeaconOptions): Builder = apply {
             this.options = options
@@ -98,6 +114,7 @@ public class FailoverBeaconConfig private constructor(
                 blockedHosts = blockedHosts,
                 failureSampleRate = failureSampleRate,
                 successSampleRate = successSampleRate,
+                failoverHosts = failoverHosts,
                 options = options ?: FailoverBeaconOptions.Builder().build()
             )
         }
