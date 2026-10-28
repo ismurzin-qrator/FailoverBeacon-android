@@ -1,11 +1,11 @@
 package net.qrator.failoverbeacon.okhttp.internal
 
+import java.net.InetAddress
+import java.net.UnknownHostException
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.error
 import net.qrator.failoverbeacon.core.util.catchSdkFailure
 import okhttp3.Dns
-import java.net.InetAddress
-import java.net.UnknownHostException
 
 internal class FailoverBeaconDns(private val delegate: Dns) : Dns {
     override fun lookup(hostname: String): List<InetAddress> {
