@@ -93,7 +93,14 @@ class FailoverBeaconConfigTest {
     }
 
     @Test
-    fun `blockedHosts rejects blank names, urls and invalid names`() {
+    fun `blockedHosts accepts IPv4 addresses`() {
+        val config = builderWithBeacon().blockedHosts(listOf("192.0.2.10")).build()
+
+        assertEquals(setOf("192.0.2.10"), config.blockedHosts)
+    }
+
+    @Test
+    fun `blockedHosts rejects blank names, urls, ports and invalid names`() {
         val tooLongLabel = "a".repeat(64) + ".example"
         val hosts =
             listOf(
@@ -102,6 +109,9 @@ class FailoverBeaconConfigTest {
                 "https://analytics.example",
                 "analytics.example/path",
                 "a b",
+                "analytics.example:443",
+                "user@analytics.example",
+                "analytics.example.",
                 tooLongLabel
             )
         for (host in hosts) {

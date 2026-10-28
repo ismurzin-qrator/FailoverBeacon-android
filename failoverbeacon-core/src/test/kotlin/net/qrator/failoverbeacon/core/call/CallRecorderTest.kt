@@ -140,7 +140,7 @@ class CallRecorderTest {
     }
 
     @Test
-    fun `a connect OkHttp dropped before the winner started is a failure`() {
+    fun `a connect dropped before the winner started is a failure`() {
         start()
         at(0) { connectStart("1.1.1.1", 443, ProxyType.DIRECT) }
         at(100) { connectFailed("1.1.1.1", CLOSED, stop = ConnectStopReason.CLIENT) }
@@ -159,7 +159,7 @@ class CallRecorderTest {
     }
 
     @Test
-    fun `a connect OkHttp dropped during a failed handshake is superseded by it`() {
+    fun `a connect dropped during a failed handshake is superseded by it`() {
         start()
         at(0) { connectStart("1.1.1.3", 443, ProxyType.DIRECT) }
         at(20) { connectFailed("1.1.1.3", CLOSED, stop = ConnectStopReason.CLIENT) }
