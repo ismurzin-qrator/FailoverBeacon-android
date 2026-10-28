@@ -103,6 +103,19 @@ class WithFailoverBeaconTest {
         assertSame(original.dispatcher, client.dispatcher)
     }
 
+    @Test
+    fun `copies of one client reuse each other's pooled connections`() {
+        server.enqueue(MockResponse().setBody("ok"))
+        server.enqueue(MockResponse().setBody("ok"))
+        val original = OkHttpClient()
+
+        execute(original.withFailoverBeacon())
+        execute(original.withFailoverBeacon())
+
+        server.takeRequest()
+        assertEquals(1, server.takeRequest().sequenceNumber)
+    }
+
     private fun clientWith(listener: EventListener): OkHttpClient =
         OkHttpClient.Builder().eventListenerFactory { listener }.build()
 

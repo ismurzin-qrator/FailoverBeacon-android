@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import ru.vyarus.gradle.plugin.animalsniffer.AnimalSnifferExtension
 import ru.vyarus.gradle.plugin.animalsniffer.signature.BuildSignatureTask
 
@@ -27,4 +29,9 @@ configure<AnimalSnifferExtension> {
     excludeJars = listOf("okhttp-*")
     ignore = listOf("java.*", "javax.*", "android.*")
     annotation = "net.qrator.failoverbeacon.okhttp.internal.util.SuppressSignatureCheck"
+}
+
+// Disables default method compatibility bridges to avoid referencing APIs present only in newer versions.
+tasks.withType<KotlinCompile>().configureEach {
+    compilerOptions.jvmDefault.set(JvmDefaultMode.NO_COMPATIBILITY)
 }

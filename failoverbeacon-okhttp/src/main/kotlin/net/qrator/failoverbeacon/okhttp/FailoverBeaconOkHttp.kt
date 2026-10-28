@@ -3,6 +3,7 @@
 package net.qrator.failoverbeacon.okhttp
 
 import net.qrator.failoverbeacon.FailoverBeacon
+import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconDns
 import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconEventListenerFactory
 import okhttp3.OkHttpClient
 
@@ -18,5 +19,6 @@ public fun OkHttpClient.withFailoverBeacon(): OkHttpClient {
     if (eventListenerFactory is FailoverBeaconEventListenerFactory) return this
     return newBuilder()
         .eventListenerFactory(FailoverBeaconEventListenerFactory(eventListenerFactory))
+        .dns(FailoverBeaconDns(dns))
         .build()
 }
