@@ -1,15 +1,16 @@
 package net.qrator.failoverbeacon.core
 
 import android.content.Context
+import java.io.Closeable
+import java.util.concurrent.CopyOnWriteArrayList
 import net.qrator.failoverbeacon.core.app.ForegroundSource
 import net.qrator.failoverbeacon.core.call.ExchangeBus
+import net.qrator.failoverbeacon.core.dns.SdkDns
 import net.qrator.failoverbeacon.core.logging.error
 import net.qrator.failoverbeacon.core.network.NetworkSource
 import net.qrator.failoverbeacon.core.time.EpochClock
 import net.qrator.failoverbeacon.core.time.MonotonicClock
 import net.qrator.failoverbeacon.core.util.catchSdkFailure
-import java.io.Closeable
-import java.util.concurrent.CopyOnWriteArrayList
 
 class SdkInstance(
     val appContext: Context,
@@ -24,6 +25,9 @@ class SdkInstance(
     @Volatile
     override var consent: TrackingConsent = consent
         private set
+
+    @Volatile
+    var dns: SdkDns? = null
 
     private val featureList = CopyOnWriteArrayList<SdkFeature>()
 

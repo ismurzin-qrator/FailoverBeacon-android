@@ -23,6 +23,7 @@ import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkFeature
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
+import net.qrator.failoverbeacon.failover.Failover
 import net.qrator.failoverbeacon.internal.LogcatLogger
 import net.qrator.failoverbeacon.internal.SdkStartup
 import net.qrator.failoverbeacon.telemetry.Telemetry
@@ -205,6 +206,34 @@ class FailoverBeaconTest {
         assertNull(SdkRegistry.instance)
         assertTrue(executor.isShutdown)
         assertEquals(emptySet(), networkCallbacks())
+    }
+
+    @Test
+    fun `failover runs without hosts and stops with the SDK`() {
+        FailoverBeacon.initialize(app, config)
+        val instance = assertNotNull(SdkRegistry.instance)
+
+        FailoverBeacon.stop()
+
+        assertEquals(1, instance.features.filterIsInstance<Failover>().size)
+    }
+
+    @Test
+    fun `failover gives the transport the addresses of its hosts only`() {
+        val failoverConfig = FailoverBeaconConfig.Builder()
+            .beacons(listOf("https://beacon.example"))
+            .failoverHosts(
+                listOf(FailoverHost("localhost", additionalAddresses = listOf("192.0.2.10")))
+            )
+            .build()
+        FailoverBeacon.initialize(app, failoverConfig)
+        val dns = assertNotNull(SdkRegistry.instance?.dns)
+
+        val configured = dns.onResolveFailed("localhost")
+        val outside = dns.onResolveFailed("other.example")
+
+        assertEquals(listOf<String?>("192.0.2.10"), configured?.map { it.hostAddress })
+        assertNull(outside)
     }
 
     @Test

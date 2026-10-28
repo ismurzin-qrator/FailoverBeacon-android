@@ -9,5 +9,6 @@ android {
 
 dependencies {
     implementation(project(":failoverbeacon-core"))
+    implementation(project(":failoverbeacon-failover"))
     implementation(project(":failoverbeacon-telemetry"))
 }

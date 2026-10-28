@@ -1,5 +1,6 @@
 package net.qrator.failoverbeacon.telemetry
 
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import net.qrator.failoverbeacon.core.SdkFeature
 import net.qrator.failoverbeacon.core.SdkInstance
@@ -19,7 +20,13 @@ class Telemetry(
     private val uploadPeriodMillis: Long,
     diskQueueBytes: Long
 ) : SdkFeature {
-    val storageExecutor = SdkExecutor("storage")
+    val storageExecutor = SdkExecutor(
+        name = "storage",
+        coreThreads = 1,
+        maxThreads = 1,
+        keepAliveMillis = 0,
+        queue = LinkedBlockingQueue()
+    )
     val uploadExecutor = SdkScheduledExecutor("upload")
     private val dropped = DroppedEvents(beacons)
     private val storage = EventStorage(

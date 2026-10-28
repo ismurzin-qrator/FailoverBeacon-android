@@ -8,6 +8,9 @@ import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.app.ForegroundSource
 import net.qrator.failoverbeacon.core.call.ExchangeBus
+import net.qrator.failoverbeacon.failover.Failover
+import net.qrator.failoverbeacon.failover.FailoverSettings
+import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.internal.app.ForegroundMonitor
 import net.qrator.failoverbeacon.internal.network.NetworkMonitor
 import net.qrator.failoverbeacon.internal.time.ElapsedRealtimeEpochClock
@@ -43,11 +46,20 @@ internal object SdkStartup {
             diskQueueBytes = config.options.diskQueueBytes
         )
         telemetry.subscribe()
+        val failover = Failover(
+            sdk = sdk,
+            hosts = config.failoverHosts.map {
+                FailoverHostConfig(it.host, it.additionalAddresses)
+            },
+            settings = FailoverSettings()
+        )
+        failover.subscribe()
         if (!SdkRegistry.install(sdk)) return false
         try {
             networkMonitor.register()
             foregroundMonitor?.register()
             telemetry.start()
+            failover.start()
             sdk.publishConsent()
         } catch (e: Throwable) {
             SdkRegistry.clear()
