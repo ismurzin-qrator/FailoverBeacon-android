@@ -13,7 +13,7 @@ class AddressStoreTest {
     fun `a configured host is updated in place`() {
         store.update(API) { it.withResolved(listOf(ip(1)), nowNanos = 0) }
 
-        assertEquals(listOf(ip(1), ip(7)), store[API]?.addresses)
+        assertEquals(listOf(ip(1), ip(7)), store[API]?.addresses?.keys?.toList())
     }
 
     @Test

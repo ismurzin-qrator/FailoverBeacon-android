@@ -49,7 +49,7 @@ internal object SdkStartup {
         val failover = Failover(
             sdk = sdk,
             hosts = config.failoverHosts.map {
-                FailoverHostConfig(it.host, it.additionalAddresses)
+                FailoverHostConfig(it.host, it.port, it.additionalAddresses, it.probeConnections)
             },
             settings = FailoverSettings()
         )
