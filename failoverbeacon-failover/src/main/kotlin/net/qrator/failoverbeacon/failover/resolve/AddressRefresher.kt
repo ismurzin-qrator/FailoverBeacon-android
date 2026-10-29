@@ -9,13 +9,11 @@ import java.util.concurrent.atomic.AtomicInteger
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.core.logging.info
-import net.qrator.failoverbeacon.failover.ranking.AddressRanking
-import net.qrator.failoverbeacon.failover.store.AddressRecorder
+import net.qrator.failoverbeacon.failover.repository.AddressRepository
 
 internal class AddressRefresher(
     private val resolve: (String) -> List<InetAddress>,
-    private val recorder: AddressRecorder,
-    private val ranking: AddressRanking,
+    private val repository: AddressRepository,
     private val executor: Executor
 ) {
     private val refreshing = ConcurrentHashMap.newKeySet<String>()
@@ -37,11 +35,6 @@ internal class AddressRefresher(
 
     fun refresh(host: String) = submit(host) {}
 
-    fun recordAnswer(host: String, addresses: List<InetAddress>) {
-        recorder.recordResolved(host, addresses)
-        ranking.probe(host)
-    }
-
     private fun submit(host: String, onDone: (Boolean) -> Unit) {
         if (!refreshing.add(host)) return
         try {
@@ -57,7 +50,7 @@ internal class AddressRefresher(
         var success = false
         try {
             val addresses = resolve(host)
-            recordAnswer(host, addresses)
+            repository.saveResolved(host, addresses)
             success = addresses.isNotEmpty()
             SdkRegistry.logger.debug { "[Failover] $host: ${addresses.size} addresses" }
         } catch (e: UnknownHostException) {

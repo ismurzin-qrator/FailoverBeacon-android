@@ -11,10 +11,8 @@ import net.qrator.failoverbeacon.failover.fakes.LogRecorder
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
-import net.qrator.failoverbeacon.failover.model.HostRecord
 import net.qrator.failoverbeacon.failover.model.ProbeResult
-import net.qrator.failoverbeacon.failover.store.AddressRecorder
-import net.qrator.failoverbeacon.failover.store.AddressStore
+import net.qrator.failoverbeacon.failover.repository.AddressRepository
 
 class AddressRankingTest {
     private val log = LogRecorder()
@@ -25,9 +23,8 @@ class AddressRankingTest {
         FailoverHostConfig(SPARE, PORT, listOf(ip(4), ip(5)), probeConnections = true),
         FailoverHostConfig(NO_PROBES, PORT, emptyList(), probeConnections = false)
     )
-    private val store = AddressStore(hosts.map { HostRecord(it.host, it.additionalAddresses) })
-    private val recorder = AddressRecorder(store, clock = { 0 })
-    private val ranking = AddressRanking(hosts, store, recorder, connect::connect, executor)
+    private val repository = AddressRepository(hosts, clock = { 0 })
+    private val ranking = AddressRanking(hosts, repository, connect::connect, executor)
 
     @AfterTest
     fun tearDown() = log.close()
@@ -35,7 +32,7 @@ class AddressRankingTest {
     @Test
     fun `each IPv4 address is connected on the host's port and its result is recorded`() {
         connect.answer(ip(1), ProbeResult.Connected(connectNanos = 40_000_000))
-        recorder.recordResolved(API, listOf(ip(1), ip(2), IPV6))
+        repository.saveResolved(API, listOf(ip(1), ip(2), IPV6))
 
         ranking.probe(API)
         executor.runAll()
@@ -48,14 +45,14 @@ class AddressRankingTest {
                 IPV6 to ProbeResult.Unknown,
                 ip(7) to ProbeResult.Failed
             ),
-            store[API]?.addresses
+            repository[API]?.addresses
         )
     }
 
     @Test
     fun `each result is logged`() {
         connect.answer(ip(1), ProbeResult.Connected(connectNanos = 40_000_000))
-        recorder.recordResolved(API, listOf(ip(1)))
+        repository.saveResolved(API, listOf(ip(1)))
 
         ranking.probe(API)
         executor.runAll()
@@ -80,8 +77,8 @@ class AddressRankingTest {
 
     @Test
     fun `a host with one IPv4 address, without probes or outside the config is not probed`() {
-        recorder.recordResolved(API, listOf(IPV6))
-        recorder.recordResolved(NO_PROBES, listOf(ip(1), ip(2)))
+        repository.saveResolved(API, listOf(IPV6))
+        repository.saveResolved(NO_PROBES, listOf(ip(1), ip(2)))
 
         ranking.probe(API)
         ranking.probe(NO_PROBES)
@@ -92,13 +89,13 @@ class AddressRankingTest {
 
     @Test
     fun `probed addresses are not probed again and new ones are`() {
-        recorder.recordResolved(API, listOf(ip(1)))
+        repository.saveResolved(API, listOf(ip(1)))
         ranking.probe(API)
         executor.runAll()
 
         ranking.probe(API)
         assertEquals(0, executor.queued)
-        recorder.recordResolved(API, listOf(ip(1), ip(3)))
+        repository.saveResolved(API, listOf(ip(1), ip(3)))
         ranking.probe(API)
         executor.runAll()
 
@@ -107,12 +104,12 @@ class AddressRankingTest {
 
     @Test
     fun `an address being probed is not queued again and a new one is queued at once`() {
-        recorder.recordResolved(API, listOf(ip(1)))
+        repository.saveResolved(API, listOf(ip(1)))
         ranking.probe(API)
         ranking.probe(API)
         assertEquals(2, executor.queued)
 
-        recorder.recordResolved(API, listOf(ip(1), ip(3)))
+        repository.saveResolved(API, listOf(ip(1), ip(3)))
         ranking.probe(API)
 
         assertEquals(3, executor.queued)
@@ -121,12 +118,12 @@ class AddressRankingTest {
     @Test
     fun `an unexpected failure leaves the address unknown to be probed again`() {
         connect.fail(ip(1), SecurityException("no INTERNET permission"))
-        recorder.recordResolved(API, listOf(ip(1)))
+        repository.saveResolved(API, listOf(ip(1)))
         ranking.probe(API)
         runCatching { executor.runAll() }
         executor.runAll()
 
-        assertEquals(ProbeResult.Unknown, store[API]?.addresses?.get(ip(1)))
+        assertEquals(ProbeResult.Unknown, repository[API]?.addresses?.get(ip(1)))
         ranking.probe(API)
         assertEquals(1, executor.queued)
     }

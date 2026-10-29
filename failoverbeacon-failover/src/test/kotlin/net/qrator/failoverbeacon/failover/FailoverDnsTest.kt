@@ -7,16 +7,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import net.qrator.failoverbeacon.failover.fakes.FakeConnect
 import net.qrator.failoverbeacon.failover.fakes.FakeDns
 import net.qrator.failoverbeacon.failover.fakes.LogRecorder
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.ip
-import net.qrator.failoverbeacon.failover.model.HostRecord
-import net.qrator.failoverbeacon.failover.ranking.AddressRanking
+import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
+import net.qrator.failoverbeacon.failover.repository.AddressRepository
 import net.qrator.failoverbeacon.failover.resolve.AddressRefresher
-import net.qrator.failoverbeacon.failover.store.AddressRecorder
-import net.qrator.failoverbeacon.failover.store.AddressStore
 
 class FailoverDnsTest {
     private val log = LogRecorder()
@@ -112,12 +109,11 @@ class FailoverDnsTest {
         prepared: List<InetAddress>? = null,
         additional: List<InetAddress> = emptyList()
     ): FailoverDns {
-        val store = AddressStore(listOf(HostRecord(API, additional)))
-        val recorder = AddressRecorder(store, clock = { now })
-        prepared?.let { recorder.recordResolved(API, it) }
-        val ranking = AddressRanking(emptyList(), store, recorder, FakeConnect()::connect, executor)
-        val refresher = AddressRefresher(system::lookup, recorder, ranking, executor)
-        return FailoverDns(store, refresher, clock = { now }, maxAgeNanos = MAX_AGE)
+        val host = FailoverHostConfig(API, 443, additional, probeConnections = true)
+        val repository = AddressRepository(listOf(host), clock = { now })
+        prepared?.let { repository.saveResolved(API, it) }
+        val refresher = AddressRefresher(system::lookup, repository, executor)
+        return FailoverDns(repository, refresher, clock = { now }, maxAgeNanos = MAX_AGE)
     }
 
     private companion object {

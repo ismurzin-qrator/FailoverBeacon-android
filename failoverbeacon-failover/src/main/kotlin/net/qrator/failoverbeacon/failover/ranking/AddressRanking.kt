@@ -9,13 +9,11 @@ import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.model.ProbeResult
-import net.qrator.failoverbeacon.failover.store.AddressRecorder
-import net.qrator.failoverbeacon.failover.store.AddressStore
+import net.qrator.failoverbeacon.failover.repository.AddressRepository
 
 internal class AddressRanking(
     hosts: List<FailoverHostConfig>,
-    private val store: AddressStore,
-    private val recorder: AddressRecorder,
+    private val repository: AddressRepository,
     private val connect: (InetAddress, Int) -> ProbeResult,
     private val executor: Executor
 ) {
@@ -24,7 +22,7 @@ internal class AddressRanking(
 
     fun probe(host: String) {
         val port = ports[host] ?: return
-        val addresses = store[host]?.addresses ?: return
+        val addresses = repository[host]?.addresses ?: return
         val ipv4Addresses = addresses.keys.filterIsInstance<Inet4Address>()
         if (ipv4Addresses.size < 2) return
         ipv4Addresses
@@ -42,7 +40,7 @@ internal class AddressRanking(
             SdkRegistry.logger.debug {
                 "[Failover] $host ${address.hostAddress}: ${describe(result)}"
             }
-            recorder.recordProbe(host, address, result)
+            repository.saveProbe(host, address, result)
         } finally {
             probingAddresses -= host to address
         }
