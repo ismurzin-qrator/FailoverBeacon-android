@@ -16,6 +16,7 @@ class SdkInstance(
     val appContext: Context,
     consent: TrackingConsent,
     val clock: MonotonicClock,
+    val elapsedRealtimeClock: MonotonicClock,
     val epochClock: EpochClock,
     val exchangeBus: ExchangeBus,
     val networkSource: NetworkSource,

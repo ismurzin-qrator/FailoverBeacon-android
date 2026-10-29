@@ -13,6 +13,7 @@ import net.qrator.failoverbeacon.failover.FailoverSettings
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.internal.app.ForegroundMonitor
 import net.qrator.failoverbeacon.internal.network.NetworkMonitor
+import net.qrator.failoverbeacon.internal.time.ElapsedRealtimeClock
 import net.qrator.failoverbeacon.internal.time.ElapsedRealtimeEpochClock
 import net.qrator.failoverbeacon.internal.time.NanoTimeClock
 import net.qrator.failoverbeacon.telemetry.Telemetry
@@ -30,6 +31,7 @@ internal object SdkStartup {
             appContext = appContext,
             consent = consent,
             clock = NanoTimeClock,
+            elapsedRealtimeClock = ElapsedRealtimeClock,
             epochClock = ElapsedRealtimeEpochClock(),
             exchangeBus = ExchangeBus(),
             networkSource = networkMonitor,

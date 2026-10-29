@@ -31,7 +31,7 @@ class Failover(
         keepAliveMillis = settings.threadKeepAliveMillis,
         queue = LinkedBlockingQueue()
     ).apply { allowCoreThreadTimeOut(true) }
-    private val repository = AddressRepository(hosts, sdk.clock)
+    private val repository = AddressRepository(hosts, sdk.elapsedRealtimeClock)
     private val tcpProbe = TcpProbe(sdk.clock, settings.probeTimeoutMillis)
     private val ranking = AddressRanking(
         hosts = hosts,
@@ -47,7 +47,7 @@ class Failover(
     private val dns = FailoverDns(
         repository = repository,
         refresher = refresher,
-        clock = sdk.clock,
+        clock = sdk.elapsedRealtimeClock,
         maxAgeNanos = settings.maxAddressAgeNanos
     )
     private val hostNames = hosts.map { it.host }

@@ -22,6 +22,7 @@ fun installSdk(
             appContext = ContextWrapper(null),
             consent = TrackingConsent.GRANTED,
             clock = { System.nanoTime() },
+            elapsedRealtimeClock = { System.nanoTime() },
             epochClock = { startTimeMillis },
             exchangeBus = bus,
             networkSource = { network },
