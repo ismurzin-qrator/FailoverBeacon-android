@@ -5,31 +5,34 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import net.qrator.failoverbeacon.failover.cache.AddressCache
 import net.qrator.failoverbeacon.failover.fakes.FakeDns
 import net.qrator.failoverbeacon.failover.fakes.LogRecorder
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.ip
+import net.qrator.failoverbeacon.failover.model.HostRecord
+import net.qrator.failoverbeacon.failover.store.AddressStore
 
 class AddressRefresherTest {
     private val log = LogRecorder()
     private val resolver = FakeDns()
-    private val cache = AddressCache({ 0 }, maxAgeNanos = Long.MAX_VALUE)
+    private val store =
+        AddressStore(listOf(HostRecord(API, emptyList()), HostRecord(OTHER, emptyList())))
+    private val recorder = DnsRecorder(store, clock = { 0 })
     private val executor = ManualExecutor()
-    private val refresher = AddressRefresher(resolver::lookup, cache, executor)
+    private val refresher = AddressRefresher(resolver::lookup, recorder, executor)
 
     @AfterTest
     fun tearDown() = log.close()
 
     @Test
-    fun `refresh resolves in the background into the cache`() {
+    fun `refresh resolves in the background into the store`() {
         resolver.answer(API, ip(1))
 
         refresher.refresh(API)
 
         assertEquals(emptyList(), resolver.lookups)
         executor.runAll()
-        assertEquals(listOf(ip(1)), cache.lastAddresses(API))
+        assertEquals(listOf(ip(1)), store[API]?.resolvedAddresses)
     }
 
     @Test
@@ -44,25 +47,25 @@ class AddressRefresherTest {
     }
 
     @Test
-    fun `a failed resolution keeps the cached addresses`() {
-        cache.put(API, listOf(ip(1)))
+    fun `a failed resolution keeps the recorded addresses`() {
+        recorder.record(API, listOf(ip(1)))
         resolver.fail(API)
 
         refresher.refresh(API)
         executor.runAll()
 
-        assertEquals(listOf(ip(1)), cache.lastAddresses(API))
+        assertEquals(listOf(ip(1)), store[API]?.resolvedAddresses)
     }
 
     @Test
-    fun `an empty answer keeps the cached addresses`() {
-        cache.put(API, listOf(ip(1)))
+    fun `an empty answer keeps the recorded addresses`() {
+        recorder.record(API, listOf(ip(1)))
         resolver.answer(API) { emptyList() }
 
         refresher.refresh(API)
         executor.runAll()
 
-        assertEquals(listOf(ip(1)), cache.lastAddresses(API))
+        assertEquals(listOf(ip(1)), store[API]?.resolvedAddresses)
     }
 
     @Test

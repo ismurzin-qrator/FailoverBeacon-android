@@ -7,18 +7,18 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import net.qrator.failoverbeacon.failover.cache.AddressCache
 import net.qrator.failoverbeacon.failover.fakes.FakeDns
 import net.qrator.failoverbeacon.failover.fakes.LogRecorder
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.ip
-import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
+import net.qrator.failoverbeacon.failover.model.HostRecord
 import net.qrator.failoverbeacon.failover.resolve.AddressRefresher
+import net.qrator.failoverbeacon.failover.resolve.DnsRecorder
+import net.qrator.failoverbeacon.failover.store.AddressStore
 
 class FailoverDnsTest {
     private val log = LogRecorder()
     private var now = 0L
-    private val cache = AddressCache({ now }, MAX_AGE)
     private val system = FakeDns()
     private val executor = ManualExecutor()
 
@@ -103,7 +103,6 @@ class FailoverDnsTest {
         assertNull(dns.preparedAddresses(OTHER))
         assertEquals(listOf(ip(2)), dns.onResolved(OTHER, listOf(ip(2))))
         assertNull(dns.onResolveFailed(OTHER))
-        assertNull(cache.lastAddresses(OTHER))
         assertEquals(0, executor.queued)
     }
 
@@ -111,9 +110,11 @@ class FailoverDnsTest {
         prepared: List<InetAddress>? = null,
         additional: List<InetAddress> = emptyList()
     ): FailoverDns {
-        prepared?.let { cache.put(API, it) }
-        val refresher = AddressRefresher(system::lookup, cache, executor)
-        return FailoverDns(listOf(FailoverHostConfig(API, additional)), cache, refresher)
+        val store = AddressStore(listOf(HostRecord(API, additional)))
+        val recorder = DnsRecorder(store, clock = { now })
+        prepared?.let { recorder.record(API, it) }
+        val refresher = AddressRefresher(system::lookup, recorder, executor)
+        return FailoverDns(store, recorder, refresher, clock = { now }, maxAgeNanos = MAX_AGE)
     }
 
     private companion object {
