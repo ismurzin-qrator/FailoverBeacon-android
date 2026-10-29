@@ -112,6 +112,8 @@ class FailoverBeaconDnsTest {
         var failure: Throwable? = null
         val answers = mutableListOf<Pair<String, List<InetAddress>>>()
 
+        override fun manages(host: String): Boolean = host == API
+
         override fun preparedAddresses(host: String): List<InetAddress>? {
             failure?.let { throw it }
             return prepared

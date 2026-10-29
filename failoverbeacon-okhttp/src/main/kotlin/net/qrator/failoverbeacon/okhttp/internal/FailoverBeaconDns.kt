@@ -7,7 +7,7 @@ import net.qrator.failoverbeacon.core.logging.error
 import net.qrator.failoverbeacon.core.util.catchSdkFailure
 import okhttp3.Dns
 
-internal class FailoverBeaconDns(private val delegate: Dns) : Dns {
+internal open class FailoverBeaconDns(protected val delegate: Dns) : Dns {
     override fun lookup(hostname: String): List<InetAddress> {
         val dns = SdkRegistry.instance?.dns ?: return delegate.lookup(hostname)
         catchSdkFailure(::logFailure) {

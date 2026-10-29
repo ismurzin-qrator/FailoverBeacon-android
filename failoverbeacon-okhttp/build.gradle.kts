@@ -6,6 +6,10 @@ plugins {
 
 android {
     namespace = "net.qrator.failoverbeacon.okhttp"
+
+    defaultConfig {
+        consumerProguardFiles("consumer-rules.pro")
+    }
 }
 
 dependencies {

@@ -4,7 +4,9 @@ import java.net.InetAddress
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.cache.AddressCache
 import net.qrator.failoverbeacon.failover.fakes.FakeDns
 import net.qrator.failoverbeacon.failover.fakes.LogRecorder
@@ -96,6 +98,8 @@ class FailoverDnsTest {
     fun `hosts outside the config are left to the client's DNS`() {
         val dns = dns(prepared = listOf(ip(1)))
 
+        assertTrue(dns.manages(API))
+        assertFalse(dns.manages(OTHER))
         assertNull(dns.preparedAddresses(OTHER))
         assertEquals(listOf(ip(2)), dns.onResolved(OTHER, listOf(ip(2))))
         assertNull(dns.onResolveFailed(OTHER))

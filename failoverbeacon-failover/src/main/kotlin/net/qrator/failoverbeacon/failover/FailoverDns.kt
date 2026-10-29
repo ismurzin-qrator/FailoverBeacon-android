@@ -13,6 +13,8 @@ internal class FailoverDns(
 ) : SdkDns {
     private val hostsByName = hosts.associateBy { it.host }
 
+    override fun manages(host: String): Boolean = host in hostsByName
+
     override fun preparedAddresses(host: String): List<InetAddress>? {
         val config = hostsByName[host] ?: return null
         val prepared = cache.freshAddresses(host) ?: return null
