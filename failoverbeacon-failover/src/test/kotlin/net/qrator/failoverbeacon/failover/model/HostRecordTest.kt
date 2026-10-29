@@ -51,16 +51,38 @@ class HostRecordTest {
     }
 
     @Test
-    fun `a probe result is kept by its address in place`() {
-        val probed = record
-            .withResolved(listOf(ip(1), ip(2)), nowNanos = 0)
-            .withProbe(ip(2), connected)
+    fun `connected IPv4 addresses come first by time, then unknown ones, then failed ones`() {
+        val ranked = record
+            .withResolved(listOf(ip(1), ip(2), ip(3), ip(4), ip(5)), nowNanos = 0)
+            .withProbe(ip(1), ProbeResult.Failed)
+            .withProbe(ip(3), ProbeResult.Connected(connectNanos = 300))
+            .withProbe(ip(4), ProbeResult.Failed)
+            .withProbe(ip(5), connected)
 
         assertEquals(
-            mapOf(ip(1) to ProbeResult.Unknown, ip(2) to connected, ip(7) to ProbeResult.Unknown),
-            probed.addresses
+            listOf(ip(5), ip(3), ip(2), ip(7), ip(1), ip(4)),
+            ranked.addresses.keys.toList()
         )
-        assertEquals(listOf(ip(1), ip(2), ip(7)), probed.addresses.keys.toList())
+    }
+
+    @Test
+    fun `failed addresses keep the source order whatever order they failed in`() {
+        val ranked = record
+            .withResolved(listOf(ip(1), ip(2)), nowNanos = 0)
+            .withProbe(ip(1), ProbeResult.Failed)
+            .withProbe(ip(2), ProbeResult.Failed)
+
+        assertEquals(listOf(ip(7), ip(1), ip(2)), ranked.addresses.keys.toList())
+    }
+
+    @Test
+    fun `IPv6 addresses keep their places`() {
+        val ranked = record
+            .withResolved(listOf(IPV6, ip(1), OTHER_IPV6, ip(2)), nowNanos = 0)
+            .withProbe(ip(1), ProbeResult.Failed)
+            .withProbe(ip(2), connected)
+
+        assertEquals(listOf(IPV6, ip(2), OTHER_IPV6, ip(7), ip(1)), ranked.addresses.keys.toList())
     }
 
     @Test
@@ -89,5 +111,6 @@ class HostRecordTest {
         const val API = "api.example"
         const val MAX_AGE = 100L
         val IPV6: InetAddress = InetAddress.getByName("2001:db8::1")
+        val OTHER_IPV6: InetAddress = InetAddress.getByName("2001:db8::2")
     }
 }

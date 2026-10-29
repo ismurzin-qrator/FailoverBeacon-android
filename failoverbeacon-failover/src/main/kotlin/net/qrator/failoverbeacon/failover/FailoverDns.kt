@@ -21,11 +21,8 @@ internal class FailoverDns(
         return record.addresses.keys.toList()
     }
 
-    override fun onResolved(host: String, addresses: List<InetAddress>): List<InetAddress> {
-        val record = repository[host] ?: return addresses
-        repository.saveResolved(host, addresses)
-        return (addresses + record.additionalAddresses).distinct()
-    }
+    override fun onResolved(host: String, addresses: List<InetAddress>): List<InetAddress> =
+        repository.saveResolved(host, addresses)?.addresses?.keys?.toList() ?: addresses
 
     override fun onResolveFailed(host: String): List<InetAddress>? =
         repository[host]?.addresses?.keys?.toList()?.ifEmpty { null }

@@ -12,6 +12,7 @@ import net.qrator.failoverbeacon.failover.fakes.LogRecorder
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
+import net.qrator.failoverbeacon.failover.model.ProbeResult
 import net.qrator.failoverbeacon.failover.repository.AddressRepository
 import net.qrator.failoverbeacon.failover.resolve.AddressRefresher
 
@@ -20,6 +21,7 @@ class FailoverDnsTest {
     private var now = 0L
     private val system = FakeDns()
     private val executor = ManualExecutor()
+    private lateinit var repository: AddressRepository
 
     @AfterTest
     fun tearDown() = log.close()
@@ -57,10 +59,10 @@ class FailoverDnsTest {
     }
 
     @Test
-    fun `an empty answer gets the additional addresses and keeps the prepared ones`() {
+    fun `an empty answer gets the last prepared and the additional addresses like a failure`() {
         val dns = dns(prepared = listOf(ip(1)), additional = listOf(ip(7)))
 
-        assertEquals(listOf(ip(7)), dns.onResolved(API, emptyList()))
+        assertEquals(listOf(ip(1), ip(7)), dns.onResolved(API, emptyList()))
         assertEquals(listOf(ip(1), ip(7)), dns.preparedAddresses(API))
     }
 
@@ -94,6 +96,17 @@ class FailoverDnsTest {
     }
 
     @Test
+    fun `every answer is ordered by the probe results`() {
+        val dns = dns(prepared = listOf(ip(1), ip(2)), additional = listOf(ip(7)))
+        repository.saveProbe(API, ip(1), ProbeResult.Failed)
+        repository.saveProbe(API, ip(7), ProbeResult.Connected(connectNanos = 40))
+
+        assertEquals(listOf(ip(7), ip(2), ip(1)), dns.preparedAddresses(API))
+        assertEquals(listOf(ip(7), ip(2), ip(1)), dns.onResolveFailed(API))
+        assertEquals(listOf(ip(7), ip(3), ip(1)), dns.onResolved(API, listOf(ip(1), ip(3))))
+    }
+
+    @Test
     fun `hosts outside the config are left to the client's DNS`() {
         val dns = dns(prepared = listOf(ip(1)))
 
@@ -110,7 +123,7 @@ class FailoverDnsTest {
         additional: List<InetAddress> = emptyList()
     ): FailoverDns {
         val host = FailoverHostConfig(API, 443, additional, probeConnections = true)
-        val repository = AddressRepository(listOf(host), clock = { now })
+        repository = AddressRepository(listOf(host), clock = { now })
         prepared?.let { repository.saveResolved(API, it) }
         val refresher = AddressRefresher(system::lookup, repository, executor)
         return FailoverDns(repository, refresher, clock = { now }, maxAgeNanos = MAX_AGE)
