@@ -1,6 +1,7 @@
 package net.qrator.failoverbeacon.okhttp
 
 import java.io.IOException
+import java.net.InetAddress
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -9,9 +10,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.okhttp.fakes.RecordingEventListener
 import net.qrator.failoverbeacon.okhttp.fakes.installSdk
+import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconDnsFactory
+import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconEventListenerFactory
+import okhttp3.Dns
 import okhttp3.EventListener
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -80,6 +85,29 @@ class WithFailoverBeaconTest {
         val client = OkHttpClient().withFailoverBeacon()
 
         assertSame(client, client.withFailoverBeacon())
+    }
+
+    @Test
+    fun `wraps a DNS set later on a copy of a returned client`() {
+        val client = OkHttpClient().withFailoverBeacon()
+        val appDns = Dns { listOf(InetAddress.getLoopbackAddress()) }
+
+        val copy = client.newBuilder().dns(appDns).build().withFailoverBeacon()
+
+        assertEquals(FailoverBeaconDnsFactory.create(appDns), copy.dns)
+        assertSame(client.eventListenerFactory, copy.eventListenerFactory)
+    }
+
+    @Test
+    fun `wraps a listener set later on a copy of a returned client`() {
+        val client = OkHttpClient().withFailoverBeacon()
+
+        val copy = client.newBuilder().eventListener(
+            EventListener.NONE
+        ).build().withFailoverBeacon()
+
+        assertTrue(copy.eventListenerFactory is FailoverBeaconEventListenerFactory)
+        assertSame(client.dns, copy.dns)
     }
 
     @Test
