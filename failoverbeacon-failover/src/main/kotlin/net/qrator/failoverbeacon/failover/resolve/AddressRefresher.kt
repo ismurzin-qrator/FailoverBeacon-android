@@ -4,7 +4,6 @@ import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executor
-import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicInteger
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.debug
@@ -37,13 +36,7 @@ internal class AddressRefresher(
 
     private fun submit(host: String, onDone: (Boolean) -> Unit) {
         if (!refreshing.add(host)) return
-        try {
-            executor.execute { resolveInBackground(host, onDone) }
-        } catch (_: RejectedExecutionException) {
-            refreshing.remove(host)
-            SdkRegistry.logger.debug { "[Failover] $host: no free thread, resolution skipped" }
-            onDone(false)
-        }
+        executor.execute { resolveInBackground(host, onDone) }
     }
 
     private fun resolveInBackground(host: String, onDone: (Boolean) -> Unit) {
