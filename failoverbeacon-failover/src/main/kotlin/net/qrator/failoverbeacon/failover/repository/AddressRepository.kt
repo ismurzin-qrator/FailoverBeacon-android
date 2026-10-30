@@ -13,7 +13,7 @@ internal class AddressRepository(
     private val clock: MonotonicClock
 ) {
     private val records = ConcurrentHashMap(
-        hosts.associate { it.host to HostRecord(it.host, it.additionalAddresses) }
+        hosts.associate { it.host to HostRecord(it.additionalAddresses) }
     )
     private val addressListeners = CopyOnWriteArrayList<(String) -> Unit>()
 

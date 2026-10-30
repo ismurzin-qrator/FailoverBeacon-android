@@ -1,4 +1,4 @@
-package net.qrator.failoverbeacon.failover.ranking
+package net.qrator.failoverbeacon.failover.probe
 
 import android.net.TrafficStats
 import java.net.InetAddress

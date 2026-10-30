@@ -6,8 +6,8 @@ import net.qrator.failoverbeacon.core.SdkFeature
 import net.qrator.failoverbeacon.core.SdkInstance
 import net.qrator.failoverbeacon.core.thread.SdkExecutor
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
-import net.qrator.failoverbeacon.failover.ranking.AddressRanking
-import net.qrator.failoverbeacon.failover.ranking.TcpProbe
+import net.qrator.failoverbeacon.failover.probe.AddressProber
+import net.qrator.failoverbeacon.failover.probe.TcpProbe
 import net.qrator.failoverbeacon.failover.repository.AddressRepository
 import net.qrator.failoverbeacon.failover.resolve.AddressRefresher
 
@@ -33,7 +33,7 @@ class Failover(
     ).apply { allowCoreThreadTimeOut(true) }
     private val repository = AddressRepository(hosts, sdk.elapsedRealtimeClock)
     private val tcpProbe = TcpProbe(sdk.clock, settings.probeTimeoutMillis)
-    private val ranking = AddressRanking(
+    private val prober = AddressProber(
         hosts = hosts,
         repository = repository,
         connect = tcpProbe::connect,
@@ -53,13 +53,13 @@ class Failover(
     private val hostNames = hosts.map { it.host }
 
     fun subscribe() {
-        repository.addAddressListener(ranking::probe)
+        repository.addAddressListener(prober::probe)
         sdk.dns = dns
         sdk.addFeature(this)
     }
 
     fun start() {
-        hostNames.forEach(ranking::probe)
+        hostNames.forEach(prober::probe)
         refresher.refreshAll(hostNames)
     }
 

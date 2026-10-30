@@ -4,14 +4,13 @@ import java.net.Inet4Address
 import java.net.InetAddress
 
 internal class HostRecord private constructor(
-    val host: String,
     private val resolvedAddresses: List<InetAddress>,
     private val additionalAddresses: List<InetAddress>,
     private val resolvedAtNanos: Long?,
     results: Map<InetAddress, ProbeResult>
 ) {
-    constructor(host: String, additionalAddresses: List<InetAddress>) :
-        this(host, emptyList(), additionalAddresses, null, emptyMap())
+    constructor(additionalAddresses: List<InetAddress>) :
+        this(emptyList(), additionalAddresses, null, emptyMap())
 
     val addresses: Map<InetAddress, ProbeResult> =
         rank((resolvedAddresses + additionalAddresses).distinct(), results)
@@ -21,13 +20,12 @@ internal class HostRecord private constructor(
 
     fun withResolved(resolved: List<InetAddress>, nowNanos: Long): HostRecord {
         if (resolved.isEmpty()) return this
-        return HostRecord(host, resolved, additionalAddresses, nowNanos, addresses)
+        return HostRecord(resolved, additionalAddresses, nowNanos, addresses)
     }
 
     fun withProbe(address: InetAddress, result: ProbeResult): HostRecord {
         if (address !in addresses) return this
         return HostRecord(
-            host,
             resolvedAddresses,
             additionalAddresses,
             resolvedAtNanos,

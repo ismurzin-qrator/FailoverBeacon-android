@@ -1,4 +1,4 @@
-package net.qrator.failoverbeacon.failover.ranking
+package net.qrator.failoverbeacon.failover.probe
 
 import android.util.Log
 import java.net.InetAddress
@@ -14,7 +14,7 @@ import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.model.ProbeResult
 import net.qrator.failoverbeacon.failover.repository.AddressRepository
 
-class AddressRankingTest {
+class AddressProberTest {
     private val log = LogRecorder()
     private val connect = FakeConnect()
     private val executor = ManualExecutor()
@@ -24,7 +24,7 @@ class AddressRankingTest {
         FailoverHostConfig(NO_PROBES, PORT, emptyList(), probeConnections = false)
     )
     private val repository = AddressRepository(hosts, clock = { 0 })
-    private val ranking = AddressRanking(hosts, repository, connect::connect, executor)
+    private val prober = AddressProber(hosts, repository, connect::connect, executor)
 
     @AfterTest
     fun tearDown() = log.close()
@@ -34,7 +34,7 @@ class AddressRankingTest {
         connect.answer(ip(1), ProbeResult.Connected(connectNanos = 40_000_000))
         repository.saveResolved(API, listOf(ip(1), ip(2), IPV6))
 
-        ranking.probe(API)
+        prober.probe(API)
         executor.runAll()
 
         assertEquals(listOf(ip(1), ip(2), ip(7)).map { it to PORT }, connect.connects)
@@ -54,7 +54,7 @@ class AddressRankingTest {
         connect.answer(ip(1), ProbeResult.Connected(connectNanos = 40_000_000))
         repository.saveResolved(API, listOf(ip(1)))
 
-        ranking.probe(API)
+        prober.probe(API)
         executor.runAll()
 
         assertTrue(
@@ -69,7 +69,7 @@ class AddressRankingTest {
 
     @Test
     fun `the additional addresses are probed before DNS answers`() {
-        ranking.probe(SPARE)
+        prober.probe(SPARE)
         executor.runAll()
 
         assertEquals(listOf(ip(4), ip(5)), connect.connects.map { it.first })
@@ -80,9 +80,9 @@ class AddressRankingTest {
         repository.saveResolved(API, listOf(IPV6))
         repository.saveResolved(NO_PROBES, listOf(ip(1), ip(2)))
 
-        ranking.probe(API)
-        ranking.probe(NO_PROBES)
-        ranking.probe("unknown.example")
+        prober.probe(API)
+        prober.probe(NO_PROBES)
+        prober.probe("unknown.example")
 
         assertEquals(0, executor.queued)
     }
@@ -90,13 +90,13 @@ class AddressRankingTest {
     @Test
     fun `probed addresses are not probed again and new ones are`() {
         repository.saveResolved(API, listOf(ip(1)))
-        ranking.probe(API)
+        prober.probe(API)
         executor.runAll()
 
-        ranking.probe(API)
+        prober.probe(API)
         assertEquals(0, executor.queued)
         repository.saveResolved(API, listOf(ip(1), ip(3)))
-        ranking.probe(API)
+        prober.probe(API)
         executor.runAll()
 
         assertEquals(listOf(ip(1), ip(7), ip(3)), connect.connects.map { it.first })
@@ -105,12 +105,12 @@ class AddressRankingTest {
     @Test
     fun `an address being probed is not queued again and a new one is queued at once`() {
         repository.saveResolved(API, listOf(ip(1)))
-        ranking.probe(API)
-        ranking.probe(API)
+        prober.probe(API)
+        prober.probe(API)
         assertEquals(2, executor.queued)
 
         repository.saveResolved(API, listOf(ip(1), ip(3)))
-        ranking.probe(API)
+        prober.probe(API)
 
         assertEquals(3, executor.queued)
     }
@@ -119,12 +119,12 @@ class AddressRankingTest {
     fun `an unexpected failure leaves the address unknown to be probed again`() {
         connect.fail(ip(1), SecurityException("no INTERNET permission"))
         repository.saveResolved(API, listOf(ip(1)))
-        ranking.probe(API)
+        prober.probe(API)
         runCatching { executor.runAll() }
         executor.runAll()
 
         assertEquals(ProbeResult.Unknown, repository[API]?.addresses?.get(ip(1)))
-        ranking.probe(API)
+        prober.probe(API)
         assertEquals(1, executor.queued)
     }
 

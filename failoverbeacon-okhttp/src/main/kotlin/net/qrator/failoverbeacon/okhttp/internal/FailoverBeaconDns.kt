@@ -19,6 +19,8 @@ internal open class FailoverBeaconDns(protected val delegate: Dns) : Dns {
 
     override fun hashCode(): Int = delegate.hashCode()
 
+    override fun toString(): String = "FailoverBeaconDns($delegate)"
+
     private fun logFailure(failure: Throwable) {
         SdkRegistry.logger.error(failure, onlyOnce = true) {
             "[OkHttp] SDK DNS failed. The client's DNS is used. Further failures are not logged"

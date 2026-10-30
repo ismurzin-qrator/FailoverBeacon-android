@@ -86,6 +86,11 @@ class FailoverBeaconDnsTest {
         assertEquals(listOf(ip(1)), dns.lookup(API))
     }
 
+    @Test
+    fun `the wrapper names the app's DNS`() {
+        assertEquals("FailoverBeaconDns($appDns)", dns.toString())
+    }
+
     private class FakeSdkDns : SdkDns {
         var addresses: List<InetAddress>? = null
         var failure: Throwable? = null

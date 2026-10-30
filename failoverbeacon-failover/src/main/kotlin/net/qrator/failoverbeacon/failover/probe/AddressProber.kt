@@ -1,4 +1,4 @@
-package net.qrator.failoverbeacon.failover.ranking
+package net.qrator.failoverbeacon.failover.probe
 
 import java.net.Inet4Address
 import java.net.InetAddress
@@ -11,7 +11,7 @@ import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.model.ProbeResult
 import net.qrator.failoverbeacon.failover.repository.AddressRepository
 
-internal class AddressRanking(
+internal class AddressProber(
     hosts: List<FailoverHostConfig>,
     private val repository: AddressRepository,
     private val connect: (InetAddress, Int) -> ProbeResult,

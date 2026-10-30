@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.fakes.ip
 
 class HostRecordTest {
-    private val record = HostRecord(API, additionalAddresses = listOf(ip(7)))
+    private val record = HostRecord(additionalAddresses = listOf(ip(7)))
     private val connected = ProbeResult.Connected(connectNanos = 40)
 
     @Test
@@ -108,7 +108,6 @@ class HostRecordTest {
     }
 
     private companion object {
-        const val API = "api.example"
         const val MAX_AGE = 100L
         val IPV6: InetAddress = InetAddress.getByName("2001:db8::1")
         val OTHER_IPV6: InetAddress = InetAddress.getByName("2001:db8::2")
