@@ -28,6 +28,7 @@ internal class NetworkMonitor(context: Context) :
     private val snapshot = AtomicReference<NetworkSnapshot>(NetworkSnapshot.Unknown)
     private var state = NetworkState()
     private var onNetworkChanged: (DefaultNetwork?) -> Unit = {}
+    private var reported: DefaultNetwork? = null
 
     override fun currentNetwork(): NetworkSnapshot = snapshot.get()
 
@@ -41,11 +42,28 @@ internal class NetworkMonitor(context: Context) :
             return
         }
         try {
-            val offline = manager.activeNetwork == null
+            val activeNetwork = manager.activeNetwork
+            if (activeNetwork != null) {
+                manager.getNetworkCapabilities(activeNetwork)?.let {
+                    onCapabilitiesChanged(activeNetwork, it)
+                }
+                manager.getLinkProperties(activeNetwork)?.let {
+                    onLinkPropertiesChanged(activeNetwork, it)
+                }
+                // getActiveNetwork returns null for a blocked network.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    onBlockedStatusChanged(activeNetwork, false)
+                }
+            }
             manager.registerDefaultNetworkCallback(this)
-            if (offline) snapshot.compareAndSet(NetworkSnapshot.Unknown, NetworkSnapshot.None)
+            if (activeNetwork == null) {
+                snapshot.compareAndSet(NetworkSnapshot.Unknown, NetworkSnapshot.None)
+            }
         } catch (e: Exception) {
             SdkRegistry.logger.warn(e) { "[Network] Cannot watch the network. Network is unknown" }
+            state = NetworkState()
+            snapshot.set(NetworkSnapshot.Unknown)
+            report(null)
         }
     }
 
@@ -81,7 +99,7 @@ internal class NetworkMonitor(context: Context) :
     override fun onLost(network: Network) {
         state = NetworkState()
         snapshot.set(NetworkSnapshot.None)
-        onNetworkChanged(null)
+        report(null)
     }
 
     override fun close() {
@@ -92,12 +110,19 @@ internal class NetworkMonitor(context: Context) :
         }
     }
 
-    private fun report(network: Network) {
-        val capabilities = state.capabilities ?: return
-        val linkProperties = state.linkProperties ?: return
-        // From API 29 the blocked status of a new network follows its link properties.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && state.blocked == null) return
-        val key = keyMapper.toKey(capabilities, linkProperties, state.carrier)
-        onNetworkChanged(DefaultNetwork(network.networkHandle, key, state.blocked))
+    private fun report(network: Network?) {
+        val defaultNetwork = if (network == null) {
+            null
+        } else {
+            val capabilities = state.capabilities ?: return
+            val linkProperties = state.linkProperties ?: return
+            // From API 29 the blocked status of a new network follows its link properties.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && state.blocked == null) return
+            val key = keyMapper.toKey(capabilities, linkProperties, state.carrier)
+            DefaultNetwork(network.networkHandle, key, state.blocked)
+        }
+        if (defaultNetwork == reported) return
+        reported = defaultNetwork
+        onNetworkChanged(defaultNetwork)
     }
 }

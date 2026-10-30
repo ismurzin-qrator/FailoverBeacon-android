@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.Context
 import android.content.ContextWrapper
 import android.net.ConnectivityManager
+import android.net.LinkProperties
 import android.util.Log
 import java.io.File
 import java.net.InetAddress
@@ -34,7 +35,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowApplication
 import org.robolectric.shadows.ShadowLog
-import org.robolectric.shadows.ShadowNetwork
+import org.robolectric.shadows.ShadowNetworkCapabilities
 import org.robolectric.shadows.ShadowSystemClock
 
 @RunWith(RobolectricTestRunner::class)
@@ -211,6 +212,12 @@ class FailoverBeaconTest {
 
     @Test
     fun `a network change reaches the features`() {
+        val manager = app.getSystemService(ConnectivityManager::class.java)
+        val active = assertNotNull(manager.activeNetwork)
+        shadowOf(manager).apply {
+            setNetworkCapabilities(active, ShadowNetworkCapabilities.newInstance())
+            setLinkProperties(active, LinkProperties())
+        }
         FailoverBeacon.initialize(app, config)
         val changes = mutableListOf<DefaultNetwork?>()
         assertNotNull(SdkRegistry.instance).addFeature(
@@ -221,7 +228,7 @@ class FailoverBeaconTest {
             }
         )
 
-        networkCallbacks().single().onLost(ShadowNetwork.newInstance(100))
+        networkCallbacks().single().onLost(active)
 
         assertEquals(listOf<DefaultNetwork?>(null), changes)
     }

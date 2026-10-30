@@ -24,6 +24,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.LogOutput
@@ -39,6 +40,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.Implementation
 import org.robolectric.annotation.Implements
 import org.robolectric.shadow.api.Shadow
+import org.robolectric.shadows.ShadowConnectivityManager
 import org.robolectric.shadows.ShadowNetwork
 import org.robolectric.shadows.ShadowNetworkCapabilities
 import org.robolectric.shadows.ShadowSubscriptionManager
@@ -356,6 +358,40 @@ class NetworkMonitorTest {
     }
 
     @Test
+    fun `a repeated network is not reported again`() {
+        monitor.register(reported::add)
+        connect(WIFI_NETWORK, "192.0.2.10")
+
+        monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
+        monitor.onLinkPropertiesChanged(WIFI_NETWORK, linkProperties("192.0.2.20"))
+        monitor.onBlockedStatusChanged(WIFI_NETWORK, false)
+        repeat(2) { monitor.onLost(WIFI_NETWORK) }
+
+        assertEquals(listOf(WIFI_NETWORK.networkHandle, null), reported.map { it?.handle })
+    }
+
+    @Test
+    fun `the network read at start is reported once when the system repeats it`() {
+        val active = activeWifi()
+        monitor.register(reported::add)
+
+        connect(active, "192.0.2.10")
+
+        assertEquals(1, reported.size)
+    }
+
+    @Test
+    @Config(sdk = [24])
+    fun `below API 26 the network read at start is reported once when the system repeats it`() {
+        val active = activeWifi()
+        monitor.register(reported::add)
+
+        monitor.onAvailable(active)
+
+        assertEquals(1, reported.size)
+    }
+
+    @Test
     fun `a new default network is reported with its own handle`() {
         monitor.register(reported::add)
         connect(WIFI_NETWORK, "192.0.2.10")
@@ -382,11 +418,11 @@ class NetworkMonitorTest {
     fun `the network key is the transport and the first IPv4 address without its last byte`() {
         monitor.register(reported::add)
 
-        connect(WIFI_NETWORK, "127.0.0.1", "fe80::1", "192.0.2.10", "192.0.2.20", "2001:db8::1")
-        connect(WIFI_NETWORK, "192.0.2.20")
-        connect(WIFI_NETWORK, "192.0.2.10", capabilities = capabilities(listOf(TRANSPORT_ETHERNET)))
+        connect(network(1), "127.0.0.1", "fe80::1", "192.0.2.10", "192.0.2.20", "2001:db8::1")
+        connect(network(2), "192.0.2.20")
+        connect(network(3), "192.0.2.10", capabilities = capabilities(listOf(TRANSPORT_ETHERNET)))
         connect(
-            WIFI_NETWORK,
+            network(4),
             "192.0.2.10",
             capabilities = capabilities(listOf(TRANSPORT_VPN, TRANSPORT_WIFI))
         )
@@ -429,29 +465,56 @@ class NetworkMonitorTest {
     }
 
     @Test
-    fun `without a default network at start the network is none, with one it waits for it`() {
-        val connectivity = shadowOf(app.getSystemService(ConnectivityManager::class.java))
-        monitor.register {}
-        val withNetwork = monitor.currentNetwork()
-        monitor.close()
-        connectivity.setActiveNetworkInfo(null)
-        val offline = NetworkMonitor(app)
+    fun `at start the default network is reported before the callback is registered`() {
+        val manager = app.getSystemService(ConnectivityManager::class.java)
+        val active = activeWifi()
+        val callbacksWhenReported = mutableListOf<Int>()
+        monitor.register { network ->
+            reported += network
+            callbacksWhenReported += shadowOf(manager).networkCallbacks.size
+        }
 
-        offline.register {}
+        assertEquals(
+            listOf<DefaultNetwork?>(
+                DefaultNetwork(active.networkHandle, "WIFI/192.0.2", blocked = false)
+            ),
+            reported
+        )
+        assertEquals(listOf(0), callbacksWhenReported)
+        assertEquals(NetworkTransport.WIFI, connected().transport)
+        assertEquals(false, connected().blocked)
+    }
 
-        assertEquals(NetworkSnapshot.Unknown, withNetwork)
-        assertEquals(NetworkSnapshot.None, offline.currentNetwork())
-        offline.close()
+    @Test
+    @Config(sdk = [28])
+    fun `below API 29 the default network at start has unknown blocking`() {
+        activeWifi()
+
+        monitor.register(reported::add)
+
+        assertNull(reported.single()?.blocked)
+    }
+
+    @Test
+    fun `without a default network at start nothing is reported and the network is none`() {
+        shadowOf(app.getSystemService(ConnectivityManager::class.java)).setActiveNetworkInfo(null)
+
+        monitor.register(reported::add)
+
+        assertEquals(emptyList<DefaultNetwork?>(), reported)
+        assertEquals(NetworkSnapshot.None, monitor.currentNetwork())
     }
 
     @Test
     @Config(shadows = [RefusingConnectivityManager::class])
-    fun `a refused registration leaves the network unknown and is logged`() {
+    fun `a refused registration leaves the network unknown, reports none and is logged`() {
+        val active = activeWifi()
         val logged = mutableListOf<Throwable?>()
         SdkRegistry.logger.output = LogOutput { _, _, throwable -> logged += throwable }
 
-        monitor.register {}
+        monitor.register(reported::add)
 
+        assertEquals(listOf(active.networkHandle, null), reported.map { it?.handle })
         assertEquals(NetworkSnapshot.Unknown, monitor.currentNetwork())
         assertIs<SecurityException>(logged.single())
     }
@@ -496,6 +559,18 @@ class NetworkMonitorTest {
     }
 
     private fun address(literal: String) = InetAddress.getByName(literal)
+
+    private fun network(id: Int) = ShadowNetwork.newInstance(200 + id)
+
+    private fun activeWifi(): Network {
+        val manager = app.getSystemService(ConnectivityManager::class.java)
+        val active = assertNotNull(manager.activeNetwork)
+        shadowOf(manager).apply {
+            setNetworkCapabilities(active, capabilities(listOf(TRANSPORT_WIFI)))
+            setLinkProperties(active, linkProperties("192.0.2.10"))
+        }
+        return active
+    }
 
     private fun cellular() = capabilities(listOf(TRANSPORT_CELLULAR))
 
@@ -545,10 +620,11 @@ class NetworkMonitorTest {
     }
 
     @Implements(ConnectivityManager::class)
-    class RefusingConnectivityManager {
+    class RefusingConnectivityManager : ShadowConnectivityManager() {
         @Implementation
-        fun registerDefaultNetworkCallback(callback: ConnectivityManager.NetworkCallback): Unit =
-            throw SecurityException()
+        override fun registerDefaultNetworkCallback(
+            callback: ConnectivityManager.NetworkCallback
+        ): Unit = throw SecurityException()
     }
 
     private companion object {
