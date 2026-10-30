@@ -8,6 +8,7 @@ import net.qrator.failoverbeacon.core.call.ExchangeBus
 import net.qrator.failoverbeacon.core.dns.SdkDns
 import net.qrator.failoverbeacon.core.logging.error
 import net.qrator.failoverbeacon.core.network.NetworkSource
+import net.qrator.failoverbeacon.core.network.model.DefaultNetwork
 import net.qrator.failoverbeacon.core.thread.SdkThreads
 import net.qrator.failoverbeacon.core.time.EpochClock
 import net.qrator.failoverbeacon.core.time.MonotonicClock
@@ -47,6 +48,10 @@ class SdkInstance(
     fun publishConsent() {
         val consent = consent
         featureList.forEach { it.onConsentChanged(consent) }
+    }
+
+    fun publishNetwork(network: DefaultNetwork?) {
+        featureList.forEach { it.onNetworkChanged(network) }
     }
 
     fun clearData() {

@@ -3,6 +3,9 @@ package net.qrator.failoverbeacon.internal.network
 import android.Manifest
 import android.app.Application
 import android.net.ConnectivityManager
+import android.net.LinkAddress
+import android.net.LinkProperties
+import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL
 import android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED
@@ -15,6 +18,8 @@ import android.net.NetworkCapabilities.TRANSPORT_VPN
 import android.net.NetworkCapabilities.TRANSPORT_WIFI
 import android.os.Build
 import android.telephony.TelephonyManager
+import java.net.Inet4Address
+import java.net.InetAddress
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,6 +27,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.LogOutput
+import net.qrator.failoverbeacon.core.network.model.DefaultNetwork
 import net.qrator.failoverbeacon.core.network.model.NetworkCarrier
 import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 import net.qrator.failoverbeacon.core.network.model.NetworkTransport
@@ -36,6 +42,8 @@ import org.robolectric.shadow.api.Shadow
 import org.robolectric.shadows.ShadowNetwork
 import org.robolectric.shadows.ShadowNetworkCapabilities
 import org.robolectric.shadows.ShadowSubscriptionManager
+import org.robolectric.util.ReflectionHelpers
+import org.robolectric.util.ReflectionHelpers.ClassParameter
 
 @RunWith(RobolectricTestRunner::class)
 class NetworkMonitorTest {
@@ -45,6 +53,7 @@ class NetworkMonitorTest {
     )
     private val monitor = NetworkMonitor(app)
     private val previousOutput = SdkRegistry.logger.output
+    private val reported = mutableListOf<DefaultNetwork?>()
 
     @AfterTest
     fun tearDown() {
@@ -272,6 +281,146 @@ class NetworkMonitorTest {
     }
 
     @Test
+    fun `from API 29 a new default network is reported once its blocking is known`() {
+        val current = mutableListOf<NetworkSnapshot>()
+        monitor.register { network ->
+            reported += network
+            current += monitor.currentNetwork()
+        }
+
+        monitor.onAvailable(WIFI_NETWORK)
+        monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
+        monitor.onLinkPropertiesChanged(WIFI_NETWORK, linkProperties("192.0.2.10"))
+        val beforeBlocking = reported.toList()
+        monitor.onBlockedStatusChanged(WIFI_NETWORK, false)
+
+        assertEquals(emptyList<DefaultNetwork?>(), beforeBlocking)
+        assertEquals(
+            listOf<DefaultNetwork?>(
+                DefaultNetwork(WIFI_NETWORK.networkHandle, "WIFI/192.0.2", blocked = false)
+            ),
+            reported
+        )
+        assertEquals(listOf<NetworkSnapshot>(connected()), current)
+    }
+
+    @Test
+    @Config(sdk = [28])
+    fun `below API 29 a new default network is reported with its link properties`() {
+        monitor.register(reported::add)
+
+        monitor.onAvailable(WIFI_NETWORK)
+        monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
+        monitor.onLinkPropertiesChanged(WIFI_NETWORK, linkProperties("192.0.2.10"))
+
+        assertEquals(
+            DefaultNetwork(WIFI_NETWORK.networkHandle, "WIFI/192.0.2", blocked = null),
+            reported.single()
+        )
+    }
+
+    @Test
+    @Config(sdk = [24])
+    fun `below API 26 a new default network is reported when it becomes available`() {
+        shadowOf(app.getSystemService(ConnectivityManager::class.java)).apply {
+            setNetworkCapabilities(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
+            setLinkProperties(WIFI_NETWORK, linkProperties("192.0.2.10"))
+        }
+        monitor.register(reported::add)
+
+        monitor.onAvailable(WIFI_NETWORK)
+
+        assertEquals(
+            DefaultNetwork(WIFI_NETWORK.networkHandle, "WIFI/192.0.2", blocked = null),
+            reported.single()
+        )
+    }
+
+    @Test
+    fun `address and blocking changes are reported, capability changes are not`() {
+        monitor.register(reported::add)
+        connect(WIFI_NETWORK, "192.0.2.10")
+
+        monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
+        monitor.onLinkPropertiesChanged(WIFI_NETWORK, linkProperties("198.51.100.10"))
+        monitor.onBlockedStatusChanged(WIFI_NETWORK, true)
+
+        assertEquals(
+            listOf<DefaultNetwork?>(
+                DefaultNetwork(WIFI_NETWORK.networkHandle, "WIFI/192.0.2", blocked = false),
+                DefaultNetwork(WIFI_NETWORK.networkHandle, "WIFI/198.51.100", blocked = false),
+                DefaultNetwork(WIFI_NETWORK.networkHandle, "WIFI/198.51.100", blocked = true)
+            ),
+            reported
+        )
+    }
+
+    @Test
+    fun `a new default network is reported with its own handle`() {
+        monitor.register(reported::add)
+        connect(WIFI_NETWORK, "192.0.2.10")
+
+        connect(CELLULAR_NETWORK, "192.0.2.10")
+
+        assertEquals(
+            listOf(WIFI_NETWORK.networkHandle, CELLULAR_NETWORK.networkHandle),
+            reported.map { it?.handle }
+        )
+    }
+
+    @Test
+    fun `losing the default network is reported as none`() {
+        monitor.register(reported::add)
+        connect(WIFI_NETWORK, "192.0.2.10")
+
+        monitor.onLost(WIFI_NETWORK)
+
+        assertEquals(listOf(WIFI_NETWORK.networkHandle, null), reported.map { it?.handle })
+    }
+
+    @Test
+    fun `the network key is the transport and the first IPv4 address without its last byte`() {
+        monitor.register(reported::add)
+
+        connect(WIFI_NETWORK, "127.0.0.1", "fe80::1", "192.0.2.10", "192.0.2.20", "2001:db8::1")
+        connect(WIFI_NETWORK, "192.0.2.20")
+        connect(WIFI_NETWORK, "192.0.2.10", capabilities = capabilities(listOf(TRANSPORT_ETHERNET)))
+        connect(
+            WIFI_NETWORK,
+            "192.0.2.10",
+            capabilities = capabilities(listOf(TRANSPORT_VPN, TRANSPORT_WIFI))
+        )
+
+        assertEquals(
+            listOf("WIFI/192.0.2", "WIFI/192.0.2", "ETHERNET/192.0.2", "WIFI+VPN/192.0.2"),
+            reported.map { it?.key }
+        )
+    }
+
+    @Test
+    fun `without IPv4 the network key is the first 64 bits of an IPv6 address`() {
+        monitor.register(reported::add)
+
+        connect(WIFI_NETWORK, "fe80::1", "2001:db8:1:2::10")
+
+        assertEquals("WIFI/20010db800010002", reported.single()?.key)
+    }
+
+    @Test
+    fun `a mobile network key is its operator, without one its address`() {
+        monitor.register(reported::add)
+
+        connect(CELLULAR_NETWORK, "198.51.100.10", capabilities = cellular())
+        shadowOf(telephonyManager).setSimOperator("00101")
+        connect(CELLULAR_NETWORK, "198.51.100.10", capabilities = cellular())
+
+        assertEquals(
+            listOf("CELLULAR/198.51.100", "CELLULAR/001-01"),
+            reported.map { it?.key }
+        )
+    }
+
+    @Test
     fun `losing the default network leaves none`() {
         monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
         monitor.onLost(WIFI_NETWORK)
@@ -282,13 +431,13 @@ class NetworkMonitorTest {
     @Test
     fun `without a default network at start the network is none, with one it waits for it`() {
         val connectivity = shadowOf(app.getSystemService(ConnectivityManager::class.java))
-        monitor.register()
+        monitor.register {}
         val withNetwork = monitor.currentNetwork()
         monitor.close()
         connectivity.setActiveNetworkInfo(null)
         val offline = NetworkMonitor(app)
 
-        offline.register()
+        offline.register {}
 
         assertEquals(NetworkSnapshot.Unknown, withNetwork)
         assertEquals(NetworkSnapshot.None, offline.currentNetwork())
@@ -301,7 +450,7 @@ class NetworkMonitorTest {
         val logged = mutableListOf<Throwable?>()
         SdkRegistry.logger.output = LogOutput { _, _, throwable -> logged += throwable }
 
-        monitor.register()
+        monitor.register {}
 
         assertEquals(NetworkSnapshot.Unknown, monitor.currentNetwork())
         assertIs<SecurityException>(logged.single())
@@ -321,6 +470,32 @@ class NetworkMonitorTest {
     }
 
     private fun connected() = assertIs<NetworkSnapshot.Connected>(monitor.currentNetwork())
+
+    private fun connect(
+        network: Network,
+        vararg addresses: String,
+        capabilities: NetworkCapabilities = capabilities(listOf(TRANSPORT_WIFI))
+    ) {
+        monitor.onAvailable(network)
+        monitor.onCapabilitiesChanged(network, capabilities)
+        monitor.onLinkPropertiesChanged(network, linkProperties(*addresses))
+        monitor.onBlockedStatusChanged(network, false)
+    }
+
+    private fun linkProperties(vararg addresses: String) = LinkProperties().apply {
+        val linkAddresses = addresses.map(::address).map {
+            val prefixLength = if (it is Inet4Address) 24 else 64
+            // The LinkAddress constructors are hidden from apps.
+            ReflectionHelpers.callConstructor(
+                LinkAddress::class.java,
+                ClassParameter.from(InetAddress::class.java, it),
+                ClassParameter.from(Int::class.javaPrimitiveType, prefixLength)
+            )
+        }
+        setLinkAddresses(linkAddresses)
+    }
+
+    private fun address(literal: String) = InetAddress.getByName(literal)
 
     private fun cellular() = capabilities(listOf(TRANSPORT_CELLULAR))
 

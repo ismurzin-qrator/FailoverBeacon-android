@@ -24,6 +24,7 @@ import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkFeature
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
+import net.qrator.failoverbeacon.core.network.model.DefaultNetwork
 import net.qrator.failoverbeacon.internal.LogcatLogger
 import net.qrator.failoverbeacon.internal.SdkStartup
 import org.junit.runner.RunWith
@@ -33,6 +34,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowApplication
 import org.robolectric.shadows.ShadowLog
+import org.robolectric.shadows.ShadowNetwork
 import org.robolectric.shadows.ShadowSystemClock
 
 @RunWith(RobolectricTestRunner::class)
@@ -205,6 +207,23 @@ class FailoverBeaconTest {
         assertNull(SdkRegistry.instance)
         assertTrue(executor.isShutdown)
         assertEquals(emptySet(), networkCallbacks())
+    }
+
+    @Test
+    fun `a network change reaches the features`() {
+        FailoverBeacon.initialize(app, config)
+        val changes = mutableListOf<DefaultNetwork?>()
+        assertNotNull(SdkRegistry.instance).addFeature(
+            object : SdkFeature {
+                override fun onNetworkChanged(network: DefaultNetwork?) {
+                    changes += network
+                }
+            }
+        )
+
+        networkCallbacks().single().onLost(ShadowNetwork.newInstance(100))
+
+        assertEquals(listOf<DefaultNetwork?>(null), changes)
     }
 
     @Test

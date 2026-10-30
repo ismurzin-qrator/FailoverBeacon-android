@@ -59,7 +59,7 @@ internal object SdkStartup {
         failover.subscribe()
         if (!SdkRegistry.install(sdk)) return false
         try {
-            networkMonitor.register()
+            networkMonitor.register(sdk::publishNetwork)
             foregroundMonitor?.register()
             telemetry.start()
             failover.start()
