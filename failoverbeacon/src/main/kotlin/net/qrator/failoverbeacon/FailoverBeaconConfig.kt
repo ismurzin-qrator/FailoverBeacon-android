@@ -91,7 +91,11 @@ public class FailoverBeaconConfig private constructor(
 
         /**
          * Sets hosts for connection optimization and failover, for example
-         * `listOf(FailoverHost("api.example.com"))`. By default, the list is empty.
+         * `listOf(FailoverHost("api.example.com"))`. After [FailoverBeacon.initialize] the SDK
+         * resolves them with [dnsResolver] and checks their IPv4 addresses with TCP connections in
+         * the background. Clients wrapped with `withFailoverBeacon()` get the fastest addresses
+         * first and keep working through the other ones and through `additionalAddresses` when
+         * some fail. By default, the list is empty.
          *
          * @throws IllegalArgumentException if [hosts] contains duplicate host names.
          */

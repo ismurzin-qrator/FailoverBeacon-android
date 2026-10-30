@@ -11,8 +11,9 @@ import okhttp3.OkHttpClient
 /**
  * Returns a copy of this client observed by the FailoverBeacon SDK. The copy shares the connection
  * pool and dispatcher with this client, and this client's [okhttp3.EventListener] still receives
- * every event. SDK failures don't affect calls. Observes nothing until [FailoverBeacon.initialize]
- * is called.
+ * every event. Hosts from `FailoverBeaconConfig.Builder.failoverHosts` get addresses from the
+ * SDK, fastest first, other hosts use this client's DNS. SDK failures don't affect calls. Observes
+ * nothing until [FailoverBeacon.initialize] is called.
  *
  * Requires OkHttp 3.14 or newer.
  */
