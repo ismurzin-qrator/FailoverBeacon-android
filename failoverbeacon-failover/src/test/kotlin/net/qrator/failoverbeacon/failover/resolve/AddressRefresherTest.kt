@@ -41,6 +41,16 @@ class AddressRefresherTest {
     }
 
     @Test
+    fun `refreshNow resolves on the calling thread into the repository`() {
+        resolver.answer(API, ip(1))
+
+        refresher.refreshNow(API)
+
+        assertEquals(0, executor.queued)
+        assertEquals(listOf(ip(1)), repository[API]?.addresses?.keys?.toList())
+    }
+
+    @Test
     fun `a host is resolved once at a time`() {
         refresher.refresh(API)
         refresher.refresh(API)

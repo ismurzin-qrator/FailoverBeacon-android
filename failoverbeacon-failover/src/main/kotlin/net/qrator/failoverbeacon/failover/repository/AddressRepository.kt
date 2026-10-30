@@ -19,9 +19,9 @@ internal class AddressRepository(
 
     operator fun get(host: String): HostRecord? = records[host]
 
-    fun saveResolved(host: String, addresses: List<InetAddress>): HostRecord? {
+    fun saveResolved(host: String, addresses: List<InetAddress>) {
         var hasNewAddresses = false
-        val savedRecord = records.computeIfPresent(host) { _, oldRecord ->
+        records.computeIfPresent(host) { _, oldRecord ->
             val newRecord = oldRecord.withResolved(addresses, clock.nanoTime())
             hasNewAddresses = newRecord.addresses.keys != oldRecord.addresses.keys
             newRecord
@@ -29,7 +29,6 @@ internal class AddressRepository(
         if (hasNewAddresses) {
             addressListeners.forEach { listener -> listener(host) }
         }
-        return savedRecord
     }
 
     fun saveProbe(host: String, address: InetAddress, result: ProbeResult) {

@@ -50,31 +50,21 @@ class FailoverBeaconDnsTest {
     }
 
     @Test
-    fun `prepared addresses are used without the app's DNS`() {
-        sdkDns.prepared = listOf(ip(5))
+    fun `the SDK addresses are used without the app's DNS`() {
+        sdkDns.addresses = listOf(ip(5))
 
         assertEquals(listOf(ip(5)), dns.lookup(API))
         assertEquals(emptyList(), appLookups)
     }
 
     @Test
-    fun `the app's answer goes through the SDK`() {
-        sdkDns.resolved = { listOf(ip(1), ip(7)) }
-
-        assertEquals(listOf(ip(1), ip(7)), dns.lookup(API))
-        assertEquals(listOf(API to listOf(ip(1))), sdkDns.answers)
+    fun `when the SDK has no addresses the app's DNS answers`() {
+        assertEquals(listOf(ip(1)), dns.lookup(API))
+        assertEquals(listOf(API), sdkDns.lookups)
     }
 
     @Test
-    fun `when the app's DNS fails the SDK addresses are used`() {
-        appAnswer = { throw UnknownHostException(API) }
-        sdkDns.failed = listOf(ip(7))
-
-        assertEquals(listOf(ip(7)), dns.lookup(API))
-    }
-
-    @Test
-    fun `when the app's DNS fails and the SDK has nothing, the app's error is thrown`() {
+    fun `when the SDK has no addresses the app's DNS error is thrown`() {
         val error = UnknownHostException(API)
         appAnswer = { throw error }
 
@@ -83,19 +73,10 @@ class FailoverBeaconDnsTest {
 
     @Test
     fun `an SDK failure falls back to the app's DNS`() {
-        sdkDns.prepared = listOf(ip(5))
+        sdkDns.addresses = listOf(ip(5))
         sdkDns.failure = IllegalStateException()
 
         assertEquals(listOf(ip(1)), dns.lookup(API))
-    }
-
-    @Test
-    fun `an SDK failure after the app's DNS failed keeps the app's error`() {
-        val error = UnknownHostException(API)
-        appAnswer = { throw error }
-        sdkDns.failure = IllegalStateException()
-
-        assertSame(error, assertFailsWith<UnknownHostException> { dns.lookup(API) })
     }
 
     @Test
@@ -106,28 +87,16 @@ class FailoverBeaconDnsTest {
     }
 
     private class FakeSdkDns : SdkDns {
-        var prepared: List<InetAddress>? = null
-        var resolved: ((List<InetAddress>) -> List<InetAddress>) = { it }
-        var failed: List<InetAddress>? = null
+        var addresses: List<InetAddress>? = null
         var failure: Throwable? = null
-        val answers = mutableListOf<Pair<String, List<InetAddress>>>()
+        val lookups = mutableListOf<String>()
 
         override fun manages(host: String): Boolean = host == API
 
-        override fun preparedAddresses(host: String): List<InetAddress>? {
+        override fun lookup(host: String): List<InetAddress>? {
             failure?.let { throw it }
-            return prepared
-        }
-
-        override fun onResolved(host: String, addresses: List<InetAddress>): List<InetAddress> {
-            failure?.let { throw it }
-            answers += host to addresses
-            return resolved(addresses)
-        }
-
-        override fun onResolveFailed(host: String): List<InetAddress>? {
-            failure?.let { throw it }
-            return failed
+            lookups += host
+            return addresses
         }
     }
 

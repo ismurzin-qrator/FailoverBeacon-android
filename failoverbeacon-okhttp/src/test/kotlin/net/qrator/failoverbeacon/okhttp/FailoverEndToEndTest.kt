@@ -43,9 +43,11 @@ class FailoverEndToEndTest {
             .failoverHosts(
                 listOf(
                     FailoverHost(API, additionalAddresses = listOf("127.0.0.1")),
-                    FailoverHost(RANKED, server.port, listOf(UNREACHABLE, "127.0.0.1"))
+                    FailoverHost(RANKED, server.port, listOf(UNREACHABLE, "127.0.0.1")),
+                    FailoverHost(RESOLVED)
                 )
             )
+            .dnsResolver { sdkDns(it) }
             .build()
         FailoverBeacon.initialize(app, config)
     }
@@ -61,6 +63,13 @@ class FailoverEndToEndTest {
         server.enqueue(MockResponse().setBody("ok"))
 
         assertEquals("ok", execute(API))
+    }
+
+    @Test
+    fun `a configured host is resolved through the configured DNS`() {
+        server.enqueue(MockResponse().setBody("ok"))
+
+        assertEquals("ok", execute(RESOLVED))
     }
 
     @Test
@@ -106,10 +115,13 @@ class FailoverEndToEndTest {
     private fun appDns(host: String): List<InetAddress> =
         if (host == OTHER) listOf(LOOPBACK) else throw UnknownHostException(host)
 
+    private fun sdkDns(host: String): List<InetAddress> =
+        if (host == RESOLVED) listOf(LOOPBACK) else throw UnknownHostException(host)
+
     private fun awaitLeader(host: String, address: InetAddress): Boolean {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
         while (System.nanoTime() < deadline) {
-            if (SdkRegistry.instance?.dns?.onResolveFailed(host)?.first() == address) return true
+            if (SdkRegistry.instance?.dns?.lookup(host)?.first() == address) return true
             Thread.sleep(10)
         }
         return false
@@ -124,6 +136,7 @@ class FailoverEndToEndTest {
         const val API = "api.test"
         const val OTHER = "other.test"
         const val RANKED = "ranked.test"
+        const val RESOLVED = "resolved.test"
         const val UNREACHABLE = "192.0.2.1"
         val LOOPBACK: InetAddress = InetAddress.getByName("127.0.0.1")
     }

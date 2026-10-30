@@ -53,6 +53,7 @@ internal object SdkStartup {
             hosts = config.failoverHosts.map {
                 FailoverHostConfig(it.host, it.port, it.additionalAddresses, it.probeConnections)
             },
+            resolve = config.dnsResolver::resolve,
             settings = FailoverSettings()
         )
         failover.subscribe()

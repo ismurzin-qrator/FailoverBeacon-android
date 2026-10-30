@@ -14,16 +14,13 @@ internal class FailoverDns(
 ) : SdkDns {
     override fun manages(host: String): Boolean = repository[host] != null
 
-    override fun preparedAddresses(host: String): List<InetAddress>? {
+    override fun lookup(host: String): List<InetAddress>? {
         val record = repository[host] ?: return null
-        if (!record.isFresh(clock.nanoTime(), maxAgeNanos)) return null
-        refresher.refresh(host)
-        return record.addresses.keys.toList()
+        if (record.isFresh(clock.nanoTime(), maxAgeNanos)) {
+            refresher.refresh(host)
+        } else {
+            refresher.refreshNow(host)
+        }
+        return repository[host]?.addresses?.keys?.toList()?.ifEmpty { null }
     }
-
-    override fun onResolved(host: String, addresses: List<InetAddress>): List<InetAddress> =
-        repository.saveResolved(host, addresses)?.addresses?.keys?.toList() ?: addresses
-
-    override fun onResolveFailed(host: String): List<InetAddress>? =
-        repository[host]?.addresses?.keys?.toList()?.ifEmpty { null }
 }

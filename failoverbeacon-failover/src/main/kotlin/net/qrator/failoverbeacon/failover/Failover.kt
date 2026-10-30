@@ -14,6 +14,7 @@ import net.qrator.failoverbeacon.failover.resolve.AddressRefresher
 class Failover(
     private val sdk: SdkInstance,
     hosts: List<FailoverHostConfig>,
+    resolve: (String) -> List<InetAddress>,
     settings: FailoverSettings
 ) : SdkFeature {
     private val resolveExecutor = SdkExecutor(
@@ -39,7 +40,7 @@ class Failover(
         executor = probeExecutor
     )
     private val refresher = AddressRefresher(
-        resolve = { InetAddress.getAllByName(it).toList() },
+        resolve = resolve,
         repository = repository,
         executor = resolveExecutor
     )

@@ -34,6 +34,10 @@ internal class AddressRefresher(
 
     fun refresh(host: String) = submit(host) {}
 
+    fun refreshNow(host: String) {
+        resolveAndSave(host)
+    }
+
     private fun submit(host: String, onDone: (Boolean) -> Unit) {
         if (!refreshing.add(host)) return
         executor.execute { resolveInBackground(host, onDone) }
@@ -42,15 +46,20 @@ internal class AddressRefresher(
     private fun resolveInBackground(host: String, onDone: (Boolean) -> Unit) {
         var success = false
         try {
-            val addresses = resolve(host)
-            repository.saveResolved(host, addresses)
-            success = addresses.isNotEmpty()
-            SdkRegistry.logger.debug { "[Failover] $host: ${addresses.size} addresses" }
-        } catch (e: UnknownHostException) {
-            SdkRegistry.logger.debug(e) { "[Failover] $host: DNS failed" }
+            success = resolveAndSave(host)
         } finally {
             refreshing.remove(host)
             onDone(success)
         }
+    }
+
+    private fun resolveAndSave(host: String): Boolean = try {
+        val addresses = resolve(host)
+        repository.saveResolved(host, addresses)
+        SdkRegistry.logger.debug { "[Failover] $host: ${addresses.size} addresses" }
+        addresses.isNotEmpty()
+    } catch (e: UnknownHostException) {
+        SdkRegistry.logger.debug(e) { "[Failover] $host: DNS failed" }
+        false
     }
 }

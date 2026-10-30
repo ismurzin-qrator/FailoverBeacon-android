@@ -1,11 +1,14 @@
 package net.qrator.failoverbeacon
 
+import java.net.InetAddress
 import java.net.URISyntaxException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class FailoverBeaconConfigTest {
     @Test
@@ -144,6 +147,17 @@ class FailoverBeaconConfigTest {
         for (hosts in repeats) {
             assertFailsWith<IllegalArgumentException> { builderWithBeacon().failoverHosts(hosts) }
         }
+    }
+
+    @Test
+    fun `dnsResolver is the system DNS by default and can be replaced`() {
+        val appDns = HostResolver { listOf(InetAddress.getByName("192.0.2.1")) }
+
+        val default = builderWithBeacon().build().dnsResolver
+        val replaced = builderWithBeacon().dnsResolver(appDns).build().dnsResolver
+
+        assertTrue(default.resolve("localhost").all { it.isLoopbackAddress })
+        assertSame(appDns, replaced)
     }
 
     @Test

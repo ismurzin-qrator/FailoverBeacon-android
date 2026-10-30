@@ -1,5 +1,6 @@
 package net.qrator.failoverbeacon
 
+import java.net.InetAddress
 import java.net.URI
 import java.net.URISyntaxException
 import net.qrator.failoverbeacon.internal.util.canonicalHost
@@ -20,6 +21,7 @@ public class FailoverBeaconConfig private constructor(
     internal val failureSampleRate: Double,
     internal val successSampleRate: Double,
     internal val failoverHosts: List<FailoverHost>,
+    internal val dnsResolver: HostResolver,
     internal val options: FailoverBeaconOptions
 ) {
     /** Builds [FailoverBeaconConfig]. [beacons] is required; other setters are optional. */
@@ -29,6 +31,7 @@ public class FailoverBeaconConfig private constructor(
         private var failureSampleRate = DEFAULT_FAILURE_SAMPLE_RATE
         private var successSampleRate = DEFAULT_SUCCESS_SAMPLE_RATE
         private var failoverHosts: List<FailoverHost> = emptyList()
+        private var dnsResolver = SYSTEM_DNS
         private var options: FailoverBeaconOptions? = null
 
         /**
@@ -100,6 +103,16 @@ public class FailoverBeaconConfig private constructor(
             failoverHosts = hosts.toList()
         }
 
+        /**
+         * Sets the DNS for [failoverHosts], for example the app's DNS over HTTPS:
+         * `dnsResolver { host -> doh.lookup(host) }`. The SDK resolves these hosts at start and
+         * in the background, and clients wrapped with `withFailoverBeacon()` get these addresses
+         * instead of their own DNS. By default, the system DNS.
+         */
+        public fun dnsResolver(resolver: HostResolver): Builder = apply {
+            dnsResolver = resolver
+        }
+
         /** Sets additional options. By default, every option has its default value. */
         public fun options(options: FailoverBeaconOptions): Builder = apply {
             this.options = options
@@ -118,6 +131,7 @@ public class FailoverBeaconConfig private constructor(
                 failureSampleRate = failureSampleRate,
                 successSampleRate = successSampleRate,
                 failoverHosts = failoverHosts,
+                dnsResolver = dnsResolver,
                 options = options ?: FailoverBeaconOptions.Builder().build()
             )
         }
@@ -125,6 +139,7 @@ public class FailoverBeaconConfig private constructor(
         private companion object {
             private const val DEFAULT_FAILURE_SAMPLE_RATE = 1.0
             private const val DEFAULT_SUCCESS_SAMPLE_RATE = 0.1
+            private val SYSTEM_DNS = HostResolver { InetAddress.getAllByName(it).toList() }
 
             private fun checkBeaconUrl(url: String) {
                 val uri = try {

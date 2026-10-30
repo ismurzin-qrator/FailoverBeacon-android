@@ -87,11 +87,7 @@ class FailoverBeaconDnsWithNewCallTest {
     private class ManagesApi : SdkDns {
         override fun manages(host: String) = host == API
 
-        override fun preparedAddresses(host: String): List<InetAddress>? = null
-
-        override fun onResolved(host: String, addresses: List<InetAddress>) = addresses
-
-        override fun onResolveFailed(host: String): List<InetAddress>? = null
+        override fun lookup(host: String): List<InetAddress>? = null
     }
 
     private companion object {

@@ -7,6 +7,7 @@ import android.content.ContextWrapper
 import android.net.ConnectivityManager
 import android.util.Log
 import java.io.File
+import java.net.InetAddress
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
@@ -219,20 +220,19 @@ class FailoverBeaconTest {
     }
 
     @Test
-    fun `failover gives the transport the addresses of its hosts only`() {
+    fun `failover gives the transport the addresses of its hosts from the configured DNS`() {
         val failoverConfig = FailoverBeaconConfig.Builder()
             .beacons(listOf("https://beacon.example"))
-            .failoverHosts(
-                listOf(FailoverHost("localhost", additionalAddresses = listOf("192.0.2.10")))
-            )
+            .failoverHosts(listOf(FailoverHost("api.example")))
+            .dnsResolver { listOf(InetAddress.getByName("192.0.2.1")) }
             .build()
         FailoverBeacon.initialize(app, failoverConfig)
         val dns = assertNotNull(SdkRegistry.instance?.dns)
 
-        val configured = dns.onResolveFailed("localhost")
-        val outside = dns.onResolveFailed("other.example")
+        val configured = dns.lookup("api.example")
+        val outside = dns.lookup("other.example")
 
-        assertEquals(listOf<String?>("192.0.2.10"), configured?.map { it.hostAddress })
+        assertEquals(listOf<String?>("192.0.2.1"), configured?.map { it.hostAddress })
         assertNull(outside)
     }
 
