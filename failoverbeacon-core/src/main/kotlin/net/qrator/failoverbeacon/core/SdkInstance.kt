@@ -8,6 +8,7 @@ import net.qrator.failoverbeacon.core.call.ExchangeBus
 import net.qrator.failoverbeacon.core.dns.SdkDns
 import net.qrator.failoverbeacon.core.logging.error
 import net.qrator.failoverbeacon.core.network.NetworkSource
+import net.qrator.failoverbeacon.core.thread.SdkThreads
 import net.qrator.failoverbeacon.core.time.EpochClock
 import net.qrator.failoverbeacon.core.time.MonotonicClock
 import net.qrator.failoverbeacon.core.util.catchSdkFailure
@@ -30,9 +31,9 @@ class SdkInstance(
     @Volatile
     var dns: SdkDns? = null
 
-    private val featureList = CopyOnWriteArrayList<SdkFeature>()
+    val threads = SdkThreads()
 
-    val features: List<SdkFeature> get() = featureList
+    private val featureList = CopyOnWriteArrayList<SdkFeature>()
 
     fun addFeature(feature: SdkFeature) {
         featureList += feature
@@ -57,6 +58,7 @@ class SdkInstance(
         featureList.forEach { feature ->
             catchSdkFailure(::logStopFailure) { feature.close() }
         }
+        threads.close()
         networkSource.close()
         foregroundSource.close()
     }

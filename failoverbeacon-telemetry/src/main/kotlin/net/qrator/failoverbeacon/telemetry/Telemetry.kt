@@ -1,12 +1,9 @@
 package net.qrator.failoverbeacon.telemetry
 
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import net.qrator.failoverbeacon.core.SdkFeature
 import net.qrator.failoverbeacon.core.SdkInstance
 import net.qrator.failoverbeacon.core.TrackingConsent
-import net.qrator.failoverbeacon.core.thread.SdkExecutor
-import net.qrator.failoverbeacon.core.thread.SdkScheduledExecutor
 import net.qrator.failoverbeacon.telemetry.storage.EventStorage
 import net.qrator.failoverbeacon.telemetry.upload.TelemetryUploader
 
@@ -20,14 +17,6 @@ class Telemetry(
     private val uploadPeriodMillis: Long,
     diskQueueBytes: Long
 ) : SdkFeature {
-    val storageExecutor = SdkExecutor(
-        name = "storage",
-        coreThreads = 1,
-        maxThreads = 1,
-        keepAliveMillis = 0,
-        queue = LinkedBlockingQueue()
-    )
-    val uploadExecutor = SdkScheduledExecutor("upload")
     private val dropped = DroppedEvents(beacons)
     private val storage = EventStorage(
         cacheDir = sdk.appContext::getCacheDir,
@@ -43,14 +32,14 @@ class Telemetry(
         failureSampleRate = failureSampleRate,
         successSampleRate = successSampleRate,
         memoryQueueSize = memoryQueueSize,
-        executor = storageExecutor,
+        executor = sdk.threads.storage,
         storage = storage,
         dropped = dropped
     )
     private val uploader = TelemetryUploader(
         beacons = beacons,
         storage = storage,
-        storageExecutor = storageExecutor,
+        storageExecutor = sdk.threads.storage,
         consentSource = sdk,
         networkSource = sdk.networkSource,
         clock = sdk.epochClock,
@@ -63,7 +52,7 @@ class Telemetry(
     }
 
     fun start() {
-        uploadExecutor.scheduleWithFixedDelay(
+        sdk.threads.upload.scheduleWithFixedDelay(
             uploader::upload,
             0,
             uploadPeriodMillis,
@@ -74,11 +63,6 @@ class Telemetry(
     override fun onConsentChanged(consent: TrackingConsent) = collector.onConsentChanged(consent)
 
     override fun clearData() = collector.clearData()
-
-    override fun close() {
-        storageExecutor.shutdown()
-        uploadExecutor.shutdownNow()
-    }
 
     private companion object {
         const val MAX_BATCH_WINDOW_MILLIS = 10_000L
