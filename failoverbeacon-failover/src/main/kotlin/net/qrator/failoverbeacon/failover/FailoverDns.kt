@@ -13,13 +13,15 @@ internal class FailoverDns(
     override fun manages(host: String): Boolean = repository[host] != null
 
     override fun lookup(host: String): List<InetAddress>? {
-        if (repository[host] == null) return null
+        val record = repository[host] ?: return null
         onLookup()
-        if (repository.isFresh(host)) {
-            refresher.refresh(host)
+        val current = if (repository.isAnswerNeeded(record)) {
+            refresher.refreshAndWait(host)
+            repository[host]
         } else {
-            refresher.refreshNow(host)
+            refresher.refresh(host)
+            record
         }
-        return repository[host]?.addresses?.keys?.toList()?.ifEmpty { null }
+        return current?.addresses?.keys?.toList()?.ifEmpty { null }
     }
 }

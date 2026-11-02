@@ -13,7 +13,8 @@ import net.qrator.failoverbeacon.internal.util.parseIpv4
  * [port] is used for test connections, 443 by default.
  * [additionalAddresses] are IPv4 addresses of the host known to the app, such as `192.0.2.10`.
  * The SDK uses them along with DNS results and when DNS fails.
- * [probeConnections] allows test connections to the host's addresses, true by default.
+ * [probeConnections] allows test connections to the host's addresses, true by default. New
+ * connections then prefer the fastest address, whatever balancing DNS does.
  *
  * @throws IllegalArgumentException if [host] is not a host name, [port] is outside 1..65535 or
  * [additionalAddresses] has a value that is not an IPv4 address.

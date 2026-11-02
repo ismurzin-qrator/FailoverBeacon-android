@@ -9,18 +9,19 @@ internal class HostRecord private constructor(
     private val resolvedAtNanos: Long?,
     private val resolveRoundAtNanos: Long?,
     private val probeRoundAtNanos: Long?,
+    val hasResolveFailed: Boolean,
     results: Map<InetAddress, ProbeResult>
 ) {
     constructor(additionalAddresses: List<InetAddress>) :
-        this(emptyList(), additionalAddresses, null, null, null, emptyMap())
+        this(emptyList(), additionalAddresses, null, null, null, false, emptyMap())
 
     val addresses: Map<InetAddress, ProbeResult> =
         rank((resolvedAddresses + additionalAddresses).distinct(), results)
 
     val hasAnswer: Boolean get() = resolvedAtNanos != null
 
-    fun isFresh(nowNanos: Long, maxAgeNanos: Long): Boolean =
-        resolvedAtNanos != null && nowNanos - resolvedAtNanos <= maxAgeNanos
+    fun isFresh(nowNanos: Long, intervalNanos: Long): Boolean =
+        resolvedAtNanos != null && nowNanos - resolvedAtNanos < intervalNanos
 
     fun isResolveRoundDue(nowNanos: Long, intervalNanos: Long): Boolean =
         isDue(resolveRoundAtNanos, nowNanos, intervalNanos)
@@ -33,9 +34,12 @@ internal class HostRecord private constructor(
         return copy(
             resolvedAddresses = resolved,
             resolvedAtNanos = nowNanos,
-            resolveRoundAtNanos = nowNanos
+            resolveRoundAtNanos = nowNanos,
+            hasResolveFailed = false
         )
     }
+
+    fun withResolveFailure(): HostRecord = copy(hasResolveFailed = true)
 
     fun withResolveRound(nowNanos: Long): HostRecord = copy(resolveRoundAtNanos = nowNanos)
 
@@ -54,6 +58,7 @@ internal class HostRecord private constructor(
         resolvedAtNanos: Long? = this.resolvedAtNanos,
         resolveRoundAtNanos: Long? = this.resolveRoundAtNanos,
         probeRoundAtNanos: Long? = this.probeRoundAtNanos,
+        hasResolveFailed: Boolean = this.hasResolveFailed,
         results: Map<InetAddress, ProbeResult> = addresses
     ) = HostRecord(
         resolvedAddresses,
@@ -61,6 +66,7 @@ internal class HostRecord private constructor(
         resolvedAtNanos,
         resolveRoundAtNanos,
         probeRoundAtNanos,
+        hasResolveFailed,
         results
     )
 

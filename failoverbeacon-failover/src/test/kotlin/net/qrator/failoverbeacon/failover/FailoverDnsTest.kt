@@ -1,6 +1,9 @@
 package net.qrator.failoverbeacon.failover
 
 import java.net.InetAddress
+import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.Executor
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -58,27 +61,38 @@ class FailoverDnsTest {
     }
 
     @Test
-    fun `without fresh addresses the host is resolved on the calling thread`() {
-        val dns = dns(resolved = listOf(ip(1)), additional = listOf(ip(7)))
+    fun `a stale answer waits for the new one`() {
+        val dns =
+            dns(resolved = listOf(ip(1)), additional = listOf(ip(7)), executor = Runnable::run)
         resolver.answer(API, ip(2))
-        now = MAX_AGE + 1
+        now = INTERVAL
 
         assertEquals(listOf(ip(2), ip(7)), dns.lookup(API))
-        assertEquals(0, executor.queued)
+    }
+
+    @Test
+    fun `a new answer keeps the results of the addresses that stay`() {
+        val dns = dns(resolved = listOf(ip(1), ip(2)), executor = Runnable::run)
+        repository.saveProbe(1, API, ip(2), ProbeResult.Connected(connectNanos = 40))
+        resolver.answer(API, ip(1), ip(2), ip(3))
+        now = INTERVAL
+
+        assertEquals(listOf(ip(2), ip(1), ip(3)), dns.lookup(API))
     }
 
     @Test
     fun `a failed resolution gives the last and the additional addresses`() {
-        val dns = dns(resolved = listOf(ip(1)), additional = listOf(ip(7)))
+        val dns =
+            dns(resolved = listOf(ip(1)), additional = listOf(ip(7)), executor = Runnable::run)
         resolver.fail(API)
-        now = MAX_AGE + 1
+        now = INTERVAL
 
         assertEquals(listOf(ip(1), ip(7)), dns.lookup(API))
     }
 
     @Test
     fun `a failed resolution without earlier answers gives the additional addresses`() {
-        val dns = dns(additional = listOf(ip(7)))
+        val dns = dns(additional = listOf(ip(7)), executor = Runnable::run)
         resolver.fail(API)
 
         assertEquals(listOf(ip(7)), dns.lookup(API))
@@ -86,15 +100,43 @@ class FailoverDnsTest {
 
     @Test
     fun `a failed resolution with nothing to give gives nothing`() {
-        val dns = dns()
+        val dns = dns(executor = Runnable::run)
         resolver.fail(API)
 
         assertNull(dns.lookup(API))
     }
 
     @Test
+    fun `a resolver that does not answer ends the wait with the last addresses`() {
+        val dns = dns(resolved = listOf(ip(1)))
+        now = INTERVAL
+
+        assertEquals(listOf(ip(1)), dns.lookup(API))
+        assertEquals(1, executor.queued)
+    }
+
+    @Test
+    fun `after a failure lookups do not wait until DNS answers`() {
+        val dns = dns(resolved = listOf(ip(1)), waitMillis = 5_000)
+        repository.saveResolveFailure(1, API)
+        now = INTERVAL
+        resolver.answer(API, ip(2))
+
+        val start = Instant.now()
+        val whileFailed = dns.lookup(API)
+        val elapsed = Duration.between(start, Instant.now())
+        val queued = executor.queued
+        executor.runAll()
+
+        assertTrue(elapsed < Duration.ofSeconds(2), "$elapsed")
+        assertEquals(listOf(ip(1)), whileFailed)
+        assertEquals(1, queued)
+        assertEquals(listOf(ip(2)), dns.lookup(API))
+    }
+
+    @Test
     fun `DNS addresses come first and duplicates are dropped`() {
-        val dns = dns(additional = listOf(ip(7), ip(8)))
+        val dns = dns(additional = listOf(ip(7), ip(8)), executor = Runnable::run)
         resolver.answer(API, ip(1), ip(7))
 
         assertEquals(listOf(ip(1), ip(7), ip(8)), dns.lookup(API))
@@ -132,10 +174,12 @@ class FailoverDnsTest {
 
     private fun dns(
         resolved: List<InetAddress>? = null,
-        additional: List<InetAddress> = emptyList()
+        additional: List<InetAddress> = emptyList(),
+        executor: Executor = this.executor,
+        waitMillis: Long = WAIT_MILLIS
     ): FailoverDns {
         val host = FailoverHostConfig(API, 443, additional, probeConnections = true)
-        repository = AddressRepository(listOf(host), { now }, MAX_AGE, MAX_AGE, maxNetworks = 8)
+        repository = AddressRepository(listOf(host), { now }, INTERVAL, maxNetworks = 8)
         repository.switchTo(network(1))
         resolved?.let { repository.saveResolved(1, API, it) }
         val refresher = AddressRefresher(
@@ -143,7 +187,8 @@ class FailoverDnsTest {
             repository,
             executor,
             hosts = listOf(API),
-            preresolveOnNetworkChange = true
+            preresolveOnNetworkChange = true,
+            waitMillis = waitMillis
         )
         return FailoverDns(repository, refresher, onLookup = { lookups++ })
     }
@@ -151,6 +196,7 @@ class FailoverDnsTest {
     private companion object {
         const val API = "api.example"
         const val OTHER = "other.example"
-        const val MAX_AGE = 100L
+        const val INTERVAL = 100L
+        const val WAIT_MILLIS = 20L
     }
 }

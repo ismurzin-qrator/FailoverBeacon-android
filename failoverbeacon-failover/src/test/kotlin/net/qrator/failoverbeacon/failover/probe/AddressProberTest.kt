@@ -28,7 +28,6 @@ class AddressProberTest {
     private val repository = AddressRepository(
         hosts,
         { now },
-        MAX_AGE,
         INTERVAL,
         maxNetworks = 8
     ).apply { switchTo(network(1, key = WIFI)) }
@@ -315,7 +314,6 @@ class AddressProberTest {
         const val SPARE = "spare.example"
         const val NO_PROBES = "noprobes.example"
         const val PORT = 8443
-        const val MAX_AGE = 100L
         const val INTERVAL = 50L
         const val WIFI = "WIFI/192.0.2"
         const val CELLULAR = "CELLULAR/001-01"

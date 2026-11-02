@@ -82,8 +82,9 @@ public class FailoverBeaconOptions private constructor(
         }
 
         /**
-         * Sets how often the addresses of failover hosts are tested again with connections, from
-         * 1 minute to 1 hour. The default value is 10 minutes.
+         * Sets how often failover hosts are resolved and their addresses tested with connections
+         * while the app makes requests, from 1 minute to 1 hour. A new connection to a host with
+         * an older DNS answer waits for DNS up to 2 seconds. The default value is 10 minutes.
          *
          * @throws IllegalArgumentException if [interval] is shorter than 1 minute or longer than
          *     1 hour.

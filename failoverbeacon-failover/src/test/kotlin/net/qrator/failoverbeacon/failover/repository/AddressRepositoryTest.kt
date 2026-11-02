@@ -5,6 +5,7 @@ import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.fakes.ip
@@ -17,7 +18,6 @@ class AddressRepositoryTest {
     private val repository = AddressRepository(
         listOf(FailoverHostConfig(API, 443, listOf(ip(7)), probeConnections = true)),
         clock = { now },
-        maxAgeNanos = MAX_AGE,
         refreshIntervalNanos = INTERVAL,
         maxNetworks = 2
     ).apply { switchTo(network(1, key = WIFI)) }
@@ -33,7 +33,7 @@ class AddressRepositoryTest {
         repository.saveResolved(1, API, listOf(ip(1)))
 
         assertEquals(listOf(ip(1), ip(7)), repository[API]?.addresses?.keys?.toList())
-        assertTrue(repository[API]?.isFresh(nowNanos = 10, maxAgeNanos = 0) == true)
+        assertTrue(repository[API]?.isFresh(nowNanos = 10, intervalNanos = 1) == true)
     }
 
     @Test
@@ -55,7 +55,7 @@ class AddressRepositoryTest {
     fun `a stale record keeps its probes with a new answer`() {
         repository.saveResolved(1, API, listOf(ip(1)))
         repository.saveProbe(1, API, ip(1), ProbeResult.Failed)
-        now += MAX_AGE + 1
+        now += INTERVAL + 1
 
         repository.saveResolved(1, API, listOf(ip(1)))
 
@@ -63,6 +63,34 @@ class AddressRepositoryTest {
             mapOf(ip(7) to ProbeResult.Unknown, ip(1) to ProbeResult.Failed),
             repository[API]?.addresses
         )
+    }
+
+    @Test
+    fun `an answer is needed when none is fresh unless the last resolution failed`() {
+        val withoutAnswer = repository.isAnswerNeeded(assertNotNull(repository[API]))
+        repository.saveResolved(1, API, listOf(ip(1)))
+        val fresh = repository.isAnswerNeeded(assertNotNull(repository[API]))
+        now += INTERVAL
+        val stale = repository.isAnswerNeeded(assertNotNull(repository[API]))
+        repository.saveResolveFailure(1, API)
+        val failed = repository.isAnswerNeeded(assertNotNull(repository[API]))
+        repository.saveResolved(1, API, listOf(ip(1)))
+        now += INTERVAL
+
+        assertTrue(withoutAnswer)
+        assertFalse(fresh)
+        assertTrue(stale)
+        assertFalse(failed)
+        assertTrue(repository.isAnswerNeeded(assertNotNull(repository[API])))
+    }
+
+    @Test
+    fun `a resolve failure of an earlier session is dropped`() {
+        repository.switchTo(network(2, key = WIFI))
+
+        repository.saveResolveFailure(1, API)
+
+        assertFalse(assertNotNull(repository[API]).hasResolveFailed)
     }
 
     @Test
@@ -201,7 +229,7 @@ class AddressRepositoryTest {
         repository.saveProbe(1, API, ip(1), ProbeResult.Failed)
         repository.saveResolved(1, OTHER, listOf(ip(1)))
         repository.saveResolved(2, API, listOf(ip(3)))
-        now += MAX_AGE + 1
+        now += INTERVAL + 1
         repository.saveResolved(1, API, listOf(ip(1)))
         repository.saveResolved(1, API, listOf(ip(1), ip(3)))
 
@@ -213,7 +241,6 @@ class AddressRepositoryTest {
         const val OTHER = "other.example"
         const val WIFI = "WIFI/192.0.2"
         const val CELLULAR = "CELLULAR/001-01"
-        const val MAX_AGE = 100L
         const val INTERVAL = 50L
     }
 }

@@ -22,7 +22,6 @@ class Failover(
     private val repository = AddressRepository(
         hosts = hosts,
         clock = sdk.elapsedRealtimeClock,
-        maxAgeNanos = settings.maxAddressAgeNanos,
         refreshIntervalNanos = settings.refreshIntervalNanos,
         maxNetworks = settings.maxNetworks
     )
@@ -39,7 +38,8 @@ class Failover(
         repository = repository,
         executor = sdk.threads.failoverResolve,
         hosts = hosts.map { it.host },
-        preresolveOnNetworkChange = settings.preresolveOnNetworkChange
+        preresolveOnNetworkChange = settings.preresolveOnNetworkChange,
+        waitMillis = settings.resolveWaitMillis
     )
     private val dns = FailoverDns(repository, refresher, onLookup = ::refreshDue)
 
@@ -63,6 +63,7 @@ class Failover(
 
     override fun close() {
         tcpProbe.close()
+        refresher.close()
     }
 
     private fun refreshDue() {

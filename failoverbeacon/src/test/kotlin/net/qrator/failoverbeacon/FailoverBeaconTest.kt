@@ -13,9 +13,11 @@ import android.util.Log
 import java.io.File
 import java.net.InetAddress
 import java.time.Duration
+import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 import kotlin.math.abs
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -298,6 +300,75 @@ class FailoverBeaconTest {
         awaitResolutions()
 
         assertEquals(listOf("api.example", "api.example"), resolutions)
+    }
+
+    @Test
+    fun `a hung resolver delays the first lookup up to the limit and later ones not at all`() {
+        val release = CountDownLatch(1)
+        val failoverConfig = FailoverBeaconConfig.Builder()
+            .beacons(listOf("https://beacon.example"))
+            .failoverHosts(
+                listOf(
+                    FailoverHost(
+                        "api.example",
+                        additionalAddresses = listOf("192.0.2.1"),
+                        probeConnections = false
+                    )
+                )
+            )
+            .dnsResolver {
+                release.await()
+                emptyList()
+            }
+            .build()
+        activeNetwork()
+        FailoverBeacon.initialize(app, failoverConfig)
+        val dns = assertNotNull(SdkRegistry.instance?.dns)
+
+        val start = Instant.now()
+        val first = dns.lookup("api.example")
+        val afterFirst = Instant.now()
+        val second = dns.lookup("api.example")
+        val afterSecond = Instant.now()
+        release.countDown()
+
+        assertEquals(listOf<String?>("192.0.2.1"), first?.map { it.hostAddress })
+        assertEquals(first, second)
+        assertTrue(Duration.between(start, afterFirst) >= Duration.ofSeconds(2))
+        assertTrue(Duration.between(start, afterFirst) < Duration.ofSeconds(4))
+        assertTrue(Duration.between(afterFirst, afterSecond) < Duration.ofMillis(500))
+    }
+
+    @Test
+    fun `stop releases a lookup waiting for a hung resolver`() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val failoverConfig = FailoverBeaconConfig.Builder()
+            .beacons(listOf("https://beacon.example"))
+            .failoverHosts(listOf(FailoverHost("api.example", probeConnections = false)))
+            .dnsResolver {
+                entered.countDown()
+                while (release.count > 0) {
+                    runCatching { release.await() }
+                }
+                emptyList()
+            }
+            .build()
+        activeNetwork()
+        FailoverBeacon.initialize(app, failoverConfig)
+        val dns = assertNotNull(SdkRegistry.instance?.dns)
+        assertTrue(entered.await(5, TimeUnit.SECONDS))
+        val finished = CountDownLatch(1)
+        thread {
+            dns.lookup("api.example")
+            finished.countDown()
+        }
+        Thread.sleep(100)
+
+        FailoverBeacon.stop()
+
+        assertTrue(finished.await(1, TimeUnit.SECONDS), "the lookup waited after stop")
+        release.countDown()
     }
 
     @Test

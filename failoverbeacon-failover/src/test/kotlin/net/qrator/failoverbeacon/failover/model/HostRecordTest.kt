@@ -26,11 +26,11 @@ class HostRecordTest {
     }
 
     @Test
-    fun `resolved addresses are fresh up to the max age`() {
+    fun `resolved addresses are fresh until the interval passes`() {
         val resolved = record.withResolved(listOf(ip(1)), nowNanos = 10)
 
-        assertTrue(resolved.isFresh(nowNanos = 10 + MAX_AGE, MAX_AGE))
-        assertFalse(resolved.isFresh(nowNanos = 11 + MAX_AGE, MAX_AGE))
+        assertTrue(resolved.isFresh(nowNanos = 9 + MAX_AGE, MAX_AGE))
+        assertFalse(resolved.isFresh(nowNanos = 10 + MAX_AGE, MAX_AGE))
     }
 
     @Test
@@ -105,6 +105,16 @@ class HostRecordTest {
             mapOf(ip(1) to connected, ip(3) to ProbeResult.Unknown, ip(7) to ProbeResult.Failed),
             resolved.addresses
         )
+    }
+
+    @Test
+    fun `a resolve failure lasts until an answer with addresses`() {
+        val failed = record.withResolved(listOf(ip(1)), nowNanos = 0).withResolveFailure()
+
+        assertTrue(failed.hasResolveFailed)
+        assertEquals(listOf(ip(1), ip(7)), failed.addresses.keys.toList())
+        assertTrue(failed.withResolved(emptyList(), nowNanos = 1).hasResolveFailed)
+        assertFalse(failed.withResolved(listOf(ip(1)), nowNanos = 1).hasResolveFailed)
     }
 
     @Test

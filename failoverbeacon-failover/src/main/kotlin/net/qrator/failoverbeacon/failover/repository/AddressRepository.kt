@@ -12,7 +12,6 @@ import net.qrator.failoverbeacon.failover.model.ProbeResult
 internal class AddressRepository(
     private val hosts: List<FailoverHostConfig>,
     private val clock: MonotonicClock,
-    private val maxAgeNanos: Long,
     private val refreshIntervalNanos: Long,
     private val maxNetworks: Int
 ) {
@@ -31,7 +30,11 @@ internal class AddressRepository(
 
     operator fun get(host: String): HostRecord? = current?.records?.get(host)
 
-    fun isFresh(host: String): Boolean = get(host)?.isFresh(clock.nanoTime(), maxAgeNanos) == true
+    fun isFresh(host: String): Boolean =
+        get(host)?.isFresh(clock.nanoTime(), refreshIntervalNanos) == true
+
+    fun isAnswerNeeded(record: HostRecord): Boolean =
+        !record.hasResolveFailed && !record.isFresh(clock.nanoTime(), refreshIntervalNanos)
 
     fun switchTo(network: DefaultNetwork?) {
         if (firstHandle == null) firstHandle = network?.handle
@@ -49,6 +52,10 @@ internal class AddressRepository(
         if (hasChanged) {
             addressListeners.forEach { listener -> listener(host) }
         }
+    }
+
+    fun saveResolveFailure(handle: Long, host: String) {
+        recordsOf(handle)?.computeIfPresent(host) { _, record -> record.withResolveFailure() }
     }
 
     fun saveProbe(handle: Long, host: String, address: InetAddress, result: ProbeResult) {
