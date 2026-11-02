@@ -362,6 +362,43 @@ class FailoverBeaconTest {
     }
 
     @Test
+    fun `a blocked network is left to the client's DNS until it is unblocked`() {
+        val resolutions = CopyOnWriteArrayList<String>()
+        val failoverConfig = FailoverBeaconConfig.Builder()
+            .beacons(listOf("https://beacon.example"))
+            .failoverHosts(
+                listOf(
+                    FailoverHost(
+                        "api.example",
+                        additionalAddresses = listOf("127.0.0.1", "127.0.0.2")
+                    )
+                )
+            )
+            .dnsResolver {
+                resolutions += it
+                emptyList()
+            }
+            .build()
+        FailoverBeacon.initialize(app, failoverConfig)
+        val callback = networkCallbacks().single()
+        val network = ShadowNetwork.newInstance(301)
+        val dns = assertNotNull(SdkRegistry.instance?.dns)
+
+        connect(callback, network, NetworkCapabilities.TRANSPORT_WIFI, blocked = true)
+        val whileBlocked = dns.lookup("api.example")
+        val probesWhileBlocked = threads().failoverProbe.taskCount
+        val resolutionsWhileBlocked = resolutions.size
+        callback.onBlockedStatusChanged(network, false)
+        awaitResolutions()
+
+        assertNull(whileBlocked)
+        assertEquals(0, probesWhileBlocked)
+        assertEquals(0, resolutionsWhileBlocked)
+        assertEquals(2, threads().failoverProbe.taskCount)
+        assertEquals(listOf("api.example"), resolutions)
+    }
+
+    @Test
     fun `without an application the foreground state is unknown`() {
         val context = object : ContextWrapper(app) {
             override fun getApplicationContext(): Context? = null
@@ -530,11 +567,16 @@ class FailoverBeaconTest {
         return active
     }
 
-    private fun connect(callback: NetworkCallback, network: Network, transport: Int) {
+    private fun connect(
+        callback: NetworkCallback,
+        network: Network,
+        transport: Int,
+        blocked: Boolean = false
+    ) {
         callback.onAvailable(network)
         callback.onCapabilitiesChanged(network, capabilities(transport))
         callback.onLinkPropertiesChanged(network, LinkProperties())
-        callback.onBlockedStatusChanged(network, false)
+        callback.onBlockedStatusChanged(network, blocked)
     }
 
     private fun capabilities(transport: Int): NetworkCapabilities =

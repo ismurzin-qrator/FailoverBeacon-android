@@ -39,6 +39,7 @@ internal class AddressProber(
 
     private fun probeAddress(host: String, port: Int, address: InetAddress, handle: Long) {
         try {
+            if (repository.currentHandle != handle) return
             val result = connect(address, port)
             SdkRegistry.logger.debug {
                 "[Failover] $host ${address.hostAddress}: ${describe(result)}"

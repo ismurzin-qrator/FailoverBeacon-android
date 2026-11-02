@@ -45,8 +45,9 @@ class Failover(
     }
 
     override fun onNetworkChanged(network: DefaultNetwork?) {
-        repository.switchTo(network)
-        if (network != null) start()
+        val usableNetwork = network?.takeIf { it.blocked != true }
+        repository.switchTo(usableNetwork)
+        if (usableNetwork != null) start()
     }
 
     override fun close() {

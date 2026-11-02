@@ -146,17 +146,22 @@ class AddressProberTest {
     }
 
     @Test
-    fun `a result of an earlier session is dropped`() {
+    fun `a queued probe of an earlier session does not connect and can run again`() {
         repository.saveResolved(1, API, listOf(ip(1)))
         prober.probe(API)
         repository.switchTo(network(2, key = WIFI))
 
         executor.runAll()
+        val connectsOfEarlierSession = connect.connects.size
+        repository.switchTo(network(1, key = WIFI))
+        prober.probe(API)
 
+        assertEquals(0, connectsOfEarlierSession)
         assertEquals(
             mapOf(ip(1) to ProbeResult.Unknown, ip(7) to ProbeResult.Unknown),
             repository[API]?.addresses
         )
+        assertEquals(2, executor.queued)
     }
 
     @Test

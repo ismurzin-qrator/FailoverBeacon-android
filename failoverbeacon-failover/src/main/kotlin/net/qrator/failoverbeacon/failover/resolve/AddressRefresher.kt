@@ -48,7 +48,7 @@ internal class AddressRefresher(
     private fun resolveInBackground(host: String, handle: Long, onDone: (Boolean) -> Unit) {
         var success = false
         try {
-            success = resolveAndSave(host, handle)
+            if (repository.currentHandle == handle) success = resolveAndSave(host, handle)
         } finally {
             refreshing.remove(host to handle)
             onDone(success)

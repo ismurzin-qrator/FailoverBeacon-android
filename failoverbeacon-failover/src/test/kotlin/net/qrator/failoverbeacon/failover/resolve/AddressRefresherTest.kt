@@ -64,16 +64,29 @@ class AddressRefresherTest {
     }
 
     @Test
-    fun `a resolution of an earlier session neither blocks nor reaches the new one`() {
-        val answers = ArrayDeque(listOf(ip(1), ip(2)))
-        resolver.answer(API) { listOf(answers.removeFirst()) }
+    fun `a queued resolution of an earlier session is skipped and does not block the new one`() {
+        resolver.answer(API, ip(2))
         refresher.refresh(API)
         repository.switchTo(network(2))
 
         refresher.refresh(API)
         executor.runAll()
 
+        assertEquals(listOf(API), resolver.lookups)
         assertEquals(listOf(ip(2)), repository[API]?.addresses?.keys?.toList())
+    }
+
+    @Test
+    fun `refreshAll logs its result when a queued resolution is skipped`() {
+        refresher.refreshAll(listOf(API))
+        repository.switchTo(network(2))
+
+        executor.runAll()
+
+        assertTrue(
+            Log.INFO to "[Failover] Resolved 0 of 1 hosts" in log.messages,
+            "${log.messages}"
+        )
     }
 
     @Test
