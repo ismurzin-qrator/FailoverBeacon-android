@@ -275,6 +275,20 @@ class AddressProberTest {
     }
 
     @Test
+    fun `probing all covers every host that allows probes`() {
+        repository.saveResolved(1, API, listOf(ip(1)))
+        repository.saveResolved(1, NO_PROBES, listOf(ip(2), ip(3)))
+
+        prober.probeAll()
+        executor.runAll()
+
+        assertEquals(
+            setOf(ip(1), ip(7), ip(4), ip(5)),
+            connect.connects.map { it.first }.toSet()
+        )
+    }
+
+    @Test
     fun `without a network nothing is probed`() {
         repository.switchTo(null)
 

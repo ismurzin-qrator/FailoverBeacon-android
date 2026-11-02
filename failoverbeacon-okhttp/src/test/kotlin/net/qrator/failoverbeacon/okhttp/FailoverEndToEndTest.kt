@@ -6,6 +6,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.UnknownHostException
+import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
@@ -30,6 +31,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowNetworkCapabilities
+import org.robolectric.shadows.ShadowSystemClock
 
 @RunWith(RobolectricTestRunner::class)
 class FailoverEndToEndTest {
@@ -37,6 +39,7 @@ class FailoverEndToEndTest {
     private val connectivity = app.getSystemService(ConnectivityManager::class.java)
     private val active = assertNotNull(connectivity.activeNetwork)
     private val server = MockWebServer()
+    private val sdkLookups = CopyOnWriteArrayList<String>()
     private val client = OkHttpClient.Builder()
         .dns { appDns(it) }
         .build()
@@ -51,7 +54,8 @@ class FailoverEndToEndTest {
                 listOf(
                     FailoverHost(API, additionalAddresses = listOf("127.0.0.1")),
                     FailoverHost(RANKED, server.port, listOf(UNREACHABLE, "127.0.0.1")),
-                    FailoverHost(RESOLVED)
+                    FailoverHost(RESOLVED),
+                    FailoverHost(UNUSED)
                 )
             )
             .dnsResolver { sdkDns(it) }
@@ -109,6 +113,25 @@ class FailoverEndToEndTest {
     }
 
     @Test
+    fun `a request on a pooled connection refreshes a host the app does not call`() {
+        server.enqueue(MockResponse().setBody("ok"))
+        server.enqueue(MockResponse().setBody("ok"))
+        assertEquals("ok", execute(RESOLVED))
+        assertTrue(awaitIdleResolvers(), "resolvers did not finish")
+        val lookupsBefore = sdkLookups.count { it == UNUSED }
+        ShadowSystemClock.advanceBy(Duration.ofMinutes(10))
+
+        assertEquals("ok", execute(RESOLVED))
+
+        server.takeRequest()
+        assertEquals(1, server.takeRequest().sequenceNumber, "the request used a new connection")
+        assertTrue(
+            await { sdkLookups.count { it == UNUSED } > lookupsBefore },
+            "$UNUSED was not refreshed"
+        )
+    }
+
+    @Test
     fun `other hosts keep the app's DNS answer and error`() {
         server.enqueue(MockResponse().setBody("ok"))
 
@@ -133,8 +156,23 @@ class FailoverEndToEndTest {
     private fun appDns(host: String): List<InetAddress> =
         if (host == OTHER) listOf(LOOPBACK) else throw UnknownHostException(host)
 
-    private fun sdkDns(host: String): List<InetAddress> =
-        if (host == RESOLVED) listOf(LOOPBACK) else throw UnknownHostException(host)
+    private fun sdkDns(host: String): List<InetAddress> {
+        sdkLookups += host
+        return if (host == RESOLVED) listOf(LOOPBACK) else throw UnknownHostException(host)
+    }
+
+    private fun awaitIdleResolvers(): Boolean = await {
+        val threads = assertNotNull(SdkRegistry.instance).threads.failoverResolve
+        threads.activeCount == 0 && threads.queue.isEmpty()
+    }
+
+    private fun await(condition: () -> Boolean): Boolean {
+        repeat(500) {
+            if (condition()) return true
+            Thread.sleep(10)
+        }
+        return false
+    }
 
     private fun awaitLeader(host: String, address: InetAddress): Boolean {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
@@ -155,6 +193,7 @@ class FailoverEndToEndTest {
         const val OTHER = "other.test"
         const val RANKED = "ranked.test"
         const val RESOLVED = "resolved.test"
+        const val UNUSED = "unused.test"
         const val UNREACHABLE = "192.0.2.1"
         val LOOPBACK: InetAddress = InetAddress.getByName("127.0.0.1")
     }

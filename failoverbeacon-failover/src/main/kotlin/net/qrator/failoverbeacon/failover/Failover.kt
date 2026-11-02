@@ -3,6 +3,8 @@ package net.qrator.failoverbeacon.failover
 import java.net.InetAddress
 import net.qrator.failoverbeacon.core.SdkFeature
 import net.qrator.failoverbeacon.core.SdkInstance
+import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
+import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.network.model.DefaultNetwork
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.probe.AddressProber
@@ -14,8 +16,9 @@ class Failover(
     private val sdk: SdkInstance,
     hosts: List<FailoverHostConfig>,
     resolve: (String) -> List<InetAddress>,
-    private val settings: FailoverSettings
-) : SdkFeature {
+    settings: FailoverSettings
+) : SdkFeature,
+    ExchangeSubscriber {
     private val repository = AddressRepository(
         hosts = hosts,
         clock = sdk.elapsedRealtimeClock,
@@ -34,31 +37,36 @@ class Failover(
     private val refresher = AddressRefresher(
         resolve = resolve,
         repository = repository,
-        executor = sdk.threads.failoverResolve
+        executor = sdk.threads.failoverResolve,
+        hosts = hosts.map { it.host },
+        preresolveOnNetworkChange = settings.preresolveOnNetworkChange
     )
-    private val dns = FailoverDns(repository = repository, refresher = refresher)
-    private val hostNames = hosts.map { it.host }
+    private val dns = FailoverDns(repository, refresher, onLookup = ::refreshDue)
 
     fun subscribe() {
         repository.addAddressListener(prober::probe)
         sdk.dns = dns
+        sdk.exchangeBus.subscribe(this)
         sdk.addFeature(this)
     }
 
     override fun onNetworkChanged(network: DefaultNetwork?) {
         val usableNetwork = network?.takeIf { it.blocked != true }
         repository.switchTo(usableNetwork)
-        if (usableNetwork != null) start()
+        if (usableNetwork != null) {
+            prober.probeAll()
+            refresher.preresolve()
+        }
     }
+
+    override fun onExchange(exchange: Exchange) = refreshDue()
 
     override fun close() {
         tcpProbe.close()
     }
 
-    private fun start() {
-        hostNames.forEach(prober::probe)
-        if (settings.preresolveOnNetworkChange || repository.isOnFirstNetwork) {
-            refresher.refreshAll(hostNames.filterNot(repository::isFresh))
-        }
+    private fun refreshDue() {
+        prober.probeAll()
+        refresher.refreshDue()
     }
 }

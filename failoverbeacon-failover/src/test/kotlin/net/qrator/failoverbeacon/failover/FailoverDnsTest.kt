@@ -20,12 +20,29 @@ import net.qrator.failoverbeacon.failover.resolve.AddressRefresher
 class FailoverDnsTest {
     private val log = LogRecorder()
     private var now = 0L
+    private var lookups = 0
     private val resolver = FakeDns()
     private val executor = ManualExecutor()
     private lateinit var repository: AddressRepository
 
     @AfterTest
     fun tearDown() = log.close()
+
+    @Test
+    fun `only a lookup of a configured host on a network asks for a refresh`() {
+        val dns = dns(additional = listOf(ip(7)))
+
+        dns.lookup(OTHER)
+        val outsideConfig = lookups
+        dns.lookup(API)
+        val configured = lookups
+        repository.switchTo(null)
+        dns.lookup(API)
+
+        assertEquals(0, outsideConfig)
+        assertEquals(1, configured)
+        assertEquals(1, lookups)
+    }
 
     @Test
     fun `fresh addresses come with the additional ones and are refreshed in the background`() {
@@ -121,8 +138,14 @@ class FailoverDnsTest {
         repository = AddressRepository(listOf(host), { now }, MAX_AGE, MAX_AGE, maxNetworks = 8)
         repository.switchTo(network(1))
         resolved?.let { repository.saveResolved(1, API, it) }
-        val refresher = AddressRefresher(resolver::lookup, repository, executor)
-        return FailoverDns(repository, refresher)
+        val refresher = AddressRefresher(
+            resolver::lookup,
+            repository,
+            executor,
+            hosts = listOf(API),
+            preresolveOnNetworkChange = true
+        )
+        return FailoverDns(repository, refresher, onLookup = { lookups++ })
     }
 
     private companion object {

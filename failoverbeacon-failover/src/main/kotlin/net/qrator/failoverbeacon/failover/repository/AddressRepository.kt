@@ -56,19 +56,38 @@ internal class AddressRepository(
         records.computeIfPresent(host) { _, record -> record.withProbe(address, result) }
     }
 
-    fun startProbeRound(handle: Long, host: String): Boolean {
+    fun startResolveRound(handle: Long, host: String): Boolean = startRound(
+        handle,
+        host,
+        HostRecord::isResolveRoundDue,
+        HostRecord::withResolveRound
+    )
+
+    fun startProbeRound(handle: Long, host: String): Boolean = startRound(
+        handle,
+        host,
+        HostRecord::isProbeRoundDue,
+        HostRecord::withProbeRound
+    )
+
+    fun addAddressListener(listener: (host: String) -> Unit) {
+        addressListeners += listener
+    }
+
+    private fun startRound(
+        handle: Long,
+        host: String,
+        isDue: HostRecord.(Long, Long) -> Boolean,
+        withRound: HostRecord.(Long) -> HostRecord
+    ): Boolean {
         val records = recordsOf(handle) ?: return false
         var isStarted = false
         records.computeIfPresent(host) { _, record ->
             val now = clock.nanoTime()
-            isStarted = record.isProbeRoundDue(now, refreshIntervalNanos)
-            if (isStarted) record.withProbeRound(now) else record
+            isStarted = record.isDue(now, refreshIntervalNanos)
+            if (isStarted) record.withRound(now) else record
         }
         return isStarted
-    }
-
-    fun addAddressListener(listener: (host: String) -> Unit) {
-        addressListeners += listener
     }
 
     private fun recordsOf(handle: Long) = current?.takeIf { it.handle == handle }?.records

@@ -21,6 +21,8 @@ internal class AddressProber(
     private val ports = hosts.filter { it.probeConnections }.associate { it.host to it.port }
     private val probingAddresses = ConcurrentHashMap.newKeySet<Probe>()
 
+    fun probeAll() = ports.keys.forEach(::probe)
+
     fun probe(host: String) {
         val port = ports[host] ?: return
         if (!probeOnNetworkChange && !repository.isOnFirstNetwork) return

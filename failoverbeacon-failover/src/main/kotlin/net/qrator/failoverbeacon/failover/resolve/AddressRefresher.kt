@@ -13,9 +13,24 @@ import net.qrator.failoverbeacon.failover.repository.AddressRepository
 internal class AddressRefresher(
     private val resolve: (String) -> List<InetAddress>,
     private val repository: AddressRepository,
-    private val executor: Executor
+    private val executor: Executor,
+    private val hosts: List<String>,
+    private val preresolveOnNetworkChange: Boolean
 ) {
     private val refreshing = ConcurrentHashMap.newKeySet<Pair<String, Long>>()
+
+    fun preresolve() {
+        if (preresolveOnNetworkChange || repository.isOnFirstNetwork) {
+            refreshAll(hosts.filterNot(repository::isFresh))
+        }
+    }
+
+    fun refreshDue() {
+        val handle = repository.currentHandle ?: return
+        hosts
+            .filter { canRefresh(it) && repository.startResolveRound(handle, it) }
+            .forEach(::refresh)
+    }
 
     fun refreshAll(hosts: List<String>) {
         val pending = AtomicInteger(hosts.size)
@@ -38,6 +53,10 @@ internal class AddressRefresher(
         val handle = repository.currentHandle ?: return
         resolveAndSave(host, handle)
     }
+
+    private fun canRefresh(host: String): Boolean =
+        preresolveOnNetworkChange || repository.isOnFirstNetwork ||
+            repository[host]?.hasAnswer == true
 
     private fun submit(host: String, onDone: (Boolean) -> Unit) {
         val handle = repository.currentHandle ?: return

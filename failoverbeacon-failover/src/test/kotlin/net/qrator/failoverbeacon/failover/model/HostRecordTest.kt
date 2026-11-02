@@ -108,6 +108,35 @@ class HostRecordTest {
     }
 
     @Test
+    fun `a resolve round is due before the first one and after the interval`() {
+        val started = record.withResolveRound(nowNanos = 10)
+
+        assertTrue(record.isResolveRoundDue(nowNanos = 0, INTERVAL))
+        assertFalse(started.isResolveRoundDue(nowNanos = 10 + INTERVAL - 1, INTERVAL))
+        assertTrue(started.isResolveRoundDue(nowNanos = 10 + INTERVAL, INTERVAL))
+    }
+
+    @Test
+    fun `an answer counts as a resolve round and an empty one does not`() {
+        val answered = record.withResolved(listOf(ip(1)), nowNanos = 10)
+        val empty = record.withResolved(emptyList(), nowNanos = 10)
+
+        assertFalse(answered.isResolveRoundDue(nowNanos = 10, INTERVAL))
+        assertTrue(answered.hasAnswer)
+        assertTrue(empty.isResolveRoundDue(nowNanos = 10, INTERVAL))
+        assertFalse(empty.hasAnswer)
+    }
+
+    @Test
+    fun `resolve and probe rounds do not affect each other`() {
+        val resolving = record.withResolveRound(nowNanos = 10)
+        val probing = record.withProbeRound(nowNanos = 10)
+
+        assertTrue(resolving.isProbeRoundDue(nowNanos = 10, INTERVAL))
+        assertTrue(probing.isResolveRoundDue(nowNanos = 10, INTERVAL))
+    }
+
+    @Test
     fun `a probe round is due before the first one and after the interval`() {
         val started = record.withProbeRound(nowNanos = 10)
 

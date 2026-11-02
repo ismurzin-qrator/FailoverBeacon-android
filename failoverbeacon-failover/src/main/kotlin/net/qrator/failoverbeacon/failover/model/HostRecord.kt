@@ -7,44 +7,62 @@ internal class HostRecord private constructor(
     private val resolvedAddresses: List<InetAddress>,
     private val additionalAddresses: List<InetAddress>,
     private val resolvedAtNanos: Long?,
+    private val resolveRoundAtNanos: Long?,
     private val probeRoundAtNanos: Long?,
     results: Map<InetAddress, ProbeResult>
 ) {
     constructor(additionalAddresses: List<InetAddress>) :
-        this(emptyList(), additionalAddresses, null, null, emptyMap())
+        this(emptyList(), additionalAddresses, null, null, null, emptyMap())
 
     val addresses: Map<InetAddress, ProbeResult> =
         rank((resolvedAddresses + additionalAddresses).distinct(), results)
 
+    val hasAnswer: Boolean get() = resolvedAtNanos != null
+
     fun isFresh(nowNanos: Long, maxAgeNanos: Long): Boolean =
         resolvedAtNanos != null && nowNanos - resolvedAtNanos <= maxAgeNanos
 
+    fun isResolveRoundDue(nowNanos: Long, intervalNanos: Long): Boolean =
+        isDue(resolveRoundAtNanos, nowNanos, intervalNanos)
+
     fun isProbeRoundDue(nowNanos: Long, intervalNanos: Long): Boolean =
-        probeRoundAtNanos == null || nowNanos - probeRoundAtNanos >= intervalNanos
+        isDue(probeRoundAtNanos, nowNanos, intervalNanos)
 
     fun withResolved(resolved: List<InetAddress>, nowNanos: Long): HostRecord {
         if (resolved.isEmpty()) return this
-        return HostRecord(resolved, additionalAddresses, nowNanos, probeRoundAtNanos, addresses)
+        return copy(
+            resolvedAddresses = resolved,
+            resolvedAtNanos = nowNanos,
+            resolveRoundAtNanos = nowNanos
+        )
     }
 
-    fun withProbeRound(nowNanos: Long): HostRecord = HostRecord(
-        resolvedAddresses,
-        additionalAddresses,
-        resolvedAtNanos,
-        nowNanos,
-        addresses
-    )
+    fun withResolveRound(nowNanos: Long): HostRecord = copy(resolveRoundAtNanos = nowNanos)
+
+    fun withProbeRound(nowNanos: Long): HostRecord = copy(probeRoundAtNanos = nowNanos)
 
     fun withProbe(address: InetAddress, result: ProbeResult): HostRecord {
         if (address !in addresses) return this
-        return HostRecord(
-            resolvedAddresses,
-            additionalAddresses,
-            resolvedAtNanos,
-            probeRoundAtNanos,
-            addresses + (address to result)
-        )
+        return copy(results = addresses + (address to result))
     }
+
+    private fun isDue(roundAtNanos: Long?, nowNanos: Long, intervalNanos: Long): Boolean =
+        roundAtNanos == null || nowNanos - roundAtNanos >= intervalNanos
+
+    private fun copy(
+        resolvedAddresses: List<InetAddress> = this.resolvedAddresses,
+        resolvedAtNanos: Long? = this.resolvedAtNanos,
+        resolveRoundAtNanos: Long? = this.resolveRoundAtNanos,
+        probeRoundAtNanos: Long? = this.probeRoundAtNanos,
+        results: Map<InetAddress, ProbeResult> = addresses
+    ) = HostRecord(
+        resolvedAddresses,
+        additionalAddresses,
+        resolvedAtNanos,
+        resolveRoundAtNanos,
+        probeRoundAtNanos,
+        results
+    )
 
     private fun rank(
         source: List<InetAddress>,

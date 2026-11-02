@@ -17,6 +17,7 @@ import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.repository.AddressRepository
 
 class AddressRefresherTest {
+    private var now = 0L
     private val log = LogRecorder()
     private val resolver = FakeDns()
     private val executor = ManualExecutor()
@@ -26,15 +27,103 @@ class AddressRefresherTest {
     )
     private val repository = AddressRepository(
         hosts,
-        clock = { 0 },
+        clock = { now },
         maxAgeNanos = 100,
-        refreshIntervalNanos = 100,
+        refreshIntervalNanos = INTERVAL,
         maxNetworks = 8
     ).apply { switchTo(network(1)) }
-    private val refresher = AddressRefresher(resolver::lookup, repository, executor)
+    private val refresher = newRefresher(preresolveOnNetworkChange = true)
+    private val onlyAnsweredHosts = newRefresher(preresolveOnNetworkChange = false)
 
     @AfterTest
     fun tearDown() = log.close()
+
+    @Test
+    fun `due hosts are resolved in the background once per interval`() {
+        resolver.answer(API, ip(1))
+        resolver.answer(OTHER, ip(2))
+
+        refresher.refreshDue()
+        val background = resolver.lookups.toList()
+        executor.runAll()
+        now += INTERVAL - 1
+        refresher.refreshDue()
+        val beforeInterval = executor.queued
+        now += 1
+        refresher.refreshDue()
+        executor.runAll()
+
+        assertEquals(emptyList(), background)
+        assertEquals(0, beforeInterval)
+        assertEquals(listOf(API, OTHER, API, OTHER), resolver.lookups)
+    }
+
+    @Test
+    fun `a failed host waits for the interval before the next due resolution`() {
+        resolver.fail(API)
+        resolver.fail(OTHER)
+
+        refresher.refreshDue()
+        executor.runAll()
+        refresher.refreshDue()
+        val afterFailure = executor.queued
+        now += INTERVAL
+        refresher.refreshDue()
+
+        assertEquals(0, afterFailure)
+        assertEquals(2, executor.queued)
+    }
+
+    @Test
+    fun `without a network nothing is due`() {
+        repository.switchTo(null)
+
+        refresher.refreshDue()
+
+        assertEquals(0, executor.queued)
+    }
+
+    @Test
+    fun `with preresolve off a later network refreshes only the hosts with an answer`() {
+        repository.switchTo(network(2, key = "CELLULAR/001-01"))
+        repository.saveResolved(2, API, listOf(ip(1)))
+        now += INTERVAL
+
+        onlyAnsweredHosts.refreshDue()
+        executor.runAll()
+
+        assertEquals(listOf(API), resolver.lookups)
+    }
+
+    @Test
+    fun `with preresolve off the first network still refreshes every host`() {
+        onlyAnsweredHosts.refreshDue()
+
+        assertEquals(2, executor.queued)
+    }
+
+    @Test
+    fun `preresolve takes hosts without a fresh answer`() {
+        repository.saveResolved(1, API, listOf(ip(1)))
+
+        refresher.preresolve()
+        executor.runAll()
+
+        assertEquals(listOf(OTHER), resolver.lookups)
+    }
+
+    @Test
+    fun `with preresolve off a later network is not resolved on its event`() {
+        onlyAnsweredHosts.preresolve()
+        executor.runAll()
+        val onFirstNetwork = resolver.lookups.size
+        repository.switchTo(network(2, key = "CELLULAR/001-01"))
+
+        onlyAnsweredHosts.preresolve()
+
+        assertEquals(2, onFirstNetwork)
+        assertEquals(0, executor.queued)
+    }
 
     @Test
     fun `refresh resolves in the background into the repository`() {
@@ -130,7 +219,8 @@ class AddressRefresherTest {
     @Test
     fun `hosts beyond the free threads wait in the queue and are all resolved`() {
         val pool = SdkExecutor("test", 1, 1, 1_000, LinkedBlockingQueue())
-        val refresher = AddressRefresher(resolver::lookup, repository, pool)
+        val refresher =
+            AddressRefresher(resolver::lookup, repository, pool, hosts.map { it.host }, true)
         resolver.answer(API, ip(1))
         resolver.answer(OTHER, ip(2))
 
@@ -167,7 +257,16 @@ class AddressRefresherTest {
         )
     }
 
+    private fun newRefresher(preresolveOnNetworkChange: Boolean) = AddressRefresher(
+        resolver::lookup,
+        repository,
+        executor,
+        hosts.map { it.host },
+        preresolveOnNetworkChange
+    )
+
     private companion object {
+        const val INTERVAL = 50L
         const val API = "api.example"
         const val OTHER = "other.example"
     }

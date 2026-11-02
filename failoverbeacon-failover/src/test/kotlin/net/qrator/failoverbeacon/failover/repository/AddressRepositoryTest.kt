@@ -66,6 +66,21 @@ class AddressRepositoryTest {
     }
 
     @Test
+    fun `a resolve round starts once per interval and an answer counts as one`() {
+        val first = repository.startResolveRound(1, API)
+        val second = repository.startResolveRound(1, API)
+        now += INTERVAL
+        repository.saveResolved(1, API, listOf(ip(1)))
+        val afterAnswer = repository.startResolveRound(1, API)
+        now += INTERVAL
+
+        assertTrue(first)
+        assertFalse(second)
+        assertFalse(afterAnswer)
+        assertTrue(repository.startResolveRound(1, API))
+    }
+
+    @Test
     fun `a probe round starts once per interval`() {
         val first = repository.startProbeRound(1, API)
         val second = repository.startProbeRound(1, API)
