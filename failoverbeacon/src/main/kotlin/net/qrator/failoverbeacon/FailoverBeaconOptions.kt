@@ -13,7 +13,8 @@ public class FailoverBeaconOptions private constructor(
     internal val diskQueueBytes: Long,
     internal val memoryQueueSize: Int,
     internal val preresolveOnNetworkChange: Boolean,
-    internal val probeOnNetworkChange: Boolean
+    internal val probeOnNetworkChange: Boolean,
+    internal val refreshIntervalMillis: Long
 ) {
     /** Builds [FailoverBeaconOptions]. Every setter is optional. */
     public class Builder {
@@ -22,6 +23,7 @@ public class FailoverBeaconOptions private constructor(
         private var memoryQueueSize = DEFAULT_MEMORY_QUEUE_SIZE
         private var preresolveOnNetworkChange = true
         private var probeOnNetworkChange = true
+        private var refreshIntervalMillis = DEFAULT_REFRESH_INTERVAL_MILLIS
 
         /**
          * Sets how often stored events are uploaded, from 1 second to 8 hours. The default value
@@ -79,13 +81,29 @@ public class FailoverBeaconOptions private constructor(
             probeOnNetworkChange = enabled
         }
 
+        /**
+         * Sets how often the addresses of failover hosts are tested again with connections, from
+         * 1 minute to 1 hour. The default value is 10 minutes.
+         *
+         * @throws IllegalArgumentException if [interval] is shorter than 1 minute or longer than
+         *     1 hour.
+         */
+        public fun refreshInterval(interval: Long, unit: TimeUnit): Builder = apply {
+            val millis = unit.toMillis(interval)
+            require(millis in MIN_REFRESH_INTERVAL_MILLIS..MAX_REFRESH_INTERVAL_MILLIS) {
+                "refreshInterval must be from 1 minute to 1 hour, was $interval $unit"
+            }
+            refreshIntervalMillis = millis
+        }
+
         /** Creates the options. */
         public fun build(): FailoverBeaconOptions = FailoverBeaconOptions(
             uploadPeriodMillis,
             diskQueueBytes,
             memoryQueueSize,
             preresolveOnNetworkChange,
-            probeOnNetworkChange
+            probeOnNetworkChange,
+            refreshIntervalMillis
         )
 
         private companion object {
@@ -94,6 +112,9 @@ public class FailoverBeaconOptions private constructor(
             private val MAX_UPLOAD_PERIOD_MILLIS = TimeUnit.HOURS.toMillis(8)
             private const val DEFAULT_DISK_QUEUE_BYTES = 5L * 1024 * 1024
             private const val DEFAULT_MEMORY_QUEUE_SIZE = 1000
+            private val DEFAULT_REFRESH_INTERVAL_MILLIS = TimeUnit.MINUTES.toMillis(10)
+            private val MIN_REFRESH_INTERVAL_MILLIS = TimeUnit.MINUTES.toMillis(1)
+            private val MAX_REFRESH_INTERVAL_MILLIS = TimeUnit.HOURS.toMillis(1)
         }
     }
 }

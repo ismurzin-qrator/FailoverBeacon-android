@@ -2,6 +2,7 @@ package net.qrator.failoverbeacon.internal
 
 import android.app.Application
 import android.content.Context
+import java.util.concurrent.TimeUnit
 import net.qrator.failoverbeacon.FailoverBeaconConfig
 import net.qrator.failoverbeacon.core.SdkInstance
 import net.qrator.failoverbeacon.core.SdkRegistry
@@ -56,7 +57,9 @@ internal object SdkStartup {
             resolve = config.dnsResolver::resolve,
             settings = FailoverSettings(
                 preresolveOnNetworkChange = config.options.preresolveOnNetworkChange,
-                probeOnNetworkChange = config.options.probeOnNetworkChange
+                probeOnNetworkChange = config.options.probeOnNetworkChange,
+                refreshIntervalNanos =
+                    TimeUnit.MILLISECONDS.toNanos(config.options.refreshIntervalMillis)
             )
         )
         failover.subscribe()

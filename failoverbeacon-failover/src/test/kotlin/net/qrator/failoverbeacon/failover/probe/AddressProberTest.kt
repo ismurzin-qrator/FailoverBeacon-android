@@ -25,9 +25,13 @@ class AddressProberTest {
         FailoverHostConfig(NO_PROBES, PORT, emptyList(), probeConnections = false)
     )
     private var now = 0L
-    private val repository = AddressRepository(hosts, { now }, MAX_AGE, maxNetworks = 8).apply {
-        switchTo(network(1, key = WIFI))
-    }
+    private val repository = AddressRepository(
+        hosts,
+        { now },
+        MAX_AGE,
+        INTERVAL,
+        maxNetworks = 8
+    ).apply { switchTo(network(1, key = WIFI)) }
     private val prober = AddressProber(hosts, repository, connect::connect, executor, true)
     private val firstNetworkProber =
         AddressProber(hosts, repository, connect::connect, executor, false)
@@ -169,18 +173,105 @@ class AddressProberTest {
         repository.saveResolved(1, API, listOf(ip(1)))
         firstNetworkProber.probe(API)
         executor.runAll()
-        now += MAX_AGE + 1
-        repository.saveResolved(1, API, listOf(ip(1)))
+        now += INTERVAL
         firstNetworkProber.probe(API)
-        val afterStaleAnswer = executor.queued
+        val afterInterval = executor.queued
         executor.runAll()
         repository.switchTo(network(2, key = CELLULAR))
         repository.saveResolved(2, API, listOf(ip(1)))
 
         firstNetworkProber.probe(API)
 
-        assertEquals(2, afterStaleAnswer)
+        assertEquals(2, afterInterval)
         assertEquals(0, executor.queued)
+    }
+
+    @Test
+    fun `after the interval every IPv4 address is probed again`() {
+        repository.saveResolved(1, API, listOf(ip(1), IPV6))
+        prober.probe(API)
+        executor.runAll()
+        connect.connects.clear()
+        now += INTERVAL - 1
+        prober.probe(API)
+        val beforeInterval = executor.queued
+        now += 1
+
+        prober.probe(API)
+        executor.runAll()
+
+        assertEquals(0, beforeInterval)
+        assertEquals(listOf(ip(1), ip(7)), connect.connects.map { it.first })
+    }
+
+    @Test
+    fun `earlier results keep the order until new ones replace them`() {
+        val fast = ProbeResult.Connected(connectNanos = 10)
+        val slow = ProbeResult.Connected(connectNanos = 20)
+        connect.answer(ip(1), fast)
+        connect.answer(ip(7), slow)
+        repository.saveResolved(1, API, listOf(ip(1)))
+        prober.probe(API)
+        executor.runAll()
+        connect.answer(ip(1), ProbeResult.Failed)
+        now += INTERVAL
+
+        prober.probe(API)
+        val duringRound = repository[API]?.addresses
+        executor.runAll()
+
+        assertEquals(mapOf(ip(1) to fast, ip(7) to slow), duringRound)
+        assertEquals(listOf(ip(1), ip(7)), duringRound?.keys?.toList())
+        assertEquals(listOf(ip(7), ip(1)), repository[API]?.addresses?.keys?.toList())
+    }
+
+    @Test
+    fun `a new address is probed at once and does not move the next round`() {
+        repository.saveResolved(1, API, listOf(ip(1)))
+        prober.probe(API)
+        executor.runAll()
+        connect.connects.clear()
+        now += INTERVAL - 1
+        repository.saveResolved(1, API, listOf(ip(1), ip(3)))
+        prober.probe(API)
+        executor.runAll()
+        val newAddressOnly = connect.connects.map { it.first }
+        connect.connects.clear()
+        now += 1
+
+        prober.probe(API)
+        executor.runAll()
+
+        assertEquals(listOf(ip(3)), newAddressOnly)
+        assertEquals(setOf(ip(1), ip(3), ip(7)), connect.connects.map { it.first }.toSet())
+    }
+
+    @Test
+    fun `an address still being probed is not queued again by the next round`() {
+        repository.saveResolved(1, API, listOf(ip(1)))
+        prober.probe(API)
+        now += INTERVAL
+
+        prober.probe(API)
+
+        assertEquals(2, executor.queued)
+    }
+
+    @Test
+    fun `an unexpected failure keeps the earlier result`() {
+        val connected = ProbeResult.Connected(connectNanos = 10)
+        connect.answer(ip(1), connected)
+        repository.saveResolved(1, API, listOf(ip(1)))
+        prober.probe(API)
+        executor.runAll()
+        connect.fail(ip(1), SecurityException("no INTERNET permission"))
+        now += INTERVAL
+        prober.probe(API)
+
+        runCatching { executor.runAll() }
+        executor.runAll()
+
+        assertEquals(connected, repository[API]?.addresses?.get(ip(1)))
     }
 
     @Test
@@ -211,6 +302,7 @@ class AddressProberTest {
         const val NO_PROBES = "noprobes.example"
         const val PORT = 8443
         const val MAX_AGE = 100L
+        const val INTERVAL = 50L
         const val WIFI = "WIFI/192.0.2"
         const val CELLULAR = "CELLULAR/001-01"
         val IPV6: InetAddress = InetAddress.getByName("2001:db8::1")

@@ -20,6 +20,7 @@ class Failover(
         hosts = hosts,
         clock = sdk.elapsedRealtimeClock,
         maxAgeNanos = settings.maxAddressAgeNanos,
+        refreshIntervalNanos = settings.refreshIntervalNanos,
         maxNetworks = settings.maxNetworks
     )
     private val tcpProbe = TcpProbe(sdk.clock, settings.probeTimeoutMillis)

@@ -1,5 +1,7 @@
 package net.qrator.failoverbeacon.failover.repository
 
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -16,6 +18,7 @@ class AddressRepositoryTest {
         listOf(FailoverHostConfig(API, 443, listOf(ip(7)), probeConnections = true)),
         clock = { now },
         maxAgeNanos = MAX_AGE,
+        refreshIntervalNanos = INTERVAL,
         maxNetworks = 2
     ).apply { switchTo(network(1, key = WIFI)) }
     private val changedHosts = mutableListOf<String>()
@@ -49,20 +52,65 @@ class AddressRepositoryTest {
     }
 
     @Test
-    fun `a stale record starts its probes over with a new answer`() {
+    fun `a stale record keeps its probes with a new answer`() {
         repository.saveResolved(1, API, listOf(ip(1)))
         repository.saveProbe(1, API, ip(1), ProbeResult.Failed)
         now += MAX_AGE + 1
-        repository.saveResolved(1, API, emptyList())
-        val afterFailure = repository[API]?.addresses
 
         repository.saveResolved(1, API, listOf(ip(1)))
 
-        assertEquals(mapOf(ip(1) to ProbeResult.Failed, ip(7) to ProbeResult.Unknown), afterFailure)
         assertEquals(
-            mapOf(ip(1) to ProbeResult.Unknown, ip(7) to ProbeResult.Unknown),
+            mapOf(ip(7) to ProbeResult.Unknown, ip(1) to ProbeResult.Failed),
             repository[API]?.addresses
         )
+    }
+
+    @Test
+    fun `a probe round starts once per interval`() {
+        val first = repository.startProbeRound(1, API)
+        val second = repository.startProbeRound(1, API)
+        now += INTERVAL - 1
+        val beforeInterval = repository.startProbeRound(1, API)
+        now += 1
+
+        assertTrue(first)
+        assertFalse(second)
+        assertFalse(beforeInterval)
+        assertTrue(repository.startProbeRound(1, API))
+    }
+
+    @Test
+    fun `parallel callers start one probe round`() {
+        val callers = 16
+        val pool = Executors.newFixedThreadPool(callers)
+        val start = CountDownLatch(1)
+        val rounds = List(callers) {
+            pool.submit<Boolean> {
+                start.await()
+                repository.startProbeRound(1, API)
+            }
+        }
+
+        start.countDown()
+
+        assertEquals(1, rounds.count { it.get() })
+        pool.shutdown()
+    }
+
+    @Test
+    fun `a probe round of an earlier session or an unknown host does not start`() {
+        repository.switchTo(network(2, key = WIFI))
+
+        assertFalse(repository.startProbeRound(1, API))
+        assertFalse(repository.startProbeRound(2, OTHER))
+    }
+
+    @Test
+    fun `each network keeps its own probe round`() {
+        repository.startProbeRound(1, API)
+        repository.switchTo(network(2, key = CELLULAR))
+
+        assertTrue(repository.startProbeRound(2, API))
     }
 
     @Test
@@ -129,7 +177,7 @@ class AddressRepositoryTest {
     }
 
     @Test
-    fun `listeners hear about a host whose addresses or their probes changed`() {
+    fun `listeners hear about a host whose addresses changed`() {
         repository.addAddressListener { changedHosts += it }
 
         repository.saveResolved(1, API, listOf(ip(1)))
@@ -140,6 +188,7 @@ class AddressRepositoryTest {
         repository.saveResolved(2, API, listOf(ip(3)))
         now += MAX_AGE + 1
         repository.saveResolved(1, API, listOf(ip(1)))
+        repository.saveResolved(1, API, listOf(ip(1), ip(3)))
 
         assertEquals(listOf(API, API), changedHosts)
     }
@@ -150,5 +199,6 @@ class AddressRepositoryTest {
         const val WIFI = "WIFI/192.0.2"
         const val CELLULAR = "CELLULAR/001-01"
         const val MAX_AGE = 100L
+        const val INTERVAL = 50L
     }
 }

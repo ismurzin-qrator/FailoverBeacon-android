@@ -13,6 +13,7 @@ internal class AddressRepository(
     private val hosts: List<FailoverHostConfig>,
     private val clock: MonotonicClock,
     private val maxAgeNanos: Long,
+    private val refreshIntervalNanos: Long,
     private val maxNetworks: Int
 ) {
     private val networks = LinkedHashMap<String, ConcurrentHashMap<String, HostRecord>>()
@@ -41,10 +42,7 @@ internal class AddressRepository(
         val records = recordsOf(handle) ?: return
         var hasChanged = false
         records.computeIfPresent(host) { _, oldRecord ->
-            val now = clock.nanoTime()
-            val isStale = addresses.isNotEmpty() && !oldRecord.isFresh(now, maxAgeNanos)
-            val base = if (isStale) oldRecord.withoutProbes() else oldRecord
-            val newRecord = base.withResolved(addresses, now)
+            val newRecord = oldRecord.withResolved(addresses, clock.nanoTime())
             hasChanged = newRecord.addresses != oldRecord.addresses
             newRecord
         }
@@ -56,6 +54,17 @@ internal class AddressRepository(
     fun saveProbe(handle: Long, host: String, address: InetAddress, result: ProbeResult) {
         val records = recordsOf(handle) ?: return
         records.computeIfPresent(host) { _, record -> record.withProbe(address, result) }
+    }
+
+    fun startProbeRound(handle: Long, host: String): Boolean {
+        val records = recordsOf(handle) ?: return false
+        var isStarted = false
+        records.computeIfPresent(host) { _, record ->
+            val now = clock.nanoTime()
+            isStarted = record.isProbeRoundDue(now, refreshIntervalNanos)
+            if (isStarted) record.withProbeRound(now) else record
+        }
+        return isStarted
     }
 
     fun addAddressListener(listener: (host: String) -> Unit) {

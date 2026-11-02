@@ -24,8 +24,13 @@ class AddressRefresherTest {
         FailoverHostConfig(API, 443, emptyList(), probeConnections = true),
         FailoverHostConfig(OTHER, 443, emptyList(), probeConnections = true)
     )
-    private val repository = AddressRepository(hosts, { 0 }, maxAgeNanos = 100, maxNetworks = 8)
-        .apply { switchTo(network(1)) }
+    private val repository = AddressRepository(
+        hosts,
+        clock = { 0 },
+        maxAgeNanos = 100,
+        refreshIntervalNanos = 100,
+        maxNetworks = 8
+    ).apply { switchTo(network(1)) }
     private val refresher = AddressRefresher(resolver::lookup, repository, executor)
 
     @AfterTest

@@ -118,7 +118,7 @@ class FailoverDnsTest {
         additional: List<InetAddress> = emptyList()
     ): FailoverDns {
         val host = FailoverHostConfig(API, 443, additional, probeConnections = true)
-        repository = AddressRepository(listOf(host), { now }, MAX_AGE, maxNetworks = 8)
+        repository = AddressRepository(listOf(host), { now }, MAX_AGE, MAX_AGE, maxNetworks = 8)
         repository.switchTo(network(1))
         resolved?.let { repository.saveResolved(1, API, it) }
         val refresher = AddressRefresher(resolver::lookup, repository, executor)

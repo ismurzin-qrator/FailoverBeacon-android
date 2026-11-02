@@ -108,26 +108,32 @@ class HostRecordTest {
     }
 
     @Test
-    fun `without probes the addresses and their age stay`() {
-        val probed = record
-            .withResolved(listOf(ip(1), ip(2)), nowNanos = 10)
-            .withProbe(ip(2), connected)
+    fun `a probe round is due before the first one and after the interval`() {
+        val started = record.withProbeRound(nowNanos = 10)
 
-        val unprobed = probed.withoutProbes()
+        assertTrue(record.isProbeRoundDue(nowNanos = 0, INTERVAL))
+        assertFalse(started.isProbeRoundDue(nowNanos = 10 + INTERVAL - 1, INTERVAL))
+        assertTrue(started.isProbeRoundDue(nowNanos = 10 + INTERVAL, INTERVAL))
+    }
 
-        assertEquals(
-            mapOf(
-                ip(1) to ProbeResult.Unknown,
-                ip(2) to ProbeResult.Unknown,
-                ip(7) to ProbeResult.Unknown
-            ),
-            unprobed.addresses
-        )
-        assertTrue(unprobed.isFresh(nowNanos = 10, maxAgeNanos = 0))
+    @Test
+    fun `a new answer and a probe result keep the round time and the round keeps the results`() {
+        val started = record
+            .withResolved(listOf(ip(1)), nowNanos = 0)
+            .withProbe(ip(1), connected)
+            .withProbeRound(nowNanos = 10)
+
+        val updated = started
+            .withResolved(listOf(ip(1), ip(2)), nowNanos = 20)
+            .withProbe(ip(2), ProbeResult.Failed)
+
+        assertEquals(connected, started.addresses[ip(1)])
+        assertFalse(updated.isProbeRoundDue(nowNanos = 10 + INTERVAL - 1, INTERVAL))
     }
 
     private companion object {
         const val MAX_AGE = 100L
+        const val INTERVAL = 50L
         val IPV6: InetAddress = InetAddress.getByName("2001:db8::1")
         val OTHER_IPV6: InetAddress = InetAddress.getByName("2001:db8::2")
     }

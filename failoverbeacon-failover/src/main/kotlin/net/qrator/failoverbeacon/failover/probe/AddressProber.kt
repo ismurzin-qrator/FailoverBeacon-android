@@ -28,8 +28,9 @@ internal class AddressProber(
         val addresses = repository[host]?.addresses ?: return
         val ipv4Addresses = addresses.keys.filterIsInstance<Inet4Address>()
         if (ipv4Addresses.size < 2) return
+        val isRoundStarted = repository.startProbeRound(handle, host)
         ipv4Addresses
-            .filter { addresses[it] == ProbeResult.Unknown }
+            .filter { isRoundStarted || addresses[it] == ProbeResult.Unknown }
             .forEach { address ->
                 if (probingAddresses.add(Probe(host, address, handle))) {
                     executor.execute { probeAddress(host, port, address, handle) }

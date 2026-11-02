@@ -17,6 +17,7 @@ class FailoverBeaconOptionsTest {
         assertEquals(1000, options.memoryQueueSize)
         assertTrue(options.preresolveOnNetworkChange)
         assertTrue(options.probeOnNetworkChange)
+        assertEquals(600_000L, options.refreshIntervalMillis)
     }
 
     @Test
@@ -47,6 +48,26 @@ class FailoverBeaconOptionsTest {
         }
         assertFailsWith<IllegalArgumentException> {
             builder.uploadPeriod(Long.MAX_VALUE, TimeUnit.DAYS)
+        }
+    }
+
+    @Test
+    fun `refreshInterval accepts intervals from 1 minute to 1 hour`() {
+        val builder = FailoverBeaconOptions.Builder()
+
+        val shortest = builder.refreshInterval(1, TimeUnit.MINUTES).build()
+        val longest = builder.refreshInterval(1, TimeUnit.HOURS).build()
+
+        assertEquals(60_000L, shortest.refreshIntervalMillis)
+        assertEquals(3_600_000L, longest.refreshIntervalMillis)
+        assertFailsWith<IllegalArgumentException> {
+            builder.refreshInterval(59_999, TimeUnit.MILLISECONDS)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            builder.refreshInterval(3_600_001, TimeUnit.MILLISECONDS)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            builder.refreshInterval(Long.MAX_VALUE, TimeUnit.DAYS)
         }
     }
 

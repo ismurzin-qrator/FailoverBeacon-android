@@ -7,10 +7,11 @@ internal class HostRecord private constructor(
     private val resolvedAddresses: List<InetAddress>,
     private val additionalAddresses: List<InetAddress>,
     private val resolvedAtNanos: Long?,
+    private val probeRoundAtNanos: Long?,
     results: Map<InetAddress, ProbeResult>
 ) {
     constructor(additionalAddresses: List<InetAddress>) :
-        this(emptyList(), additionalAddresses, null, emptyMap())
+        this(emptyList(), additionalAddresses, null, null, emptyMap())
 
     val addresses: Map<InetAddress, ProbeResult> =
         rank((resolvedAddresses + additionalAddresses).distinct(), results)
@@ -18,13 +19,21 @@ internal class HostRecord private constructor(
     fun isFresh(nowNanos: Long, maxAgeNanos: Long): Boolean =
         resolvedAtNanos != null && nowNanos - resolvedAtNanos <= maxAgeNanos
 
+    fun isProbeRoundDue(nowNanos: Long, intervalNanos: Long): Boolean =
+        probeRoundAtNanos == null || nowNanos - probeRoundAtNanos >= intervalNanos
+
     fun withResolved(resolved: List<InetAddress>, nowNanos: Long): HostRecord {
         if (resolved.isEmpty()) return this
-        return HostRecord(resolved, additionalAddresses, nowNanos, addresses)
+        return HostRecord(resolved, additionalAddresses, nowNanos, probeRoundAtNanos, addresses)
     }
 
-    fun withoutProbes(): HostRecord =
-        HostRecord(resolvedAddresses, additionalAddresses, resolvedAtNanos, emptyMap())
+    fun withProbeRound(nowNanos: Long): HostRecord = HostRecord(
+        resolvedAddresses,
+        additionalAddresses,
+        resolvedAtNanos,
+        nowNanos,
+        addresses
+    )
 
     fun withProbe(address: InetAddress, result: ProbeResult): HostRecord {
         if (address !in addresses) return this
@@ -32,6 +41,7 @@ internal class HostRecord private constructor(
             resolvedAddresses,
             additionalAddresses,
             resolvedAtNanos,
+            probeRoundAtNanos,
             addresses + (address to result)
         )
     }
