@@ -15,7 +15,7 @@ internal class EchDnsCall(
 
     override fun enqueue(callback: Dns.Callback) {
         val records = try {
-            val metadata = serviceMetadata.get(request)
+            val metadata = serviceMetadata.getAndRefresh(request)
             val addresses = dns.lookup(request.hostname)
             addresses.map { Dns.Record.IpAddress(request.hostname, it) } + metadata
         } catch (e: UnknownHostException) {

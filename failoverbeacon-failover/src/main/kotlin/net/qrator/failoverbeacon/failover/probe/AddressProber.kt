@@ -2,62 +2,34 @@ package net.qrator.failoverbeacon.failover.probe
 
 import java.net.Inet4Address
 import java.net.InetAddress
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executor
-import java.util.concurrent.TimeUnit
-import net.qrator.failoverbeacon.core.SdkRegistry
-import net.qrator.failoverbeacon.core.logging.debug
-import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
+import net.qrator.failoverbeacon.failover.model.HostState
 import net.qrator.failoverbeacon.failover.model.ProbeResult
-import net.qrator.failoverbeacon.failover.repository.AddressRepository
+import net.qrator.failoverbeacon.failover.network.NetworkSession
+import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
 internal class AddressProber(
-    hosts: List<FailoverHostConfig>,
-    private val repository: AddressRepository,
-    private val connect: (InetAddress, Int) -> ProbeResult,
-    private val executor: Executor,
+    private val sessions: NetworkSessions,
+    private val tasks: ProbeTasks,
     private val probeOnNetworkChange: Boolean
 ) {
-    private val ports = hosts.filter { it.probeConnections }.associate { it.host to it.port }
-    private val probingAddresses = ConcurrentHashMap.newKeySet<Probe>()
-
-    fun probeAll() = ports.keys.forEach(::probe)
-
-    fun probe(host: String) {
-        val port = ports[host] ?: return
-        if (!probeOnNetworkChange && !repository.isOnFirstNetwork) return
-        val handle = repository.currentHandle ?: return
-        val addresses = repository[host]?.addresses ?: return
-        val ipv4Addresses = addresses.keys.filterIsInstance<Inet4Address>()
-        if (ipv4Addresses.size < 2) return
-        val isRoundStarted = repository.startProbeRound(handle, host)
-        ipv4Addresses
-            .filter { isRoundStarted || addresses[it] == ProbeResult.Unknown }
-            .forEach { address ->
-                if (probingAddresses.add(Probe(host, address, handle))) {
-                    executor.execute { probeAddress(host, port, address, handle) }
-                }
-            }
+    fun probeStaleHosts() {
+        sessions.current?.states?.forEach { probeIfStale(it.config.host) }
     }
 
-    private fun probeAddress(host: String, port: Int, address: InetAddress, handle: Long) {
-        try {
-            if (repository.currentHandle != handle) return
-            val result = connect(address, port)
-            SdkRegistry.logger.debug {
-                "[Failover] $host ${address.hostAddress}: ${describe(result)}"
-            }
-            repository.saveProbe(handle, host, address, result)
-        } finally {
-            probingAddresses -= Probe(host, address, handle)
-        }
+    fun probeIfStale(host: String) {
+        val session = sessions.current ?: return
+        val state = session[host] ?: return
+        if (!state.config.probeConnections) return
+        if (!probeOnNetworkChange && !session.isFirstNetwork) return
+        addressesToProbe(session, state).forEach { tasks.start(session, state.config, it) }
     }
 
-    private fun describe(result: ProbeResult): String = when (result) {
-        is ProbeResult.Connected -> "${TimeUnit.NANOSECONDS.toMillis(result.connectNanos)} ms"
-        ProbeResult.Failed -> "failed"
-        ProbeResult.Unknown -> "unknown"
+    private fun addressesToProbe(session: NetworkSession, state: HostState): List<InetAddress> {
+        val ipv4Addresses = state.addresses.filter { it.address is Inet4Address }
+        if (ipv4Addresses.size < 2) return emptyList()
+        val isRoundStarted = session.startProbeRoundIfStale(state.config.host)
+        return ipv4Addresses
+            .filter { isRoundStarted || it.probe == ProbeResult.Unknown }
+            .map { it.address }
     }
-
-    private data class Probe(val host: String, val address: InetAddress, val handle: Long)
 }

@@ -51,10 +51,10 @@ internal object SdkStartup {
         telemetry.subscribe()
         val failover = Failover(
             sdk = sdk,
-            hosts = config.failoverHosts.map {
+            hostConfigs = config.failoverHosts.map {
                 FailoverHostConfig(it.host, it.port, it.additionalAddresses, it.probeConnections)
             },
-            resolve = config.dnsResolver::resolve,
+            queryDns = config.dnsResolver::resolve,
             settings = FailoverSettings(
                 preresolveOnNetworkChange = config.options.preresolveOnNetworkChange,
                 probeOnNetworkChange = config.options.probeOnNetworkChange,

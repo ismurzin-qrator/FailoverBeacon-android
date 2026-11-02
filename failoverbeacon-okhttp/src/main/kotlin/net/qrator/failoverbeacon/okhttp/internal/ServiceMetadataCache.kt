@@ -11,7 +11,7 @@ internal class ServiceMetadataCache(private val dns: Dns) {
     private val cache = ConcurrentHashMap<Dns.Request, List<Dns.Record.ServiceMetadata>>()
     private val refreshing = ConcurrentHashMap.newKeySet<Dns.Request>()
 
-    fun get(request: Dns.Request): List<Dns.Record.ServiceMetadata> {
+    fun getAndRefresh(request: Dns.Request): List<Dns.Record.ServiceMetadata> {
         val cached = cache[request]
         if (cached != null) {
             if (refreshing.add(request)) query(request) { refreshing.remove(request) }

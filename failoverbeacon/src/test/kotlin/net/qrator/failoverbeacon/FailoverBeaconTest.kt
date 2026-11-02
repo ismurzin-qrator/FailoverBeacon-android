@@ -340,6 +340,26 @@ class FailoverBeaconTest {
     }
 
     @Test
+    fun `addresses from a DNS answer are probed without a lookup`() {
+        val failoverConfig = FailoverBeaconConfig.Builder()
+            .beacons(listOf("https://beacon.example"))
+            .failoverHosts(listOf(FailoverHost("api.example")))
+            .dnsResolver {
+                listOf(InetAddress.getByName("127.0.0.1"), InetAddress.getByName("127.0.0.2"))
+            }
+            .build()
+        activeNetwork()
+        FailoverBeacon.initialize(app, failoverConfig)
+        val probes = threads().failoverProbe
+
+        repeat(500) {
+            if (probes.taskCount < 2) Thread.sleep(10)
+        }
+
+        assertEquals(2, probes.taskCount)
+    }
+
+    @Test
     fun `stop releases a lookup waiting for a hung resolver`() {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
