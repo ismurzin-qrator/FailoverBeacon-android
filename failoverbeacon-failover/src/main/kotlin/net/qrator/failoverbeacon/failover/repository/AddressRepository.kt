@@ -21,13 +21,19 @@ internal class AddressRepository(
     @Volatile
     private var current: Session? = null
 
+    @Volatile
+    private var firstHandle: Long? = null
+
     val currentHandle: Long? get() = current?.handle
+
+    val isOnFirstNetwork: Boolean get() = firstHandle != null && firstHandle == currentHandle
 
     operator fun get(host: String): HostRecord? = current?.records?.get(host)
 
     fun isFresh(host: String): Boolean = get(host)?.isFresh(clock.nanoTime(), maxAgeNanos) == true
 
     fun switchTo(network: DefaultNetwork?) {
+        if (firstHandle == null) firstHandle = network?.handle
         current = network?.let { Session(it.handle, recordsFor(it.key)) }
     }
 

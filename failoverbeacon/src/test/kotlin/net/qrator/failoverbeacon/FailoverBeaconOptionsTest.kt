@@ -4,6 +4,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class FailoverBeaconOptionsTest {
     @Test
@@ -13,6 +15,19 @@ class FailoverBeaconOptionsTest {
         assertEquals(60_000L, options.uploadPeriodMillis)
         assertEquals(5L * 1024 * 1024, options.diskQueueBytes)
         assertEquals(1000, options.memoryQueueSize)
+        assertTrue(options.preresolveOnNetworkChange)
+        assertTrue(options.probeOnNetworkChange)
+    }
+
+    @Test
+    fun `network change options are set independently`() {
+        val noPreresolve = FailoverBeaconOptions.Builder().preresolveOnNetworkChange(false).build()
+        val noProbes = FailoverBeaconOptions.Builder().probeOnNetworkChange(false).build()
+
+        assertFalse(noPreresolve.preresolveOnNetworkChange)
+        assertTrue(noPreresolve.probeOnNetworkChange)
+        assertTrue(noProbes.preresolveOnNetworkChange)
+        assertFalse(noProbes.probeOnNetworkChange)
     }
 
     @Test

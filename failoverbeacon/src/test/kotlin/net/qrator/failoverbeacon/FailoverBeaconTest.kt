@@ -301,6 +301,67 @@ class FailoverBeaconTest {
     }
 
     @Test
+    fun `with preresolve off a new network is resolved by the first lookup`() {
+        val resolutions = CopyOnWriteArrayList<String>()
+        val failoverConfig = FailoverBeaconConfig.Builder()
+            .beacons(listOf("https://beacon.example"))
+            .failoverHosts(listOf(FailoverHost("api.example", probeConnections = false)))
+            .dnsResolver {
+                resolutions += it
+                listOf(InetAddress.getByName("192.0.2.1"))
+            }
+            .options(FailoverBeaconOptions.Builder().preresolveOnNetworkChange(false).build())
+            .build()
+        activeNetwork()
+        FailoverBeacon.initialize(app, failoverConfig)
+        awaitResolutions()
+        val resolvedOnStart = resolutions.size
+
+        connect(
+            networkCallbacks().single(),
+            ShadowNetwork.newInstance(301),
+            NetworkCapabilities.TRANSPORT_CELLULAR
+        )
+        awaitResolutions()
+        val resolvedOnChange = resolutions.size
+        val addresses = assertNotNull(SdkRegistry.instance?.dns).lookup("api.example")
+
+        assertEquals(1, resolvedOnStart)
+        assertEquals(1, resolvedOnChange)
+        assertEquals(2, resolutions.size)
+        assertEquals(listOf<String?>("192.0.2.1"), addresses?.map { it.hostAddress })
+    }
+
+    @Test
+    fun `with probes off a new network is not probed`() {
+        val failoverConfig = FailoverBeaconConfig.Builder()
+            .beacons(listOf("https://beacon.example"))
+            .failoverHosts(
+                listOf(
+                    FailoverHost(
+                        "api.example",
+                        additionalAddresses = listOf("127.0.0.1", "127.0.0.2")
+                    )
+                )
+            )
+            .dnsResolver { emptyList() }
+            .options(FailoverBeaconOptions.Builder().probeOnNetworkChange(false).build())
+            .build()
+        activeNetwork()
+        FailoverBeacon.initialize(app, failoverConfig)
+        val probesOnStart = threads().failoverProbe.taskCount
+
+        connect(
+            networkCallbacks().single(),
+            ShadowNetwork.newInstance(301),
+            NetworkCapabilities.TRANSPORT_CELLULAR
+        )
+
+        assertEquals(2, probesOnStart)
+        assertEquals(2, threads().failoverProbe.taskCount)
+    }
+
+    @Test
     fun `without an application the foreground state is unknown`() {
         val context = object : ContextWrapper(app) {
             override fun getApplicationContext(): Context? = null

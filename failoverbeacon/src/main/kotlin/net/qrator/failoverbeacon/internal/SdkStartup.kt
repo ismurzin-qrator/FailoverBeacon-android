@@ -54,7 +54,10 @@ internal object SdkStartup {
                 FailoverHostConfig(it.host, it.port, it.additionalAddresses, it.probeConnections)
             },
             resolve = config.dnsResolver::resolve,
-            settings = FailoverSettings()
+            settings = FailoverSettings(
+                preresolveOnNetworkChange = config.options.preresolveOnNetworkChange,
+                probeOnNetworkChange = config.options.probeOnNetworkChange
+            )
         )
         failover.subscribe()
         if (!SdkRegistry.install(sdk)) return false

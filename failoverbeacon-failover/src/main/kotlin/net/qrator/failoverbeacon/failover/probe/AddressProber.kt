@@ -15,13 +15,15 @@ internal class AddressProber(
     hosts: List<FailoverHostConfig>,
     private val repository: AddressRepository,
     private val connect: (InetAddress, Int) -> ProbeResult,
-    private val executor: Executor
+    private val executor: Executor,
+    private val probeOnNetworkChange: Boolean
 ) {
     private val ports = hosts.filter { it.probeConnections }.associate { it.host to it.port }
     private val probingAddresses = ConcurrentHashMap.newKeySet<Probe>()
 
     fun probe(host: String) {
         val port = ports[host] ?: return
+        if (!probeOnNetworkChange && !repository.isOnFirstNetwork) return
         val handle = repository.currentHandle ?: return
         val addresses = repository[host]?.addresses ?: return
         val ipv4Addresses = addresses.keys.filterIsInstance<Inet4Address>()

@@ -14,7 +14,7 @@ class Failover(
     private val sdk: SdkInstance,
     hosts: List<FailoverHostConfig>,
     resolve: (String) -> List<InetAddress>,
-    settings: FailoverSettings
+    private val settings: FailoverSettings
 ) : SdkFeature {
     private val repository = AddressRepository(
         hosts = hosts,
@@ -27,7 +27,8 @@ class Failover(
         hosts = hosts,
         repository = repository,
         connect = tcpProbe::connect,
-        executor = sdk.threads.failoverProbe
+        executor = sdk.threads.failoverProbe,
+        probeOnNetworkChange = settings.probeOnNetworkChange
     )
     private val refresher = AddressRefresher(
         resolve = resolve,
@@ -54,6 +55,8 @@ class Failover(
 
     private fun start() {
         hostNames.forEach(prober::probe)
-        refresher.refreshAll(hostNames.filterNot(repository::isFresh))
+        if (settings.preresolveOnNetworkChange || repository.isOnFirstNetwork) {
+            refresher.refreshAll(hostNames.filterNot(repository::isFresh))
+        }
     }
 }

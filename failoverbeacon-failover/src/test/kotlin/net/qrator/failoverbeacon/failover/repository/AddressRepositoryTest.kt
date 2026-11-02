@@ -2,6 +2,7 @@ package net.qrator.failoverbeacon.failover.repository
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.fakes.ip
@@ -110,6 +111,21 @@ class AddressRepositoryTest {
 
         assertEquals(listOf(ip(1), ip(7)), wifi)
         assertEquals(listOf(ip(7)), repository[API]?.addresses?.keys?.toList())
+    }
+
+    @Test
+    fun `only the session the repository started with is on the first network`() {
+        val onStart = repository.isOnFirstNetwork
+        repository.switchTo(null)
+        val withoutNetwork = repository.isOnFirstNetwork
+        repository.switchTo(network(2, key = WIFI))
+        val onReconnect = repository.isOnFirstNetwork
+        repository.switchTo(network(1, key = WIFI))
+
+        assertTrue(onStart)
+        assertFalse(withoutNetwork)
+        assertFalse(onReconnect)
+        assertTrue(repository.isOnFirstNetwork)
     }
 
     @Test

@@ -14,6 +14,8 @@ public final class FailoverBeaconConfigJavaTest {
                 .uploadPeriod(30, TimeUnit.SECONDS)
                 .diskQueueBytes(1024 * 1024)
                 .memoryQueueSize(500)
+                .preresolveOnNetworkChange(false)
+                .probeOnNetworkChange(false)
                 .build();
 
         new FailoverBeaconConfig.Builder()

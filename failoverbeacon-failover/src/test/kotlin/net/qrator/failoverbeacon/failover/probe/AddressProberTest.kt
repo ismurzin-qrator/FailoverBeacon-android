@@ -24,10 +24,13 @@ class AddressProberTest {
         FailoverHostConfig(SPARE, PORT, listOf(ip(4), ip(5)), probeConnections = true),
         FailoverHostConfig(NO_PROBES, PORT, emptyList(), probeConnections = false)
     )
-    private val repository = AddressRepository(hosts, { 0 }, MAX_AGE, maxNetworks = 8).apply {
+    private var now = 0L
+    private val repository = AddressRepository(hosts, { now }, MAX_AGE, maxNetworks = 8).apply {
         switchTo(network(1, key = WIFI))
     }
-    private val prober = AddressProber(hosts, repository, connect::connect, executor)
+    private val prober = AddressProber(hosts, repository, connect::connect, executor, true)
+    private val firstNetworkProber =
+        AddressProber(hosts, repository, connect::connect, executor, false)
 
     @AfterTest
     fun tearDown() = log.close()
@@ -154,6 +157,25 @@ class AddressProberTest {
             mapOf(ip(1) to ProbeResult.Unknown, ip(7) to ProbeResult.Unknown),
             repository[API]?.addresses
         )
+    }
+
+    @Test
+    fun `with network change probes off the first network is probed, others are not`() {
+        repository.saveResolved(1, API, listOf(ip(1)))
+        firstNetworkProber.probe(API)
+        executor.runAll()
+        now += MAX_AGE + 1
+        repository.saveResolved(1, API, listOf(ip(1)))
+        firstNetworkProber.probe(API)
+        val afterStaleAnswer = executor.queued
+        executor.runAll()
+        repository.switchTo(network(2, key = CELLULAR))
+        repository.saveResolved(2, API, listOf(ip(1)))
+
+        firstNetworkProber.probe(API)
+
+        assertEquals(2, afterStaleAnswer)
+        assertEquals(0, executor.queued)
     }
 
     @Test

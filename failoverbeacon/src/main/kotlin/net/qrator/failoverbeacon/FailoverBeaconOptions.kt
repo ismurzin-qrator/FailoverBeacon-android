@@ -11,13 +11,17 @@ import java.util.concurrent.TimeUnit
 public class FailoverBeaconOptions private constructor(
     internal val uploadPeriodMillis: Long,
     internal val diskQueueBytes: Long,
-    internal val memoryQueueSize: Int
+    internal val memoryQueueSize: Int,
+    internal val preresolveOnNetworkChange: Boolean,
+    internal val probeOnNetworkChange: Boolean
 ) {
     /** Builds [FailoverBeaconOptions]. Every setter is optional. */
     public class Builder {
         private var uploadPeriodMillis = DEFAULT_UPLOAD_PERIOD_MILLIS
         private var diskQueueBytes = DEFAULT_DISK_QUEUE_BYTES
         private var memoryQueueSize = DEFAULT_MEMORY_QUEUE_SIZE
+        private var preresolveOnNetworkChange = true
+        private var probeOnNetworkChange = true
 
         /**
          * Sets how often stored events are uploaded, from 1 second to 8 hours. The default value
@@ -57,9 +61,32 @@ public class FailoverBeaconOptions private constructor(
             memoryQueueSize = size
         }
 
+        /**
+         * Sets whether failover hosts are resolved in the background when the default network
+         * changes. When disabled, the first new connection to a host on that network waits for
+         * DNS. The default value is true.
+         */
+        public fun preresolveOnNetworkChange(enabled: Boolean): Builder = apply {
+            preresolveOnNetworkChange = enabled
+        }
+
+        /**
+         * Sets whether the addresses of failover hosts are tested with connections when the
+         * default network changes. When disabled, they are tested only on the network the SDK
+         * started on. The default value is true.
+         */
+        public fun probeOnNetworkChange(enabled: Boolean): Builder = apply {
+            probeOnNetworkChange = enabled
+        }
+
         /** Creates the options. */
-        public fun build(): FailoverBeaconOptions =
-            FailoverBeaconOptions(uploadPeriodMillis, diskQueueBytes, memoryQueueSize)
+        public fun build(): FailoverBeaconOptions = FailoverBeaconOptions(
+            uploadPeriodMillis,
+            diskQueueBytes,
+            memoryQueueSize,
+            preresolveOnNetworkChange,
+            probeOnNetworkChange
+        )
 
         private companion object {
             private val DEFAULT_UPLOAD_PERIOD_MILLIS = TimeUnit.SECONDS.toMillis(60)
