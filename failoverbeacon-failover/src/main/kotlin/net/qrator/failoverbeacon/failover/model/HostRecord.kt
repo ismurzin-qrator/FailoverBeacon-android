@@ -23,6 +23,9 @@ internal class HostRecord private constructor(
         return HostRecord(resolved, additionalAddresses, nowNanos, addresses)
     }
 
+    fun withoutProbes(): HostRecord =
+        HostRecord(resolvedAddresses, additionalAddresses, resolvedAtNanos, emptyMap())
+
     fun withProbe(address: InetAddress, result: ProbeResult): HostRecord {
         if (address !in addresses) return this
         return HostRecord(

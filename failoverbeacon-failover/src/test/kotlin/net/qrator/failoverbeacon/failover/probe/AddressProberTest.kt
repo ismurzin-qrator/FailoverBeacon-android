@@ -10,6 +10,7 @@ import net.qrator.failoverbeacon.failover.fakes.FakeConnect
 import net.qrator.failoverbeacon.failover.fakes.LogRecorder
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.ip
+import net.qrator.failoverbeacon.failover.fakes.network
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.model.ProbeResult
 import net.qrator.failoverbeacon.failover.repository.AddressRepository
@@ -23,7 +24,9 @@ class AddressProberTest {
         FailoverHostConfig(SPARE, PORT, listOf(ip(4), ip(5)), probeConnections = true),
         FailoverHostConfig(NO_PROBES, PORT, emptyList(), probeConnections = false)
     )
-    private val repository = AddressRepository(hosts, clock = { 0 })
+    private val repository = AddressRepository(hosts, { 0 }, MAX_AGE, maxNetworks = 8).apply {
+        switchTo(network(1, key = WIFI))
+    }
     private val prober = AddressProber(hosts, repository, connect::connect, executor)
 
     @AfterTest
@@ -32,7 +35,7 @@ class AddressProberTest {
     @Test
     fun `each IPv4 address is connected on the host's port and its result is recorded`() {
         connect.answer(ip(1), ProbeResult.Connected(connectNanos = 40_000_000))
-        repository.saveResolved(API, listOf(ip(1), ip(2), IPV6))
+        repository.saveResolved(1, API, listOf(ip(1), ip(2), IPV6))
 
         prober.probe(API)
         executor.runAll()
@@ -52,7 +55,7 @@ class AddressProberTest {
     @Test
     fun `each result is logged`() {
         connect.answer(ip(1), ProbeResult.Connected(connectNanos = 40_000_000))
-        repository.saveResolved(API, listOf(ip(1)))
+        repository.saveResolved(1, API, listOf(ip(1)))
 
         prober.probe(API)
         executor.runAll()
@@ -77,8 +80,8 @@ class AddressProberTest {
 
     @Test
     fun `a host with one IPv4 address, without probes or outside the config is not probed`() {
-        repository.saveResolved(API, listOf(IPV6))
-        repository.saveResolved(NO_PROBES, listOf(ip(1), ip(2)))
+        repository.saveResolved(1, API, listOf(IPV6))
+        repository.saveResolved(1, NO_PROBES, listOf(ip(1), ip(2)))
 
         prober.probe(API)
         prober.probe(NO_PROBES)
@@ -89,13 +92,13 @@ class AddressProberTest {
 
     @Test
     fun `probed addresses are not probed again and new ones are`() {
-        repository.saveResolved(API, listOf(ip(1)))
+        repository.saveResolved(1, API, listOf(ip(1)))
         prober.probe(API)
         executor.runAll()
 
         prober.probe(API)
         assertEquals(0, executor.queued)
-        repository.saveResolved(API, listOf(ip(1), ip(3)))
+        repository.saveResolved(1, API, listOf(ip(1), ip(3)))
         prober.probe(API)
         executor.runAll()
 
@@ -104,21 +107,68 @@ class AddressProberTest {
 
     @Test
     fun `an address being probed is not queued again and a new one is queued at once`() {
-        repository.saveResolved(API, listOf(ip(1)))
+        repository.saveResolved(1, API, listOf(ip(1)))
         prober.probe(API)
         prober.probe(API)
         assertEquals(2, executor.queued)
 
-        repository.saveResolved(API, listOf(ip(1), ip(3)))
+        repository.saveResolved(1, API, listOf(ip(1), ip(3)))
         prober.probe(API)
 
         assertEquals(3, executor.queued)
     }
 
     @Test
+    fun `a new session of a known network keeps its results`() {
+        repository.saveResolved(1, API, listOf(ip(1)))
+        prober.probe(API)
+        executor.runAll()
+        repository.switchTo(network(2, key = WIFI))
+
+        prober.probe(API)
+
+        assertEquals(0, executor.queued)
+    }
+
+    @Test
+    fun `a new network is probed while a probe of the earlier one is running`() {
+        repository.saveResolved(1, API, listOf(ip(1)))
+        prober.probe(API)
+        repository.switchTo(network(2, key = CELLULAR))
+        repository.saveResolved(2, API, listOf(ip(1)))
+
+        prober.probe(API)
+
+        assertEquals(4, executor.queued)
+    }
+
+    @Test
+    fun `a result of an earlier session is dropped`() {
+        repository.saveResolved(1, API, listOf(ip(1)))
+        prober.probe(API)
+        repository.switchTo(network(2, key = WIFI))
+
+        executor.runAll()
+
+        assertEquals(
+            mapOf(ip(1) to ProbeResult.Unknown, ip(7) to ProbeResult.Unknown),
+            repository[API]?.addresses
+        )
+    }
+
+    @Test
+    fun `without a network nothing is probed`() {
+        repository.switchTo(null)
+
+        prober.probe(SPARE)
+
+        assertEquals(0, executor.queued)
+    }
+
+    @Test
     fun `an unexpected failure leaves the address unknown to be probed again`() {
         connect.fail(ip(1), SecurityException("no INTERNET permission"))
-        repository.saveResolved(API, listOf(ip(1)))
+        repository.saveResolved(1, API, listOf(ip(1)))
         prober.probe(API)
         runCatching { executor.runAll() }
         executor.runAll()
@@ -133,6 +183,9 @@ class AddressProberTest {
         const val SPARE = "spare.example"
         const val NO_PROBES = "noprobes.example"
         const val PORT = 8443
+        const val MAX_AGE = 100L
+        const val WIFI = "WIFI/192.0.2"
+        const val CELLULAR = "CELLULAR/001-01"
         val IPV6: InetAddress = InetAddress.getByName("2001:db8::1")
     }
 }

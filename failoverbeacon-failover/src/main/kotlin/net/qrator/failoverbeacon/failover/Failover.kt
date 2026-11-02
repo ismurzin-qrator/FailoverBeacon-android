@@ -3,6 +3,7 @@ package net.qrator.failoverbeacon.failover
 import java.net.InetAddress
 import net.qrator.failoverbeacon.core.SdkFeature
 import net.qrator.failoverbeacon.core.SdkInstance
+import net.qrator.failoverbeacon.core.network.model.DefaultNetwork
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.probe.AddressProber
 import net.qrator.failoverbeacon.failover.probe.TcpProbe
@@ -15,7 +16,12 @@ class Failover(
     resolve: (String) -> List<InetAddress>,
     settings: FailoverSettings
 ) : SdkFeature {
-    private val repository = AddressRepository(hosts, sdk.elapsedRealtimeClock)
+    private val repository = AddressRepository(
+        hosts = hosts,
+        clock = sdk.elapsedRealtimeClock,
+        maxAgeNanos = settings.maxAddressAgeNanos,
+        maxNetworks = settings.maxNetworks
+    )
     private val tcpProbe = TcpProbe(sdk.clock, settings.probeTimeoutMillis)
     private val prober = AddressProber(
         hosts = hosts,
@@ -28,12 +34,7 @@ class Failover(
         repository = repository,
         executor = sdk.threads.failoverResolve
     )
-    private val dns = FailoverDns(
-        repository = repository,
-        refresher = refresher,
-        clock = sdk.elapsedRealtimeClock,
-        maxAgeNanos = settings.maxAddressAgeNanos
-    )
+    private val dns = FailoverDns(repository = repository, refresher = refresher)
     private val hostNames = hosts.map { it.host }
 
     fun subscribe() {
@@ -42,12 +43,17 @@ class Failover(
         sdk.addFeature(this)
     }
 
-    fun start() {
-        hostNames.forEach(prober::probe)
-        refresher.refreshAll(hostNames)
+    override fun onNetworkChanged(network: DefaultNetwork?) {
+        repository.switchTo(network)
+        if (network != null) start()
     }
 
     override fun close() {
         tcpProbe.close()
+    }
+
+    private fun start() {
+        hostNames.forEach(prober::probe)
+        refresher.refreshAll(hostNames.filterNot(repository::isFresh))
     }
 }

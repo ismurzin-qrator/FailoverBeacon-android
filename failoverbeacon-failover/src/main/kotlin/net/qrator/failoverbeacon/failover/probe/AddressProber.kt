@@ -18,31 +18,32 @@ internal class AddressProber(
     private val executor: Executor
 ) {
     private val ports = hosts.filter { it.probeConnections }.associate { it.host to it.port }
-    private val probingAddresses = ConcurrentHashMap.newKeySet<Pair<String, InetAddress>>()
+    private val probingAddresses = ConcurrentHashMap.newKeySet<Probe>()
 
     fun probe(host: String) {
         val port = ports[host] ?: return
+        val handle = repository.currentHandle ?: return
         val addresses = repository[host]?.addresses ?: return
         val ipv4Addresses = addresses.keys.filterIsInstance<Inet4Address>()
         if (ipv4Addresses.size < 2) return
         ipv4Addresses
             .filter { addresses[it] == ProbeResult.Unknown }
             .forEach { address ->
-                if (probingAddresses.add(host to address)) {
-                    executor.execute { probeAddress(host, port, address) }
+                if (probingAddresses.add(Probe(host, address, handle))) {
+                    executor.execute { probeAddress(host, port, address, handle) }
                 }
             }
     }
 
-    private fun probeAddress(host: String, port: Int, address: InetAddress) {
+    private fun probeAddress(host: String, port: Int, address: InetAddress, handle: Long) {
         try {
             val result = connect(address, port)
             SdkRegistry.logger.debug {
                 "[Failover] $host ${address.hostAddress}: ${describe(result)}"
             }
-            repository.saveProbe(host, address, result)
+            repository.saveProbe(handle, host, address, result)
         } finally {
-            probingAddresses -= host to address
+            probingAddresses -= Probe(host, address, handle)
         }
     }
 
@@ -51,4 +52,6 @@ internal class AddressProber(
         ProbeResult.Failed -> "failed"
         ProbeResult.Unknown -> "unknown"
     }
+
+    private data class Probe(val host: String, val address: InetAddress, val handle: Long)
 }

@@ -1,5 +1,7 @@
 package net.qrator.failoverbeacon.okhttp
 
+import android.net.ConnectivityManager
+import android.net.LinkProperties
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Proxy
@@ -11,6 +13,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.FailoverBeacon
 import net.qrator.failoverbeacon.FailoverBeaconConfig
@@ -25,10 +28,14 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowNetworkCapabilities
 
 @RunWith(RobolectricTestRunner::class)
 class FailoverEndToEndTest {
     private val app = RuntimeEnvironment.getApplication()
+    private val connectivity = app.getSystemService(ConnectivityManager::class.java)
+    private val active = assertNotNull(connectivity.activeNetwork)
     private val server = MockWebServer()
     private val client = OkHttpClient.Builder()
         .dns { appDns(it) }
@@ -49,6 +56,10 @@ class FailoverEndToEndTest {
             )
             .dnsResolver { sdkDns(it) }
             .build()
+        shadowOf(connectivity).apply {
+            setNetworkCapabilities(active, ShadowNetworkCapabilities.newInstance())
+            setLinkProperties(active, LinkProperties())
+        }
         FailoverBeacon.initialize(app, config)
     }
 
@@ -103,6 +114,13 @@ class FailoverEndToEndTest {
 
         assertEquals("ok", execute(OTHER))
         assertFailsWith<UnknownHostException> { execute("missing.test") }
+    }
+
+    @Test
+    fun `without a network a configured host gets the app's DNS error`() {
+        shadowOf(connectivity).networkCallbacks.single().onLost(active)
+
+        assertFailsWith<UnknownHostException> { execute(API) }
     }
 
     @Test

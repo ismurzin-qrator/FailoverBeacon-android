@@ -62,7 +62,6 @@ internal object SdkStartup {
             networkMonitor.register(sdk::publishNetwork)
             foregroundMonitor?.register()
             telemetry.start()
-            failover.start()
             sdk.publishConsent()
         } catch (e: Throwable) {
             SdkRegistry.clear()

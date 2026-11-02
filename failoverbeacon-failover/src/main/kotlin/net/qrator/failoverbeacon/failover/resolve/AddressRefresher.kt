@@ -15,7 +15,7 @@ internal class AddressRefresher(
     private val repository: AddressRepository,
     private val executor: Executor
 ) {
-    private val refreshing = ConcurrentHashMap.newKeySet<String>()
+    private val refreshing = ConcurrentHashMap.newKeySet<Pair<String, Long>>()
 
     fun refreshAll(hosts: List<String>) {
         val pending = AtomicInteger(hosts.size)
@@ -35,27 +35,29 @@ internal class AddressRefresher(
     fun refresh(host: String) = submit(host) {}
 
     fun refreshNow(host: String) {
-        resolveAndSave(host)
+        val handle = repository.currentHandle ?: return
+        resolveAndSave(host, handle)
     }
 
     private fun submit(host: String, onDone: (Boolean) -> Unit) {
-        if (!refreshing.add(host)) return
-        executor.execute { resolveInBackground(host, onDone) }
+        val handle = repository.currentHandle ?: return
+        if (!refreshing.add(host to handle)) return
+        executor.execute { resolveInBackground(host, handle, onDone) }
     }
 
-    private fun resolveInBackground(host: String, onDone: (Boolean) -> Unit) {
+    private fun resolveInBackground(host: String, handle: Long, onDone: (Boolean) -> Unit) {
         var success = false
         try {
-            success = resolveAndSave(host)
+            success = resolveAndSave(host, handle)
         } finally {
-            refreshing.remove(host)
+            refreshing.remove(host to handle)
             onDone(success)
         }
     }
 
-    private fun resolveAndSave(host: String): Boolean = try {
+    private fun resolveAndSave(host: String, handle: Long): Boolean = try {
         val addresses = resolve(host)
-        repository.saveResolved(host, addresses)
+        repository.saveResolved(handle, host, addresses)
         SdkRegistry.logger.debug { "[Failover] $host: ${addresses.size} addresses" }
         addresses.isNotEmpty()
     } catch (e: UnknownHostException) {

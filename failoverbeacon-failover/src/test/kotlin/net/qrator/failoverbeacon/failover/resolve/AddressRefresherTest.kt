@@ -12,6 +12,7 @@ import net.qrator.failoverbeacon.failover.fakes.FakeDns
 import net.qrator.failoverbeacon.failover.fakes.LogRecorder
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.ip
+import net.qrator.failoverbeacon.failover.fakes.network
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.repository.AddressRepository
 
@@ -23,7 +24,8 @@ class AddressRefresherTest {
         FailoverHostConfig(API, 443, emptyList(), probeConnections = true),
         FailoverHostConfig(OTHER, 443, emptyList(), probeConnections = true)
     )
-    private val repository = AddressRepository(hosts, clock = { 0 })
+    private val repository = AddressRepository(hosts, { 0 }, maxAgeNanos = 100, maxNetworks = 8)
+        .apply { switchTo(network(1)) }
     private val refresher = AddressRefresher(resolver::lookup, repository, executor)
 
     @AfterTest
@@ -62,8 +64,32 @@ class AddressRefresherTest {
     }
 
     @Test
+    fun `a resolution of an earlier session neither blocks nor reaches the new one`() {
+        val answers = ArrayDeque(listOf(ip(1), ip(2)))
+        resolver.answer(API) { listOf(answers.removeFirst()) }
+        refresher.refresh(API)
+        repository.switchTo(network(2))
+
+        refresher.refresh(API)
+        executor.runAll()
+
+        assertEquals(listOf(ip(2)), repository[API]?.addresses?.keys?.toList())
+    }
+
+    @Test
+    fun `without a network nothing is resolved`() {
+        repository.switchTo(null)
+
+        refresher.refresh(API)
+        refresher.refreshNow(API)
+
+        assertEquals(0, executor.queued)
+        assertEquals(emptyList(), resolver.lookups)
+    }
+
+    @Test
     fun `a failed resolution keeps the recorded addresses`() {
-        repository.saveResolved(API, listOf(ip(1)))
+        repository.saveResolved(1, API, listOf(ip(1)))
         resolver.fail(API)
 
         refresher.refresh(API)
@@ -74,7 +100,7 @@ class AddressRefresherTest {
 
     @Test
     fun `an empty answer keeps the recorded addresses`() {
-        repository.saveResolved(API, listOf(ip(1)))
+        repository.saveResolved(1, API, listOf(ip(1)))
         resolver.answer(API) { emptyList() }
 
         refresher.refresh(API)

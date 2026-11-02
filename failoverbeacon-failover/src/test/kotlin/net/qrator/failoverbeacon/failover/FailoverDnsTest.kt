@@ -11,6 +11,7 @@ import net.qrator.failoverbeacon.failover.fakes.FakeDns
 import net.qrator.failoverbeacon.failover.fakes.LogRecorder
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.ip
+import net.qrator.failoverbeacon.failover.fakes.network
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.model.ProbeResult
 import net.qrator.failoverbeacon.failover.repository.AddressRepository
@@ -85,8 +86,8 @@ class FailoverDnsTest {
     @Test
     fun `addresses are ordered by the probe results`() {
         val dns = dns(resolved = listOf(ip(1), ip(2)), additional = listOf(ip(7)))
-        repository.saveProbe(API, ip(1), ProbeResult.Failed)
-        repository.saveProbe(API, ip(7), ProbeResult.Connected(connectNanos = 40))
+        repository.saveProbe(1, API, ip(1), ProbeResult.Failed)
+        repository.saveProbe(1, API, ip(7), ProbeResult.Connected(connectNanos = 40))
 
         assertEquals(listOf(ip(7), ip(2), ip(1)), dns.lookup(API))
     }
@@ -102,15 +103,26 @@ class FailoverDnsTest {
         assertEquals(0, executor.queued)
     }
 
+    @Test
+    fun `without a network configured hosts are left to the client's DNS`() {
+        val dns = dns(resolved = listOf(ip(1)))
+        repository.switchTo(null)
+
+        assertFalse(dns.manages(API))
+        assertNull(dns.lookup(API))
+        assertEquals(emptyList(), resolver.lookups)
+    }
+
     private fun dns(
         resolved: List<InetAddress>? = null,
         additional: List<InetAddress> = emptyList()
     ): FailoverDns {
         val host = FailoverHostConfig(API, 443, additional, probeConnections = true)
-        repository = AddressRepository(listOf(host), clock = { now })
-        resolved?.let { repository.saveResolved(API, it) }
+        repository = AddressRepository(listOf(host), { now }, MAX_AGE, maxNetworks = 8)
+        repository.switchTo(network(1))
+        resolved?.let { repository.saveResolved(1, API, it) }
         val refresher = AddressRefresher(resolver::lookup, repository, executor)
-        return FailoverDns(repository, refresher, clock = { now }, maxAgeNanos = MAX_AGE)
+        return FailoverDns(repository, refresher)
     }
 
     private companion object {

@@ -107,6 +107,25 @@ class HostRecordTest {
         )
     }
 
+    @Test
+    fun `without probes the addresses and their age stay`() {
+        val probed = record
+            .withResolved(listOf(ip(1), ip(2)), nowNanos = 10)
+            .withProbe(ip(2), connected)
+
+        val unprobed = probed.withoutProbes()
+
+        assertEquals(
+            mapOf(
+                ip(1) to ProbeResult.Unknown,
+                ip(2) to ProbeResult.Unknown,
+                ip(7) to ProbeResult.Unknown
+            ),
+            unprobed.addresses
+        )
+        assertTrue(unprobed.isFresh(nowNanos = 10, maxAgeNanos = 0))
+    }
+
     private companion object {
         const val MAX_AGE = 100L
         val IPV6: InetAddress = InetAddress.getByName("2001:db8::1")

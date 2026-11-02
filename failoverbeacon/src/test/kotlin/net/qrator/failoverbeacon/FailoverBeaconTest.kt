@@ -5,7 +5,10 @@ import android.app.Application
 import android.content.Context
 import android.content.ContextWrapper
 import android.net.ConnectivityManager
+import android.net.ConnectivityManager.NetworkCallback
 import android.net.LinkProperties
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.util.Log
 import java.io.File
 import java.net.InetAddress
@@ -35,6 +38,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowApplication
 import org.robolectric.shadows.ShadowLog
+import org.robolectric.shadows.ShadowNetwork
 import org.robolectric.shadows.ShadowNetworkCapabilities
 import org.robolectric.shadows.ShadowSystemClock
 
@@ -212,12 +216,7 @@ class FailoverBeaconTest {
 
     @Test
     fun `a network change reaches the features`() {
-        val manager = app.getSystemService(ConnectivityManager::class.java)
-        val active = assertNotNull(manager.activeNetwork)
-        shadowOf(manager).apply {
-            setNetworkCapabilities(active, ShadowNetworkCapabilities.newInstance())
-            setLinkProperties(active, LinkProperties())
-        }
+        val active = activeNetwork()
         FailoverBeacon.initialize(app, config)
         val changes = mutableListOf<DefaultNetwork?>()
         assertNotNull(SdkRegistry.instance).addFeature(
@@ -253,6 +252,7 @@ class FailoverBeaconTest {
             .failoverHosts(listOf(FailoverHost("api.example")))
             .dnsResolver { listOf(InetAddress.getByName("192.0.2.1")) }
             .build()
+        activeNetwork()
         FailoverBeacon.initialize(app, failoverConfig)
         val dns = assertNotNull(SdkRegistry.instance?.dns)
 
@@ -261,6 +261,43 @@ class FailoverBeaconTest {
 
         assertEquals(listOf<String?>("192.0.2.1"), configured?.map { it.hostAddress })
         assertNull(outside)
+    }
+
+    @Test
+    fun `before a network is known failover leaves its hosts to the client's DNS`() {
+        val failoverConfig = FailoverBeaconConfig.Builder()
+            .beacons(listOf("https://beacon.example"))
+            .failoverHosts(listOf(FailoverHost("api.example")))
+            .dnsResolver { listOf(InetAddress.getByName("192.0.2.1")) }
+            .build()
+
+        FailoverBeacon.initialize(app, failoverConfig)
+
+        assertNull(assertNotNull(SdkRegistry.instance?.dns).lookup("api.example"))
+    }
+
+    @Test
+    fun `failover resolves its hosts on a new network and not on a network it has seen`() {
+        val resolutions = CopyOnWriteArrayList<String>()
+        val failoverConfig = FailoverBeaconConfig.Builder()
+            .beacons(listOf("https://beacon.example"))
+            .failoverHosts(listOf(FailoverHost("api.example", probeConnections = false)))
+            .dnsResolver {
+                resolutions += it
+                listOf(InetAddress.getByName("192.0.2.1"))
+            }
+            .build()
+        activeNetwork()
+        FailoverBeacon.initialize(app, failoverConfig)
+        val callback = networkCallbacks().single()
+
+        awaitResolutions()
+        connect(callback, ShadowNetwork.newInstance(301), NetworkCapabilities.TRANSPORT_CELLULAR)
+        awaitResolutions()
+        connect(callback, ShadowNetwork.newInstance(302), NetworkCapabilities.TRANSPORT_WIFI)
+        awaitResolutions()
+
+        assertEquals(listOf("api.example", "api.example"), resolutions)
     }
 
     @Test
@@ -421,4 +458,33 @@ class FailoverBeaconTest {
 
     private fun networkCallbacks() =
         shadowOf(app.getSystemService(ConnectivityManager::class.java)).networkCallbacks.toSet()
+
+    private fun activeNetwork(): Network {
+        val manager = app.getSystemService(ConnectivityManager::class.java)
+        val active = assertNotNull(manager.activeNetwork)
+        shadowOf(manager).apply {
+            setNetworkCapabilities(active, capabilities(NetworkCapabilities.TRANSPORT_WIFI))
+            setLinkProperties(active, LinkProperties())
+        }
+        return active
+    }
+
+    private fun connect(callback: NetworkCallback, network: Network, transport: Int) {
+        callback.onAvailable(network)
+        callback.onCapabilitiesChanged(network, capabilities(transport))
+        callback.onLinkPropertiesChanged(network, LinkProperties())
+        callback.onBlockedStatusChanged(network, false)
+    }
+
+    private fun capabilities(transport: Int): NetworkCapabilities =
+        ShadowNetworkCapabilities.newInstance().also { shadowOf(it).addTransportType(transport) }
+
+    private fun awaitResolutions() {
+        val pool = threads().failoverResolve
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (pool.completedTaskCount < pool.taskCount) {
+            check(System.nanoTime() < deadline) { "Resolutions did not finish" }
+            Thread.sleep(5)
+        }
+    }
 }
