@@ -3,7 +3,7 @@ package net.qrator.failoverbeacon.failover.probe
 import java.net.Inet4Address
 import java.net.InetAddress
 import net.qrator.failoverbeacon.failover.model.HostState
-import net.qrator.failoverbeacon.failover.model.ProbeResult
+import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.network.NetworkSession
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
@@ -29,7 +29,7 @@ internal class AddressProber(
         if (ipv4Addresses.size < 2) return emptyList()
         val isRoundStarted = session.startProbeRoundIfStale(state.config.host)
         return ipv4Addresses
-            .filter { isRoundStarted || it.probe == ProbeResult.Unknown }
+            .filter { isRoundStarted || it.tcp == LayerResult.Unknown }
             .map { it.address }
     }
 }

@@ -11,8 +11,8 @@ import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.ips
-import net.qrator.failoverbeacon.failover.fakes.probes
-import net.qrator.failoverbeacon.failover.model.ProbeResult
+import net.qrator.failoverbeacon.failover.fakes.tcpResults
+import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
 
 class NetworkSessionTest {
@@ -21,7 +21,8 @@ class NetworkSessionTest {
     private val session = NetworkSession(
         isFirstNetwork = true,
         hostStates = HostStates(listOf(hostConfig(API, listOf(ip(7))))),
-        timer = timer
+        timer = timer,
+        networkHandle = 1L
     )
 
     private val dns get() = assertNotNull(session[API]).dns
@@ -49,29 +50,29 @@ class NetworkSessionTest {
 
     @Test
     fun `a probe result is saved by its address`() {
-        session.saveProbe(API, ip(7), ProbeResult.Failed)
+        session.saveProbe(API, ip(7), LayerResult.Failed)
 
-        assertEquals(mapOf(ip(7) to ProbeResult.Failed), session[API]?.probes)
+        assertEquals(mapOf(ip(7) to LayerResult.Failed), session[API]?.tcpResults)
     }
 
     @Test
     fun `a stale state keeps its probes with a new answer`() {
         session.saveAnswer(API, listOf(ip(1)))
-        session.saveProbe(API, ip(1), ProbeResult.Failed)
+        session.saveProbe(API, ip(1), LayerResult.Failed)
         now += INTERVAL + 1
 
         session.saveAnswer(API, listOf(ip(1)))
 
         assertEquals(
-            mapOf(ip(7) to ProbeResult.Unknown, ip(1) to ProbeResult.Failed),
-            session[API]?.probes
+            mapOf(ip(7) to LayerResult.Unknown, ip(1) to LayerResult.Failed),
+            session[API]?.tcpResults
         )
     }
 
     @Test
     fun `a host outside the config is not saved`() {
         session.saveAnswer(OTHER, listOf(ip(1)))
-        session.saveProbe(OTHER, ip(1), ProbeResult.Failed)
+        session.saveProbe(OTHER, ip(1), LayerResult.Failed)
         session.saveResolveFailure(OTHER)
 
         assertNull(session[OTHER])
@@ -83,11 +84,11 @@ class NetworkSessionTest {
         session.end()
 
         session.saveAnswer(API, listOf(ip(1)))
-        session.saveProbe(API, ip(7), ProbeResult.Failed)
+        session.saveProbe(API, ip(7), LayerResult.Failed)
         session.saveResolveFailure(API)
 
         assertFalse(session.isActive)
-        assertEquals(mapOf(ip(7) to ProbeResult.Unknown), session[API]?.probes)
+        assertEquals(mapOf(ip(7) to LayerResult.Unknown), session[API]?.tcpResults)
         assertTrue(dns.isAnswerNeeded(timer))
         assertFalse(session.startProbeRoundIfStale(API))
     }

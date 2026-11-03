@@ -628,7 +628,10 @@ class NetworkMonitorTest {
     }
 
     private companion object {
+        val WIFI_NETWORK = ShadowNetwork.newInstance(100)
+        val CELLULAR_NETWORK = ShadowNetwork.newInstance(101)
         val BASE = NetworkSnapshot.Connected(
+            handle = WIFI_NETWORK.networkHandle,
             transport = NetworkTransport.OTHER,
             vpn = false,
             validated = false,
@@ -642,7 +645,5 @@ class NetworkMonitorTest {
             blocked = null
         )
         const val DATA_SUBSCRIPTION = 2
-        val WIFI_NETWORK = ShadowNetwork.newInstance(100)
-        val CELLULAR_NETWORK = ShadowNetwork.newInstance(101)
     }
 }

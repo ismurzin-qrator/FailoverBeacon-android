@@ -102,7 +102,8 @@ class NetworkSessionsTest {
 
     @Test
     fun `the first network is the first one that appears after a start without one`() {
-        val sessions = NetworkSessions(emptyList(), RefreshTimer({ 0L }, 50), maxNetworks = 2)
+        val sessions =
+            NetworkSessions(emptyList(), RefreshTimer({ 0L }, 50), maxNetworks = 2)
 
         sessions.switchTo(null)
         sessions.switchTo(network(5, key = WIFI))

@@ -1,29 +1,27 @@
 package net.qrator.failoverbeacon.failover.model
 
 import java.net.Inet4Address
-import java.net.InetAddress
 
 internal object AddressRanking {
     private val fastestFirst = compareBy<HostAddress>(
+        { host -> host.hasFailure },
         { host ->
-            when (host.probe) {
-                is ProbeResult.Connected -> 0
-                ProbeResult.Unknown -> 1
-                ProbeResult.Failed -> 2
+            when (val tcp = host.tcp) {
+                is LayerResult.Passed -> if (tcp.nanos != null) 0 else 1
+                LayerResult.Unknown -> 2
+                LayerResult.Failed -> 3
             }
         },
-        { host -> (host.probe as? ProbeResult.Connected)?.connectNanos }
+        { host -> (host.tcp as? LayerResult.Passed)?.nanos }
     )
 
-    // IPv4: by connect time, then unknown, then failed. IPv6 keeps its places.
-    fun rank(source: List<InetAddress>, known: List<HostAddress>): List<HostAddress> {
-        val candidates = source.map { address ->
-            known.find { it.address == address } ?: HostAddress(address, ProbeResult.Unknown)
-        }
-        val rankedIpv4 = candidates
+    // IPv4: failed on any layer go last. Within each group: by probe time, then passed without
+    // a time, then unknown, then failed on TCP. IPv6 keeps its places.
+    fun rank(addresses: List<HostAddress>): List<HostAddress> {
+        val rankedIpv4 = addresses
             .filter { it.address is Inet4Address }
             .sortedWith(fastestFirst)
             .iterator()
-        return candidates.map { if (it.address is Inet4Address) rankedIpv4.next() else it }
+        return addresses.map { if (it.address is Inet4Address) rankedIpv4.next() else it }
     }
 }

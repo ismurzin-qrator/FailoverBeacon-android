@@ -82,7 +82,7 @@ internal class NetworkMonitor(context: Context) :
         state.capabilities = capabilities
         val cellular = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
         state.carrier = if (cellular) carrierReader.read() else null
-        snapshot.set(snapshotMapper.toSnapshot(state))
+        snapshot.set(snapshotMapper.toSnapshot(network.networkHandle, state))
     }
 
     override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
@@ -92,7 +92,7 @@ internal class NetworkMonitor(context: Context) :
 
     override fun onBlockedStatusChanged(network: Network, blocked: Boolean) {
         state.blocked = blocked
-        snapshot.set(snapshotMapper.toSnapshot(state))
+        snapshot.set(snapshotMapper.toSnapshot(network.networkHandle, state))
         report(network)
     }
 

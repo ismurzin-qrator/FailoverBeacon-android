@@ -7,6 +7,7 @@ sealed interface NetworkSnapshot {
 
     /** [roaming] is null below API 28, [signalStrength] and [blocked] below API 29. */
     data class Connected(
+        val handle: Long,
         val transport: NetworkTransport,
         val vpn: Boolean,
         val validated: Boolean,

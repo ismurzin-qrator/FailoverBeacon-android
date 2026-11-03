@@ -153,7 +153,8 @@ class ResolveTasksTest {
     private fun session() = NetworkSession(
         isFirstNetwork = true,
         hostStates = HostStates(listOf(hostConfig(API), hostConfig(OTHER))),
-        timer = timer
+        timer = timer,
+        networkHandle = 1L
     )
 
     private fun isAnswerNeeded() = assertNotNull(session[API]).dns.isAnswerNeeded(timer)

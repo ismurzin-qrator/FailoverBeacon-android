@@ -4,22 +4,21 @@ import java.net.InetAddress
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.ips
-import net.qrator.failoverbeacon.failover.fakes.probes
+import net.qrator.failoverbeacon.failover.fakes.tcpResults
 
 class HostStateTest {
     private var now = 0L
     private val timer = RefreshTimer({ now }, INTERVAL)
     private val state = HostState(hostConfig("api.example", additional = listOf(ip(7))))
-    private val connected = ProbeResult.Connected(connectNanos = 40)
+    private val connected = LayerResult.Passed(nanos = 40)
 
     @Test
     fun `a new state has the additional addresses unprobed`() {
-        assertEquals(mapOf(ip(7) to ProbeResult.Unknown), state.probes)
+        assertEquals(mapOf(ip(7) to LayerResult.Unknown), state.tcpResults)
         assertFalse(state.dns.hasAnswer)
     }
 
@@ -44,7 +43,7 @@ class HostStateTest {
     fun `a probe result of an address the host no longer has is dropped`() {
         val resolved = state.answered(ip(1))
 
-        assertSame(resolved, resolved.withProbe(ip(2), ProbeResult.Failed))
+        assertEquals(resolved.tcpResults, resolved.withProbe(ip(2), LayerResult.Failed).tcpResults)
     }
 
     @Test
@@ -52,14 +51,46 @@ class HostStateTest {
         val resolved = state
             .answered(ip(1), ip(2))
             .withProbe(ip(1), connected)
-            .withProbe(ip(2), ProbeResult.Failed)
-            .withProbe(ip(7), ProbeResult.Failed)
+            .withProbe(ip(2), LayerResult.Failed)
+            .withProbe(ip(7), LayerResult.Failed)
             .answered(ip(1), ip(3))
 
         assertEquals(
-            mapOf(ip(1) to connected, ip(3) to ProbeResult.Unknown, ip(7) to ProbeResult.Failed),
-            resolved.probes
+            mapOf(ip(1) to connected, ip(3) to LayerResult.Unknown, ip(7) to LayerResult.Failed),
+            resolved.tcpResults
         )
+    }
+
+    @Test
+    fun `a probe does not clear a TLS failure and a connection does`() {
+        val failed = state
+            .answered(ip(1))
+            .withConnectOutcome(IP_1, ConnectOutcome.TLS_FAILED)
+            .withProbe(ip(1), connected)
+
+        val cleared = failed.withConnectOutcome(IP_1, ConnectOutcome.CONNECTED_SECURE)
+
+        assertEquals(listOf(ip(7), ip(1)), failed.ips)
+        assertEquals(LayerResult.Failed, failed.addresses.last().tls)
+        assertEquals(listOf(ip(1), ip(7)), cleared.ips)
+    }
+
+    @Test
+    fun `a connect to an address the host never had is dropped`() {
+        val resolved = state.answered(ip(1))
+
+        val updated = resolved.withConnectOutcome("192.0.2.2", ConnectOutcome.TLS_FAILED)
+
+        assertEquals(resolved.addresses, updated.addresses)
+    }
+
+    @Test
+    fun `an address DNS no longer returns is forgotten with its results`() {
+        val failed = state.answered(ip(1)).withConnectOutcome(IP_1, ConnectOutcome.TLS_FAILED)
+
+        val returned = failed.answered(ip(2)).answered(ip(1))
+
+        assertEquals(HostAddress(ip(1)), returned.addresses.first { it.address == ip(1) })
     }
 
     @Test
@@ -68,7 +99,7 @@ class HostStateTest {
 
         val failed = probed.withDns(probed.dns.withFailure(atNanos = 10))
 
-        assertEquals(probed.probes, failed.probes)
+        assertEquals(probed.tcpResults, failed.tcpResults)
     }
 
     @Test
@@ -90,10 +121,10 @@ class HostStateTest {
             .withProbe(ip(1), connected)
             .withProbeRound(atNanos = 10)
 
-        val updated = started.answered(ip(1), ip(2)).withProbe(ip(2), ProbeResult.Failed)
+        val updated = started.answered(ip(1), ip(2)).withProbe(ip(2), LayerResult.Failed)
         now = 10 + INTERVAL - 1
 
-        assertEquals(connected, started.probes[ip(1)])
+        assertEquals(connected, started.tcpResults[ip(1)])
         assertFalse(updated.isProbeStale(timer))
     }
 
@@ -102,6 +133,7 @@ class HostStateTest {
 
     private companion object {
         const val INTERVAL = 50L
+        const val IP_1 = "192.0.2.1"
         val IPV6: InetAddress = InetAddress.getByName("2001:db8::1")
     }
 }

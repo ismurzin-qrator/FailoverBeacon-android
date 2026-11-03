@@ -3,13 +3,13 @@ package net.qrator.failoverbeacon.failover.fakes
 import java.net.InetAddress
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
-import net.qrator.failoverbeacon.failover.model.ProbeResult
+import net.qrator.failoverbeacon.failover.model.LayerResult
 
 internal class FakeConnect {
-    private val results = ConcurrentHashMap<InetAddress, () -> ProbeResult>()
+    private val results = ConcurrentHashMap<InetAddress, () -> LayerResult>()
     val connects = CopyOnWriteArrayList<Pair<InetAddress, Int>>()
 
-    fun answer(address: InetAddress, result: ProbeResult) {
+    fun answer(address: InetAddress, result: LayerResult) {
         results[address] = { result }
     }
 
@@ -17,8 +17,8 @@ internal class FakeConnect {
         results[address] = { throw failure }
     }
 
-    fun connect(address: InetAddress, port: Int): ProbeResult {
+    fun connect(address: InetAddress, port: Int): LayerResult {
         connects += address to port
-        return results[address]?.invoke() ?: ProbeResult.Failed
+        return results[address]?.invoke() ?: LayerResult.Failed
     }
 }

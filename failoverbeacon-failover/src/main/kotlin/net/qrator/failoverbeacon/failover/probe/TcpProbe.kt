@@ -7,7 +7,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import net.qrator.failoverbeacon.core.time.MonotonicClock
-import net.qrator.failoverbeacon.failover.model.ProbeResult
+import net.qrator.failoverbeacon.failover.model.LayerResult
 
 internal class TcpProbe(private val clock: MonotonicClock, private val timeoutMillis: Int) :
     Closeable {
@@ -15,19 +15,19 @@ internal class TcpProbe(private val clock: MonotonicClock, private val timeoutMi
     private val openSockets = HashSet<Socket>()
     private var isClosed = false
 
-    fun connect(address: InetAddress, port: Int): ProbeResult {
+    fun connect(address: InetAddress, port: Int): LayerResult {
         TrafficStats.setThreadStatsTag(TRAFFIC_STATS_TAG)
         val socket = Socket()
         try {
             synchronized(lock) {
-                if (isClosed) return ProbeResult.Failed
+                if (isClosed) return LayerResult.Failed
                 openSockets += socket
             }
             val start = clock.nanoTime()
             socket.connect(InetSocketAddress(address, port), timeoutMillis)
-            return ProbeResult.Connected(clock.nanoTime() - start)
+            return LayerResult.Passed(clock.nanoTime() - start)
         } catch (_: IOException) {
-            return ProbeResult.Failed
+            return LayerResult.Failed
         } finally {
             synchronized(lock) { openSockets -= socket }
             runCatching(socket::close)

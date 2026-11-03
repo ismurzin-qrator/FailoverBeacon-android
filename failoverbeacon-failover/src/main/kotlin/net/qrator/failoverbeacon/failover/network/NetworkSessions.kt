@@ -21,7 +21,12 @@ internal class NetworkSessions(
         current?.end()
         if (firstHandle == null) firstHandle = network?.handle
         current = network?.let {
-            NetworkSession(it.handle == firstHandle, hostStatesOf(it.key), timer)
+            NetworkSession(
+                isFirstNetwork = it.handle == firstHandle,
+                hostStates = hostStatesOf(it.key),
+                timer = timer,
+                networkHandle = it.handle
+            )
         }
     }
 

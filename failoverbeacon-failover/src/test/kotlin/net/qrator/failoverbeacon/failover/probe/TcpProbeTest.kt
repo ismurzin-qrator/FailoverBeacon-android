@@ -8,7 +8,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import net.qrator.failoverbeacon.failover.model.ProbeResult
+import net.qrator.failoverbeacon.failover.model.LayerResult
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
@@ -25,7 +25,7 @@ class TcpProbeTest {
     fun `a connect is timed with the clock and its socket is closed`() {
         val result = probe.connect(LOOPBACK, server.localPort)
 
-        assertEquals(ProbeResult.Connected(connectNanos = 40), result)
+        assertEquals(LayerResult.Passed(nanos = 40), result)
         server.accept().use { assertEquals(-1, it.getInputStream().read()) }
     }
 
@@ -34,7 +34,7 @@ class TcpProbeTest {
         val port = server.localPort
         server.close()
 
-        assertEquals(ProbeResult.Failed, probe.connect(LOOPBACK, port))
+        assertEquals(LayerResult.Failed, probe.connect(LOOPBACK, port))
     }
 
     @Test
@@ -48,7 +48,7 @@ class TcpProbeTest {
     fun `after close nothing is connected`() {
         probe.close()
 
-        assertEquals(ProbeResult.Failed, probe.connect(LOOPBACK, server.localPort))
+        assertEquals(LayerResult.Failed, probe.connect(LOOPBACK, server.localPort))
         assertFailsWith<SocketTimeoutException> { server.accept() }
     }
 

@@ -228,6 +228,7 @@ class TelemetryEventMapperTest {
 
     private companion object {
         val CONNECTED = NetworkSnapshot.Connected(
+            handle = 1,
             transport = NetworkTransport.CELLULAR,
             vpn = true,
             validated = true,

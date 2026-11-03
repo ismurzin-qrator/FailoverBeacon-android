@@ -7,11 +7,11 @@ import java.util.concurrent.TimeUnit
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
-import net.qrator.failoverbeacon.failover.model.ProbeResult
+import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.network.NetworkSession
 
 internal class ProbeTasks(
-    private val connect: (InetAddress, Int) -> ProbeResult,
+    private val connect: (InetAddress, Int) -> LayerResult,
     private val executor: Executor
 ) {
     private val running = ConcurrentHashMap.newKeySet<Probe>()
@@ -34,10 +34,13 @@ internal class ProbeTasks(
         }
     }
 
-    private fun describe(result: ProbeResult): String = when (result) {
-        is ProbeResult.Connected -> "${TimeUnit.NANOSECONDS.toMillis(result.connectNanos)} ms"
-        ProbeResult.Failed -> "failed"
-        ProbeResult.Unknown -> "unknown"
+    private fun describe(result: LayerResult): String = when (result) {
+        is LayerResult.Passed ->
+            result.nanos?.let { "${TimeUnit.NANOSECONDS.toMillis(it)} ms" } ?: "passed"
+
+        LayerResult.Failed -> "failed"
+
+        LayerResult.Unknown -> "unknown"
     }
 
     private data class Probe(

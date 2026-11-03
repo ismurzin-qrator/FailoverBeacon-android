@@ -12,8 +12,8 @@ import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.ips
 import net.qrator.failoverbeacon.failover.fakes.network
-import net.qrator.failoverbeacon.failover.fakes.probes
-import net.qrator.failoverbeacon.failover.model.ProbeResult
+import net.qrator.failoverbeacon.failover.fakes.tcpResults
+import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
@@ -42,7 +42,7 @@ class AddressProberTest {
 
     @Test
     fun `each IPv4 address is connected and its result is recorded`() {
-        connect.answer(ip(1), ProbeResult.Connected(connectNanos = 40_000_000))
+        connect.answer(ip(1), LayerResult.Passed(nanos = 40_000_000))
         session.saveAnswer(API, listOf(ip(1), ip(2), IPV6))
 
         prober.probeIfStale(API)
@@ -51,12 +51,12 @@ class AddressProberTest {
         assertEquals(listOf(ip(1), ip(2), ip(7)).map { it to PORT }, connect.connects)
         assertEquals(
             mapOf(
-                ip(1) to ProbeResult.Connected(connectNanos = 40_000_000),
-                ip(2) to ProbeResult.Failed,
-                IPV6 to ProbeResult.Unknown,
-                ip(7) to ProbeResult.Failed
+                ip(1) to LayerResult.Passed(nanos = 40_000_000),
+                ip(2) to LayerResult.Failed,
+                IPV6 to LayerResult.Unknown,
+                ip(7) to LayerResult.Failed
             ),
-            session[API]?.probes
+            session[API]?.tcpResults
         )
     }
 
@@ -122,7 +122,7 @@ class AddressProberTest {
     @Test
     fun `a probe that outlives a reconnect of the same network records nothing`() {
         session.saveAnswer(API, listOf(ip(1)))
-        connect.answer(ip(1), ProbeResult.Failed)
+        connect.answer(ip(1), LayerResult.Failed)
         val earlier = session
         prober.probeIfStale(API)
         sessions.switchTo(null)
@@ -133,8 +133,8 @@ class AddressProberTest {
         assertEquals(false, earlier.isActive)
         assertEquals(0, connect.connects.size)
         assertEquals(
-            mapOf(ip(1) to ProbeResult.Unknown, ip(7) to ProbeResult.Unknown),
-            session[API]?.probes
+            mapOf(ip(1) to LayerResult.Unknown, ip(7) to LayerResult.Unknown),
+            session[API]?.tcpResults
         )
     }
 
@@ -171,26 +171,27 @@ class AddressProberTest {
         executor.runAll()
 
         assertEquals(0, beforeInterval)
-        assertEquals(listOf(ip(1), ip(7)), connect.connects.map { it.first })
+        assertEquals(setOf(ip(1), ip(7)), connect.connects.map { it.first }.toSet())
+        assertEquals(2, connect.connects.size)
     }
 
     @Test
     fun `earlier results keep the order until new ones replace them`() {
-        val fast = ProbeResult.Connected(connectNanos = 10)
-        val slow = ProbeResult.Connected(connectNanos = 20)
+        val fast = LayerResult.Passed(nanos = 10)
+        val slow = LayerResult.Passed(nanos = 20)
         connect.answer(ip(1), fast)
         connect.answer(ip(7), slow)
         session.saveAnswer(API, listOf(ip(1)))
         prober.probeIfStale(API)
         executor.runAll()
-        connect.answer(ip(1), ProbeResult.Failed)
+        connect.answer(ip(1), LayerResult.Failed)
         now += INTERVAL
 
         prober.probeIfStale(API)
         val duringRound = assertNotNull(session[API])
         executor.runAll()
 
-        assertEquals(mapOf(ip(1) to fast, ip(7) to slow), duringRound.probes)
+        assertEquals(mapOf(ip(1) to fast, ip(7) to slow), duringRound.tcpResults)
         assertEquals(listOf(ip(1), ip(7)), duringRound.ips)
         assertEquals(listOf(ip(7), ip(1)), session[API]?.ips)
     }

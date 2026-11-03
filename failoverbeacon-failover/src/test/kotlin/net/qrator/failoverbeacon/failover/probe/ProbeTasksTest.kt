@@ -10,8 +10,8 @@ import net.qrator.failoverbeacon.failover.fakes.LogRecorder
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
-import net.qrator.failoverbeacon.failover.fakes.probes
-import net.qrator.failoverbeacon.failover.model.ProbeResult
+import net.qrator.failoverbeacon.failover.fakes.tcpResults
+import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
 import net.qrator.failoverbeacon.failover.network.HostStates
 import net.qrator.failoverbeacon.failover.network.NetworkSession
@@ -25,7 +25,8 @@ class ProbeTasksTest {
     private val session = NetworkSession(
         isFirstNetwork = true,
         hostStates = HostStates(listOf(config)),
-        timer = RefreshTimer({ 0L }, 100)
+        timer = RefreshTimer({ 0L }, 100),
+        networkHandle = 1L
     )
 
     @AfterTest
@@ -33,22 +34,22 @@ class ProbeTasksTest {
 
     @Test
     fun `an address is connected on the host's port and its result is saved`() {
-        val connected = ProbeResult.Connected(connectNanos = 40_000_000)
+        val connected = LayerResult.Passed(nanos = 40_000_000)
         connect.answer(ip(1), connected)
 
         tasks.start(session, config, ip(1))
         executor.runAll()
 
         assertEquals(listOf(ip(1) to PORT), connect.connects)
-        assertEquals(connected, session[API]?.probes?.get(ip(1)))
+        assertEquals(connected, session[API]?.tcpResults?.get(ip(1)))
     }
 
     @Test
     fun `each result is logged`() {
-        connect.answer(ip(1), ProbeResult.Connected(connectNanos = 40_000_000))
+        connect.answer(ip(1), LayerResult.Passed(nanos = 40_000_000))
         tasks.start(session, config, ip(1))
         executor.runAll()
-        connect.answer(ip(1), ProbeResult.Failed)
+        connect.answer(ip(1), LayerResult.Failed)
         tasks.start(session, config, ip(1))
         executor.runAll()
 
@@ -87,7 +88,7 @@ class ProbeTasksTest {
 
     @Test
     fun `an unexpected failure keeps the earlier result and lets the address run again`() {
-        val connected = ProbeResult.Connected(connectNanos = 10)
+        val connected = LayerResult.Passed(nanos = 10)
         session.saveProbe(API, ip(1), connected)
         connect.fail(ip(1), SecurityException("no INTERNET permission"))
         tasks.start(session, config, ip(1))
@@ -96,7 +97,7 @@ class ProbeTasksTest {
         executor.runAll()
         tasks.start(session, config, ip(1))
 
-        assertEquals(connected, session[API]?.probes?.get(ip(1)))
+        assertEquals(connected, session[API]?.tcpResults?.get(ip(1)))
         assertEquals(1, executor.queued)
     }
 

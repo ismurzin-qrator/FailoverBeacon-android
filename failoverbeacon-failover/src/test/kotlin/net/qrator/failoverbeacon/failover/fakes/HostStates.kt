@@ -3,12 +3,12 @@ package net.qrator.failoverbeacon.failover.fakes
 import java.net.InetAddress
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.model.HostState
-import net.qrator.failoverbeacon.failover.model.ProbeResult
+import net.qrator.failoverbeacon.failover.model.LayerResult
 
 internal val HostState.ips: List<InetAddress> get() = addresses.map { it.address }
 
-internal val HostState.probes: Map<InetAddress, ProbeResult>
-    get() = addresses.associate { it.address to it.probe }
+internal val HostState.tcpResults: Map<InetAddress, LayerResult>
+    get() = addresses.associate { it.address to it.tcp }
 
 internal fun hostConfig(
     host: String,

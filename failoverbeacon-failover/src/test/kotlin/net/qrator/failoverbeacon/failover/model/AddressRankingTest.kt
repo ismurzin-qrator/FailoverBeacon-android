@@ -6,57 +6,82 @@ import kotlin.test.assertEquals
 import net.qrator.failoverbeacon.failover.fakes.ip
 
 class AddressRankingTest {
-    private val fast = ProbeResult.Connected(connectNanos = 40)
-    private val slow = ProbeResult.Connected(connectNanos = 300)
+    private val fast = LayerResult.Passed(nanos = 40)
+    private val slow = LayerResult.Passed(nanos = 300)
 
     @Test
-    fun `connected IPv4 addresses come first by time, then unknown ones, then failed ones`() {
-        val source = listOf(ip(1), ip(2), ip(3), ip(4), ip(5), ip(7))
-        val known = listOf(
-            HostAddress(ip(1), ProbeResult.Failed),
+    fun `passed IPv4 addresses come first by time, then unknown ones, then failed ones`() {
+        val addresses = listOf(
+            HostAddress(ip(1), LayerResult.Failed),
+            HostAddress(ip(2)),
             HostAddress(ip(3), slow),
-            HostAddress(ip(4), ProbeResult.Failed),
-            HostAddress(ip(5), fast)
+            HostAddress(ip(4), LayerResult.Failed),
+            HostAddress(ip(5), fast),
+            HostAddress(ip(7))
         )
 
-        val ranked = AddressRanking.rank(source, known).map { it.address }
-
-        assertEquals(listOf(ip(5), ip(3), ip(2), ip(7), ip(1), ip(4)), ranked)
+        assertEquals(listOf(ip(5), ip(3), ip(2), ip(7), ip(1), ip(4)), ranked(addresses))
     }
 
     @Test
-    fun `failed addresses keep the source order`() {
-        val known = listOf(
-            HostAddress(ip(2), ProbeResult.Failed),
-            HostAddress(ip(1), ProbeResult.Failed)
+    fun `equal addresses keep their order`() {
+        val addresses = listOf(
+            HostAddress(ip(1), LayerResult.Failed),
+            HostAddress(ip(2), LayerResult.Failed),
+            HostAddress(ip(7))
         )
 
-        val ranked = AddressRanking.rank(listOf(ip(1), ip(2), ip(7)), known).map { it.address }
+        assertEquals(listOf(ip(7), ip(1), ip(2)), ranked(addresses))
+    }
 
-        assertEquals(listOf(ip(7), ip(1), ip(2)), ranked)
+    @Test
+    fun `an address failed on TLS goes last whatever its probe time`() {
+        val addresses = listOf(
+            HostAddress(ip(1), fast, LayerResult.Failed),
+            HostAddress(ip(2), slow),
+            HostAddress(ip(3))
+        )
+
+        assertEquals(listOf(ip(2), ip(3), ip(1)), ranked(addresses))
+    }
+
+    @Test
+    fun `an address passed without a time comes after timed ones and before unknown ones`() {
+        val addresses = listOf(
+            HostAddress(ip(1)),
+            HostAddress(ip(2), LayerResult.Passed(nanos = null)),
+            HostAddress(ip(3), slow)
+        )
+
+        assertEquals(listOf(ip(3), ip(2), ip(1)), ranked(addresses))
+    }
+
+    @Test
+    fun `when every address failed the probe order stays`() {
+        val addresses = listOf(
+            HostAddress(ip(1), slow, LayerResult.Failed),
+            HostAddress(ip(2), LayerResult.Failed),
+            HostAddress(ip(3), fast, LayerResult.Failed)
+        )
+
+        assertEquals(listOf(ip(3), ip(1), ip(2)), ranked(addresses))
     }
 
     @Test
     fun `IPv6 addresses keep their places`() {
-        val source = listOf(IPV6, ip(1), OTHER_IPV6, ip(2), ip(7))
-        val known = listOf(HostAddress(ip(1), ProbeResult.Failed), HostAddress(ip(2), fast))
-
-        val ranked = AddressRanking.rank(source, known).map { it.address }
-
-        assertEquals(listOf(IPV6, ip(2), OTHER_IPV6, ip(7), ip(1)), ranked)
-    }
-
-    @Test
-    fun `addresses outside the source are dropped and new ones are unknown`() {
-        val known = listOf(HostAddress(ip(1), fast), HostAddress(ip(2), ProbeResult.Failed))
-
-        val ranked = AddressRanking.rank(listOf(ip(1), ip(3)), known)
-
-        assertEquals(
-            listOf(HostAddress(ip(1), fast), HostAddress(ip(3), ProbeResult.Unknown)),
-            ranked
+        val addresses = listOf(
+            HostAddress(IPV6),
+            HostAddress(ip(1), LayerResult.Failed),
+            HostAddress(OTHER_IPV6),
+            HostAddress(ip(2), fast),
+            HostAddress(ip(7))
         )
+
+        assertEquals(listOf(IPV6, ip(2), OTHER_IPV6, ip(7), ip(1)), ranked(addresses))
     }
+
+    private fun ranked(addresses: List<HostAddress>): List<InetAddress> =
+        AddressRanking.rank(addresses).map { it.address }
 
     private companion object {
         val IPV6: InetAddress = InetAddress.getByName("2001:db8::1")

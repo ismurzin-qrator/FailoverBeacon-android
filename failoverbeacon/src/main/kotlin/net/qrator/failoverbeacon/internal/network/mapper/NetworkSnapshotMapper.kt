@@ -8,9 +8,10 @@ import net.qrator.failoverbeacon.internal.network.state.NetworkState
 internal class NetworkSnapshotMapper {
     private val transportMapper = NetworkTransportMapper()
 
-    fun toSnapshot(state: NetworkState): NetworkSnapshot {
+    fun toSnapshot(handle: Long, state: NetworkState): NetworkSnapshot {
         val capabilities = state.capabilities ?: return NetworkSnapshot.Unknown
         return NetworkSnapshot.Connected(
+            handle = handle,
             transport = transportMapper.toTransport(capabilities),
             vpn = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN),
             validated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),

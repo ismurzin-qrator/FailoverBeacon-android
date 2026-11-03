@@ -18,7 +18,7 @@ import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.network
-import net.qrator.failoverbeacon.failover.model.ProbeResult
+import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 import net.qrator.failoverbeacon.failover.probe.AddressProber
@@ -99,7 +99,7 @@ class FailoverDnsTest {
     @Test
     fun `a new answer keeps the results of the addresses that stay`() {
         val dns = dns(resolved = listOf(ip(1), ip(2)), executor = Runnable::run)
-        session.saveProbe(API, ip(2), ProbeResult.Connected(connectNanos = 40))
+        session.saveProbe(API, ip(2), LayerResult.Passed(nanos = 40))
         resolver.answer(API, ip(1), ip(2), ip(3))
         now = INTERVAL
 
@@ -171,8 +171,8 @@ class FailoverDnsTest {
     @Test
     fun `addresses are ordered by the probe results`() {
         val dns = dns(resolved = listOf(ip(1), ip(2)), additional = listOf(ip(7)))
-        session.saveProbe(API, ip(1), ProbeResult.Failed)
-        session.saveProbe(API, ip(7), ProbeResult.Connected(connectNanos = 40))
+        session.saveProbe(API, ip(1), LayerResult.Failed)
+        session.saveProbe(API, ip(7), LayerResult.Passed(nanos = 40))
 
         assertEquals(listOf(ip(7), ip(2), ip(1)), dns.lookup(API))
     }

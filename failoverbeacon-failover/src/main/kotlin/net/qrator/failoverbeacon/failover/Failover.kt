@@ -14,6 +14,7 @@ import net.qrator.failoverbeacon.failover.probe.ProbeTasks
 import net.qrator.failoverbeacon.failover.probe.TcpProbe
 import net.qrator.failoverbeacon.failover.resolve.AddressResolver
 import net.qrator.failoverbeacon.failover.resolve.ResolveTasks
+import net.qrator.failoverbeacon.failover.traffic.TrafficFeedback
 
 class Failover(
     private val sdk: SdkInstance,
@@ -24,6 +25,7 @@ class Failover(
     ExchangeSubscriber {
     private val timer = RefreshTimer(sdk.elapsedRealtimeClock, settings.refreshIntervalNanos)
     private val sessions = NetworkSessions(hostConfigs, timer, MAX_NETWORKS)
+    private val feedback = TrafficFeedback(sessions)
     private val tcpProbe = TcpProbe(sdk.clock, PROBE_TIMEOUT_MILLIS)
     private val prober = AddressProber(
         sessions = sessions,
@@ -59,6 +61,7 @@ class Failover(
     }
 
     override fun onExchange(exchange: Exchange) {
+        feedback.save(exchange)
         prober.probeStaleHosts()
         resolver.resolveStaleHosts()
     }

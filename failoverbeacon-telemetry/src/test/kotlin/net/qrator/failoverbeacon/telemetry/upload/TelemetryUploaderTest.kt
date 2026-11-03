@@ -470,6 +470,7 @@ class TelemetryUploaderTest {
     )
 
     private fun connected(blocked: Boolean?) = NetworkSnapshot.Connected(
+        handle = 1,
         transport = NetworkTransport.WIFI,
         vpn = false,
         validated = true,
