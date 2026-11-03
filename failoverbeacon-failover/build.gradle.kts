@@ -9,4 +9,6 @@ android {
 
 dependencies {
     implementation(project(":failoverbeacon-core"))
+
+    testImplementation(libs.squareup.okhttp.tls)
 }
