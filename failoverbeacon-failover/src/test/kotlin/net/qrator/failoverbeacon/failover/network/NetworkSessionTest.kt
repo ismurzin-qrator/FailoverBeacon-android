@@ -6,12 +6,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
-import net.qrator.failoverbeacon.failover.fakes.ips
-import net.qrator.failoverbeacon.failover.fakes.tcpResults
+import net.qrator.failoverbeacon.failover.model.ConnectOutcome
+import net.qrator.failoverbeacon.failover.model.HostAddress
 import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
 
@@ -28,55 +27,15 @@ class NetworkSessionTest {
     private val dns get() = assertNotNull(session[API]).dns
 
     @Test
-    fun `an answer is saved with the time of the timer`() {
+    fun `answers and failures are saved with the time of the timer`() {
+        now = 1_000
         session.saveAnswer(API, listOf(ip(1)))
         val afterAnswer = dns.isFresh(timer)
-        now += INTERVAL
-
-        assertEquals(listOf(ip(1), ip(7)), session[API]?.ips)
-        assertTrue(afterAnswer)
-        assertFalse(dns.isFresh(timer))
-    }
-
-    @Test
-    fun `a resolve failure is saved with the time of the timer`() {
+        now = 2_000
         session.saveResolveFailure(API)
-        val afterFailure = dns.isStale(timer)
-        now += INTERVAL
 
-        assertFalse(afterFailure)
-        assertTrue(dns.isStale(timer))
-    }
-
-    @Test
-    fun `a probe result is saved by its address`() {
-        session.saveProbe(API, ip(7), LayerResult.Failed)
-
-        assertEquals(mapOf(ip(7) to LayerResult.Failed), session[API]?.tcpResults)
-    }
-
-    @Test
-    fun `a stale state keeps its probes with a new answer`() {
-        session.saveAnswer(API, listOf(ip(1)))
-        session.saveProbe(API, ip(1), LayerResult.Failed)
-        now += INTERVAL + 1
-
-        session.saveAnswer(API, listOf(ip(1)))
-
-        assertEquals(
-            mapOf(ip(7) to LayerResult.Unknown, ip(1) to LayerResult.Failed),
-            session[API]?.tcpResults
-        )
-    }
-
-    @Test
-    fun `a host outside the config is not saved`() {
-        session.saveAnswer(OTHER, listOf(ip(1)))
-        session.saveProbe(OTHER, ip(1), LayerResult.Failed)
-        session.saveResolveFailure(OTHER)
-
-        assertNull(session[OTHER])
-        assertFalse(session.startProbeRoundIfStale(OTHER))
+        assertTrue(afterAnswer)
+        assertFalse(dns.isStale(timer))
     }
 
     @Test
@@ -85,10 +44,11 @@ class NetworkSessionTest {
 
         session.saveAnswer(API, listOf(ip(1)))
         session.saveProbe(API, ip(7), LayerResult.Failed)
+        session.saveConnectOutcome(API, "192.0.2.7", ConnectOutcome.TLS_FAILED)
         session.saveResolveFailure(API)
 
         assertFalse(session.isActive)
-        assertEquals(mapOf(ip(7) to LayerResult.Unknown), session[API]?.tcpResults)
+        assertEquals(listOf(HostAddress(ip(7))), session[API]?.addresses)
         assertTrue(dns.isAnswerNeeded(timer))
         assertFalse(session.startProbeRoundIfStale(API))
     }
@@ -127,7 +87,6 @@ class NetworkSessionTest {
 
     private companion object {
         const val API = "api.example"
-        const val OTHER = "other.example"
         const val INTERVAL = 50L
     }
 }

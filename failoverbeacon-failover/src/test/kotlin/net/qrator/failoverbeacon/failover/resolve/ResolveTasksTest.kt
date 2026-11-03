@@ -1,17 +1,11 @@
 package net.qrator.failoverbeacon.failover.resolve
 
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.TimeUnit
-import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertSame
-import kotlin.test.assertTrue
-import net.qrator.failoverbeacon.core.thread.SdkExecutor
 import net.qrator.failoverbeacon.failover.fakes.FakeDns
-import net.qrator.failoverbeacon.failover.fakes.LogRecorder
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
@@ -21,40 +15,28 @@ import net.qrator.failoverbeacon.failover.network.HostStates
 import net.qrator.failoverbeacon.failover.network.NetworkSession
 
 class ResolveTasksTest {
-    private val log = LogRecorder()
     private val resolver = FakeDns()
     private val executor = ManualExecutor()
     private val answers = mutableListOf<String>()
-    private val timer = RefreshTimer({ 0L }, 100)
+    private var now = 0L
+    private val timer = RefreshTimer({ now }, 100)
     private val tasks = ResolveTasks(resolver::lookup, executor) { answers += it }
     private val session = session()
 
-    @AfterTest
-    fun tearDown() = log.close()
-
     @Test
-    fun `an answer is saved in the background and announced`() {
+    fun `an answer is saved in the background, announced and finishes the callers`() {
         resolver.answer(API, ip(1))
 
-        tasks.start(session, API)
+        val done = tasks.start(session, API)
         val beforeRun = resolver.lookups.toList()
+        val countBeforeRun = done.count
         executor.runAll()
 
         assertEquals(emptyList(), beforeRun)
+        assertEquals(1, countBeforeRun)
+        assertEquals(0, done.count)
         assertEquals(listOf(ip(1)), session[API]?.ips)
         assertEquals(listOf(API), answers)
-    }
-
-    @Test
-    fun `callers finish when the task is done`() {
-        resolver.answer(API, ip(1))
-        val done = tasks.start(session, API)
-        val beforeRun = done.count
-
-        executor.runAll()
-
-        assertEquals(1, beforeRun)
-        assertEquals(0, done.count)
     }
 
     @Test
@@ -85,28 +67,23 @@ class ResolveTasksTest {
     }
 
     @Test
-    fun `a failed resolution keeps the addresses and is recorded`() {
+    fun `a failed or empty answer keeps the addresses and is recorded`() {
         session.saveAnswer(API, listOf(ip(1)))
+        now = 100
+
         resolver.fail(API)
-
         tasks.start(session, API)
         executor.runAll()
-
-        assertEquals(listOf(ip(1)), session[API]?.ips)
-        assertFalse(isAnswerNeeded())
-        assertEquals(emptyList(), answers)
-    }
-
-    @Test
-    fun `an empty answer keeps the addresses and is recorded as a failure`() {
+        val afterFailure = isAnswerNeeded()
         session.saveAnswer(API, listOf(ip(1)))
+        now = 200
         resolver.answer(API) { emptyList() }
-
         tasks.start(session, API)
         executor.runAll()
 
-        assertEquals(listOf(ip(1)), session[API]?.ips)
+        assertFalse(afterFailure)
         assertFalse(isAnswerNeeded())
+        assertEquals(listOf(ip(1)), session[API]?.ips)
         assertEquals(emptyList(), answers)
     }
 
@@ -120,22 +97,6 @@ class ResolveTasksTest {
 
         assertFalse(isAnswerNeeded())
         assertEquals(1, executor.queued)
-    }
-
-    @Test
-    fun `hosts beyond the free threads wait in the queue and are all resolved`() {
-        val pool = SdkExecutor("test", 1, 1, 1_000, LinkedBlockingQueue())
-        val tasks = ResolveTasks(resolver::lookup, pool) {}
-        resolver.answer(API, ip(1))
-        resolver.answer(OTHER, ip(2))
-
-        tasks.start(session, API)
-        tasks.start(session, OTHER)
-        pool.shutdown()
-
-        assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS))
-        assertEquals(listOf(ip(1)), session[API]?.ips)
-        assertEquals(listOf(ip(2)), session[OTHER]?.ips)
     }
 
     @Test

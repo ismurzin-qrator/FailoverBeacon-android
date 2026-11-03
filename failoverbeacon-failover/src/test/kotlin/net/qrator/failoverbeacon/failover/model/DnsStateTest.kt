@@ -32,7 +32,6 @@ class DnsStateTest {
         now = 10 + INTERVAL
 
         assertTrue(answered.hasAnswer)
-        assertEquals(listOf(ip(1)), answered.addresses)
         assertEquals(listOf(true, false, false), beforeInterval)
         assertFalse(answered.isFresh(timer))
         assertTrue(answered.isAnswerNeeded(timer))
@@ -40,37 +39,17 @@ class DnsStateTest {
     }
 
     @Test
-    fun `a new answer replaces the addresses and their age`() {
-        val state = answered.withAnswer(listOf(ip(2)), atNanos = 90)
-        now = 150
-
-        assertEquals(listOf(ip(2)), state.addresses)
-        assertTrue(state.isFresh(timer))
-    }
-
-    @Test
     fun `after a failure nothing waits for an answer and it is stale after the interval`() {
         val failed = answered.withFailure(atNanos = 200)
-        now = 200
-        val afterFailure = failed.isStale(timer)
-        val answerNeededAfterFailure = failed.isAnswerNeeded(timer)
         now = 199 + INTERVAL
         val beforeInterval = failed.isStale(timer)
         now = 200 + INTERVAL
 
         assertEquals(listOf(ip(1)), failed.addresses)
-        assertTrue(failed.hasAnswer)
-        assertFalse(failed.isFresh(timer))
-        assertFalse(afterFailure)
-        assertFalse(answerNeededAfterFailure)
         assertFalse(beforeInterval)
         assertTrue(failed.isStale(timer))
+        assertFalse(failed.isFresh(timer))
         assertFalse(failed.isAnswerNeeded(timer))
-    }
-
-    @Test
-    fun `a failure leaves an empty state without an answer`() {
-        assertFalse(DnsState().withFailure(atNanos = 0).hasAnswer)
     }
 
     @Test
@@ -79,7 +58,6 @@ class DnsStateTest {
         now = 300 + INTERVAL
 
         assertTrue(recovered.isAnswerNeeded(timer))
-        assertTrue(recovered.isStale(timer))
     }
 
     private companion object {

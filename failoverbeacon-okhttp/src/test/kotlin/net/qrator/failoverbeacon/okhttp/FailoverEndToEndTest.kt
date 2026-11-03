@@ -104,17 +104,7 @@ class FailoverEndToEndTest {
         val connects = CopyOnWriteArrayList<InetAddress>()
         val client = OkHttpClient.Builder()
             .dns { appDns(it) }
-            .eventListener(
-                object : EventListener() {
-                    override fun connectStart(
-                        call: Call,
-                        inetSocketAddress: InetSocketAddress,
-                        proxy: Proxy
-                    ) {
-                        connects += inetSocketAddress.address
-                    }
-                }
-            )
+            .eventListener(ConnectStarts(connects))
             .build()
             .withFailoverBeacon()
         server.enqueue(MockResponse().setBody("ok"))

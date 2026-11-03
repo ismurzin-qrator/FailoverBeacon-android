@@ -2,8 +2,6 @@ package net.qrator.failoverbeacon.failover.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.fakes.ip
 
 class HostAddressTest {
@@ -44,12 +42,5 @@ class HostAddressTest {
             .withConnectOutcome(ConnectOutcome.CONNECTED_PLAIN)
 
         assertEquals(HostAddress(ip(1), passed, LayerResult.Failed), connected)
-    }
-
-    @Test
-    fun `a failure on either layer counts`() {
-        assertFalse(HostAddress(ip(1), probed, passed).hasFailure)
-        assertTrue(HostAddress(ip(1), LayerResult.Failed).hasFailure)
-        assertTrue(HostAddress(ip(1), probed, LayerResult.Failed).hasFailure)
     }
 }

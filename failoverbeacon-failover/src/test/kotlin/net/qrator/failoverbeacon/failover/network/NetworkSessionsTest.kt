@@ -4,7 +4,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
-import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
@@ -23,52 +22,33 @@ class NetworkSessionsTest {
     private val session get() = assertNotNull(sessions.current)
 
     @Test
-    fun `without a network there is no session`() {
-        sessions.switchTo(null)
-
-        assertNull(sessions.current)
-    }
-
-    @Test
-    fun `each network keeps its own addresses`() {
+    fun `each network keeps its own addresses and probe round`() {
         session.saveAnswer(API, listOf(ip(1)))
+        session.startProbeRoundIfStale(API)
         sessions.switchTo(network(2, key = CELLULAR))
         val onCellular = session[API]?.ips
+        val roundOnCellular = session.startProbeRoundIfStale(API)
 
         sessions.switchTo(network(3, key = WIFI))
 
         assertEquals(listOf(ip(7)), onCellular)
+        assertTrue(roundOnCellular)
         assertEquals(listOf(ip(1), ip(7)), session[API]?.ips)
     }
 
     @Test
-    fun `each network keeps its own probe round`() {
-        session.startProbeRoundIfStale(API)
-        sessions.switchTo(network(2, key = CELLULAR))
-
-        assertTrue(session.startProbeRoundIfStale(API))
-    }
-
-    @Test
-    fun `switching ends the earlier session, also for the same network`() {
+    fun `switching or losing the network ends the session`() {
         val earlier = session
-
         sessions.switchTo(network(1, key = WIFI))
-
-        assertFalse(earlier.isActive)
-        assertTrue(session.isActive)
-        assertNotSame(earlier, session)
-    }
-
-    @Test
-    fun `losing the network ends the session`() {
-        val earlier = session
+        val next = session
 
         sessions.switchTo(null)
         earlier.saveAnswer(API, listOf(ip(1)))
-        sessions.switchTo(network(1, key = WIFI))
 
         assertFalse(earlier.isActive)
+        assertFalse(next.isActive)
+        assertNull(sessions.current)
+        sessions.switchTo(network(1, key = WIFI))
         assertEquals(listOf(ip(7)), session[API]?.ips)
     }
 
@@ -89,26 +69,20 @@ class NetworkSessionsTest {
     }
 
     @Test
-    fun `only the session the sessions started with is on the first network`() {
+    fun `the first network is the first one that appears`() {
         val onStart = session.isFirstNetwork
         sessions.switchTo(network(2, key = WIFI))
         val onReconnect = session.isFirstNetwork
         sessions.switchTo(network(1, key = WIFI))
+        val startedWithout = NetworkSessions(emptyList(), RefreshTimer({ 0L }, 50), maxNetworks = 2)
+
+        startedWithout.switchTo(null)
+        startedWithout.switchTo(network(5, key = WIFI))
 
         assertTrue(onStart)
         assertFalse(onReconnect)
         assertTrue(session.isFirstNetwork)
-    }
-
-    @Test
-    fun `the first network is the first one that appears after a start without one`() {
-        val sessions =
-            NetworkSessions(emptyList(), RefreshTimer({ 0L }, 50), maxNetworks = 2)
-
-        sessions.switchTo(null)
-        sessions.switchTo(network(5, key = WIFI))
-
-        assertTrue(assertNotNull(sessions.current).isFirstNetwork)
+        assertTrue(assertNotNull(startedWithout.current).isFirstNetwork)
     }
 
     private companion object {

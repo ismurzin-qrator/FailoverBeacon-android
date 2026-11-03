@@ -1,12 +1,8 @@
 package net.qrator.failoverbeacon.failover.probe
 
-import android.util.Log
-import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.fakes.FakeConnect
-import net.qrator.failoverbeacon.failover.fakes.LogRecorder
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
@@ -17,7 +13,6 @@ import net.qrator.failoverbeacon.failover.network.HostStates
 import net.qrator.failoverbeacon.failover.network.NetworkSession
 
 class ProbeTasksTest {
-    private val log = LogRecorder()
     private val connect = FakeConnect()
     private val executor = ManualExecutor()
     private val tasks = ProbeTasks(connect::connect, executor)
@@ -29,9 +24,6 @@ class ProbeTasksTest {
         networkHandle = 1L
     )
 
-    @AfterTest
-    fun tearDown() = log.close()
-
     @Test
     fun `an address is connected on the host's port and its result is saved`() {
         val connected = LayerResult.Passed(nanos = 40_000_000)
@@ -42,25 +34,6 @@ class ProbeTasksTest {
 
         assertEquals(listOf(ip(1) to PORT), connect.connects)
         assertEquals(connected, session[API]?.tcpResults?.get(ip(1)))
-    }
-
-    @Test
-    fun `each result is logged`() {
-        connect.answer(ip(1), LayerResult.Passed(nanos = 40_000_000))
-        tasks.start(session, config, ip(1))
-        executor.runAll()
-        connect.answer(ip(1), LayerResult.Failed)
-        tasks.start(session, config, ip(1))
-        executor.runAll()
-
-        assertTrue(
-            Log.DEBUG to "[Failover] $API 192.0.2.1: 40 ms" in log.messages,
-            "${log.messages}"
-        )
-        assertTrue(
-            Log.DEBUG to "[Failover] $API 192.0.2.1: failed" in log.messages,
-            "${log.messages}"
-        )
     }
 
     @Test

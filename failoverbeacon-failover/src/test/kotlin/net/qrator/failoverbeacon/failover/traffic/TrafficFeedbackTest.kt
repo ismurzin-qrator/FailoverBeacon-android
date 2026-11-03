@@ -90,19 +90,12 @@ class TrafficFeedbackTest {
     }
 
     @Test
-    fun `an exchange started on another network writes nothing`() {
-        sessions.switchTo(network(2))
-
-        feedback.save(exchange(attempt(ip(1), failed(ExchangeStep.TCP))))
-
-        assertEquals(HostAddress(ip(1)), addressOf(ip(1)))
-    }
-
-    @Test
-    fun `an exchange started without a known network writes nothing`() {
+    fun `an exchange of another or an unknown network writes nothing`() {
         feedback.save(
             exchange(attempt(ip(1), failed(ExchangeStep.TCP)), network = NetworkSnapshot.Unknown)
         )
+        sessions.switchTo(network(2))
+        feedback.save(exchange(attempt(ip(1), failed(ExchangeStep.TCP))))
 
         assertEquals(HostAddress(ip(1)), addressOf(ip(1)))
     }

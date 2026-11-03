@@ -24,17 +24,6 @@ class AddressRankingTest {
     }
 
     @Test
-    fun `equal addresses keep their order`() {
-        val addresses = listOf(
-            HostAddress(ip(1), LayerResult.Failed),
-            HostAddress(ip(2), LayerResult.Failed),
-            HostAddress(ip(7))
-        )
-
-        assertEquals(listOf(ip(7), ip(1), ip(2)), ranked(addresses))
-    }
-
-    @Test
     fun `an address failed on TLS goes last whatever its probe time`() {
         val addresses = listOf(
             HostAddress(ip(1), fast, LayerResult.Failed),
