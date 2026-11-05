@@ -30,7 +30,13 @@ public final class FailoverBeaconConfigJavaTest {
                         new FailoverHost("api3.example", 443,
                                 Collections.singletonList("192.0.2.10")),
                         new FailoverHost("partner.example", 443,
-                                Collections.<String>emptyList(), false)))
+                                Collections.<String>emptyList(), false),
+                        new FailoverHost("pay.example", 443,
+                                Collections.<String>emptyList(), true,
+                                new FailoverBodyProbe("/probe.bin", 64 * 1024)),
+                        new FailoverHost("root.example", 443,
+                                Collections.<String>emptyList(), true,
+                                new FailoverBodyProbe())))
                 .options(options)
                 .build();
     }

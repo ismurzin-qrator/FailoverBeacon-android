@@ -15,16 +15,24 @@ import net.qrator.failoverbeacon.internal.util.parseIpv4
  * The SDK uses them along with DNS results and when DNS fails.
  * [tcpProbe] allows test connections to the host's addresses, true by default. New
  * connections then prefer the fastest address, whatever balancing DNS does.
+ * [bodyProbe] also checks that the first addresses deliver a response, none by default. It needs
+ * [tcpProbe].
  *
- * @throws IllegalArgumentException if [host] is not a host name, [port] is outside 1..65535 or
- * [additionalAddresses] has a value that is not an IPv4 address.
+ * @throws IllegalArgumentException if [host] is not a host name, [port] is outside 1..65535,
+ * [additionalAddresses] has a value that is not an IPv4 address or [bodyProbe] is set without
+ * [tcpProbe].
  */
 public class FailoverHost @JvmOverloads public constructor(
     host: String,
     port: Int = 443,
     additionalAddresses: List<String> = emptyList(),
-    internal val tcpProbe: Boolean = true
+    internal val tcpProbe: Boolean = true,
+    internal val bodyProbe: FailoverBodyProbe? = null
 ) {
+    init {
+        require(tcpProbe || bodyProbe == null) { "bodyProbe needs tcpProbe" }
+    }
+
     internal val host: String = requireNotNull(canonicalHost(host)) {
         "host must be a host name without scheme, port or path, was \"$host\""
     }.also { name ->

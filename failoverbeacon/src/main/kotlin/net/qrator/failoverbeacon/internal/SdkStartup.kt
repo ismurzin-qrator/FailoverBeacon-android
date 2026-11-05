@@ -11,8 +11,8 @@ import net.qrator.failoverbeacon.core.app.ForegroundSource
 import net.qrator.failoverbeacon.core.call.ExchangeBus
 import net.qrator.failoverbeacon.failover.Failover
 import net.qrator.failoverbeacon.failover.FailoverSettings
-import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.internal.app.ForegroundMonitor
+import net.qrator.failoverbeacon.internal.mapper.FailoverHostMapper
 import net.qrator.failoverbeacon.internal.network.NetworkMonitor
 import net.qrator.failoverbeacon.internal.time.ElapsedRealtimeClock
 import net.qrator.failoverbeacon.internal.time.ElapsedRealtimeEpochClock
@@ -20,6 +20,8 @@ import net.qrator.failoverbeacon.internal.time.NanoTimeClock
 import net.qrator.failoverbeacon.telemetry.Telemetry
 
 internal object SdkStartup {
+    private val hostMapper = FailoverHostMapper()
+
     fun start(
         appContext: Context,
         consent: TrackingConsent,
@@ -51,9 +53,7 @@ internal object SdkStartup {
         telemetry.subscribe()
         val failover = Failover(
             sdk = sdk,
-            hostConfigs = config.failoverHosts.map {
-                FailoverHostConfig(it.host, it.port, it.additionalAddresses, it.tcpProbe)
-            },
+            hostConfigs = config.failoverHosts.map(hostMapper::toConfig),
             queryDns = config.dnsResolver::resolve,
             settings = FailoverSettings(
                 preresolveOnNetworkChange = config.options.preresolveOnNetworkChange,

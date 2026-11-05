@@ -13,6 +13,8 @@ import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import javax.net.SocketFactory
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
 import kotlin.concurrent.thread
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -23,6 +25,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.FailoverBeacon
 import net.qrator.failoverbeacon.FailoverBeaconConfig
+import net.qrator.failoverbeacon.FailoverBodyProbe
 import net.qrator.failoverbeacon.FailoverHost
 import net.qrator.failoverbeacon.core.SdkRegistry
 import okhttp3.Call
@@ -83,6 +86,55 @@ class FailoverEndToEndTest {
     fun tearDown() {
         server.shutdown()
         SdkRegistry.clear()
+    }
+
+    @Test
+    fun `a host's body probe requests its path over TLS with the platform's trust`() {
+        val trust = HandshakeCertificates.Builder()
+            .addTrustedCertificate(probedCertificate.certificate)
+            .build()
+        val defaultContext = SSLContext.getDefault()
+        val defaultVerifier = HttpsURLConnection.getDefaultHostnameVerifier()
+        val secure = MockWebServer().apply {
+            useHttps(
+                HandshakeCertificates.Builder().heldCertificate(probedCertificate).build()
+                    .sslSocketFactory(),
+                false
+            )
+            enqueue(MockResponse().setBody("ok"))
+            start(LOOPBACK, 0)
+        }
+        try {
+            SSLContext.setDefault(trust.sslContext())
+            HttpsURLConnection.setDefaultHostnameVerifier { host, _ -> host == BODY_PROBED }
+            FailoverBeacon.stop()
+            FailoverBeacon.initialize(
+                app,
+                FailoverBeaconConfig.Builder()
+                    .beacons(listOf("https://beacon.example"))
+                    .failoverHosts(
+                        listOf(
+                            FailoverHost(
+                                BODY_PROBED,
+                                secure.port,
+                                listOf("127.0.0.1", UNREACHABLE),
+                                bodyProbe = FailoverBodyProbe("/probe.bin", maxBytes = 2_048)
+                            )
+                        )
+                    )
+                    .dnsResolver { throw UnknownHostException(it) }
+                    .build()
+            )
+
+            val request = assertNotNull(secure.takeRequest(15, TimeUnit.SECONDS))
+
+            assertEquals("/probe.bin", request.path)
+            assertEquals("bytes=0-2047", request.getHeader("Range"))
+        } finally {
+            SSLContext.setDefault(defaultContext)
+            HttpsURLConnection.setDefaultHostnameVerifier(defaultVerifier)
+            secure.shutdown()
+        }
     }
 
     @Test
@@ -300,6 +352,7 @@ class FailoverEndToEndTest {
         const val RESOLVED = "resolved.test"
         const val UNUSED = "unused.test"
         const val UNPROBED = "unprobed.test"
+        const val BODY_PROBED = "probed.test"
         const val UNREACHABLE = "192.0.2.1"
         const val FIRST_ADDRESS = "192.0.2.2"
         const val SECOND_ADDRESS = "192.0.2.3"
@@ -309,6 +362,9 @@ class FailoverEndToEndTest {
 
         val certificate: HeldCertificate = HeldCertificate.Builder()
             .addSubjectAlternativeName(UNPROBED)
+            .build()
+        val probedCertificate: HeldCertificate = HeldCertificate.Builder()
+            .addSubjectAlternativeName(BODY_PROBED)
             .build()
         val serverCertificates: HandshakeCertificates = HandshakeCertificates.Builder()
             .heldCertificate(certificate)
