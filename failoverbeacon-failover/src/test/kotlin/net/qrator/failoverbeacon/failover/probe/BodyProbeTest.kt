@@ -13,6 +13,8 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import net.qrator.failoverbeacon.failover.fakes.hostConfig
+import net.qrator.failoverbeacon.failover.model.BodyProbeConfig
 import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
@@ -116,7 +118,7 @@ class BodyProbeTest {
         val otherCertificates = HandshakeCertificates.Builder().build()
 
         val outcome = bodyProbe(otherCertificates.sslSocketFactory())
-            .run(LOOPBACK, HOST, server.localPort, "/", MAX_BYTES)
+            .run(LOOPBACK, config(server.localPort, "/", MAX_BYTES))
 
         assertEquals(BodyProbeOutcome.TLS_FAILED, outcome)
     }
@@ -159,7 +161,10 @@ class BodyProbeTest {
         port: Int = server.localPort,
         path: String = "/",
         maxBytes: Int = MAX_BYTES
-    ): BodyProbeOutcome = probe.run(LOOPBACK, HOST, port, path, maxBytes)
+    ): BodyProbeOutcome = probe.run(LOOPBACK, config(port, path, maxBytes))
+
+    private fun config(port: Int, path: String, maxBytes: Int) =
+        hostConfig(HOST, port = port, bodyProbe = BodyProbeConfig(path, maxBytes))
 
     private fun serve(respond: (Socket) -> Unit) {
         thread(isDaemon = true) {

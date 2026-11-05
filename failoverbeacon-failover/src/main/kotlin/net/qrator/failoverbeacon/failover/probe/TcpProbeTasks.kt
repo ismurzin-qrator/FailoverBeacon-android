@@ -13,7 +13,7 @@ import net.qrator.failoverbeacon.failover.network.NetworkSession
 internal class TcpProbeTasks(
     private val connect: (InetAddress, Int) -> LayerResult,
     private val executor: Executor,
-    private val onResult: (String) -> Unit
+    private val bodyProber: BodyProber
 ) {
     private val running = ConcurrentHashMap.newKeySet<Probe>()
 
@@ -30,7 +30,7 @@ internal class TcpProbeTasks(
                 "[Failover] ${probe.config.host} ${probe.address.hostAddress}: ${describe(result)}"
             }
             probe.session.saveTcpProbe(probe.config.host, probe.address, result)
-            onResult(probe.config.host)
+            bodyProber.probeIfStale(probe.config.host)
         } finally {
             running -= probe
         }

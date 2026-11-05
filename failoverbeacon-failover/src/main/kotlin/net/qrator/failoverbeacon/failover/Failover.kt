@@ -9,8 +9,6 @@ import net.qrator.failoverbeacon.core.SdkInstance
 import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
 import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.network.model.DefaultNetwork
-import net.qrator.failoverbeacon.failover.mapper.SavedHostMapper
-import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
 import net.qrator.failoverbeacon.failover.network.KnownNetworks
@@ -18,10 +16,8 @@ import net.qrator.failoverbeacon.failover.network.NetworkSessions
 import net.qrator.failoverbeacon.failover.probe.BodyProbe
 import net.qrator.failoverbeacon.failover.probe.BodyProber
 import net.qrator.failoverbeacon.failover.probe.TcpProbe
-import net.qrator.failoverbeacon.failover.probe.TcpProbeTasks
 import net.qrator.failoverbeacon.failover.probe.TcpProber
 import net.qrator.failoverbeacon.failover.resolve.AddressResolver
-import net.qrator.failoverbeacon.failover.resolve.ResolveTasks
 import net.qrator.failoverbeacon.failover.store.KnownNetworksPersistence
 import net.qrator.failoverbeacon.failover.traffic.TrafficFeedback
 
@@ -58,24 +54,23 @@ class Failover(
     )
     private val bodyProber = BodyProber(
         sessions = sessions,
-        probe = ::runBodyProbe,
+        probe = bodyProbe::run,
         timer = bodyProbeTimer,
         executor = sdk.threads.failoverProbe,
         probeOnNetworkChange = settings.probeOnNetworkChange
     )
     private val tcpProber = TcpProber(
         sessions = sessions,
-        tasks = TcpProbeTasks(tcpProbe::run, sdk.threads.failoverProbe, bodyProber::probeIfStale),
+        connect = tcpProbe::run,
+        executor = sdk.threads.failoverProbe,
+        bodyProber = bodyProber,
         probeOnNetworkChange = settings.probeOnNetworkChange
-    )
-    private val resolveTasks = ResolveTasks(
-        queryDns = queryDns,
-        executor = sdk.threads.failoverResolve,
-        onAnswer = tcpProber::probeIfStale
     )
     private val resolver = AddressResolver(
         sessions = sessions,
-        tasks = resolveTasks,
+        queryDns = queryDns,
+        executor = sdk.threads.failoverResolve,
+        tcpProber = tcpProber,
         timer = timer,
         preresolveOnNetworkChange = settings.preresolveOnNetworkChange,
         waitMillis = RESOLVE_WAIT_MILLIS
@@ -108,7 +103,7 @@ class Failover(
     override fun close() {
         tcpProbe.close()
         bodyProbe.close()
-        resolveTasks.close()
+        resolver.close()
     }
 
     private fun startSession(network: DefaultNetwork?) {
@@ -120,11 +115,6 @@ class Failover(
             resolver.preresolve()
             persistence.saveLater()
         }
-    }
-
-    private fun runBodyProbe(address: InetAddress, config: FailoverHostConfig): BodyProbeOutcome {
-        val settings = checkNotNull(config.bodyProbe)
-        return bodyProbe.run(address, config.host, config.port, settings.path, settings.maxBytes)
     }
 
     private companion object {

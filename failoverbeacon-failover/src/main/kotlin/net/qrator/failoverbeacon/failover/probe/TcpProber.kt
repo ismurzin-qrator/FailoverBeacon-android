@@ -2,6 +2,7 @@ package net.qrator.failoverbeacon.failover.probe
 
 import java.net.Inet4Address
 import java.net.InetAddress
+import java.util.concurrent.Executor
 import net.qrator.failoverbeacon.failover.model.HostState
 import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.network.NetworkSession
@@ -9,9 +10,13 @@ import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
 internal class TcpProber(
     private val sessions: NetworkSessions,
-    private val tasks: TcpProbeTasks,
+    connect: (InetAddress, Int) -> LayerResult,
+    executor: Executor,
+    bodyProber: BodyProber,
     private val probeOnNetworkChange: Boolean
 ) {
+    private val tasks = TcpProbeTasks(connect, executor, bodyProber)
+
     fun probeStaleHosts() {
         sessions.current?.states?.forEach { probeIfStale(it.config.host) }
     }

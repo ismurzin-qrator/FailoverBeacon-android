@@ -13,6 +13,7 @@ import net.qrator.failoverbeacon.core.thread.SdkExecutor
 import net.qrator.failoverbeacon.failover.fakes.FakeDns
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
+import net.qrator.failoverbeacon.failover.fakes.idleTcpProber
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.ips
 import net.qrator.failoverbeacon.failover.fakes.network
@@ -163,12 +164,11 @@ class AddressResolverTest {
 
     @Test
     fun `closing the tasks releases a waiting caller and later callers do not wait`() {
-        val tasks = ResolveTasks(dns::lookup, executor) {}
-        val resolver = AddressResolver(sessions, tasks, timer, true, 60_000)
+        val resolver = newResolver(waitMillis = 60_000)
         val caller = thread { resolver.resolveAndWait(API) }
         assertTrue(await { executor.queued == 1 })
 
-        tasks.close()
+        resolver.close()
         caller.join(5_000)
         val laterCaller = thread { resolver.resolveAndWait(OTHER) }
         laterCaller.join(5_000)
@@ -194,7 +194,9 @@ class AddressResolverTest {
         waitMillis: Long = 5_000
     ) = AddressResolver(
         sessions,
-        ResolveTasks(dns::lookup, executor) {},
+        dns::lookup,
+        executor,
+        idleTcpProber(),
         timer,
         preresolveOnNetworkChange,
         waitMillis

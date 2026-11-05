@@ -15,6 +15,7 @@ import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.core.time.MonotonicClock
 import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
+import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 
 internal class BodyProbe(
     private val clock: MonotonicClock,
@@ -25,13 +26,11 @@ internal class BodyProbe(
 ) : Closeable {
     private val sockets = OpenSockets()
 
-    fun run(
-        address: InetAddress,
-        host: String,
-        port: Int,
-        path: String,
-        maxBytes: Int
-    ): BodyProbeOutcome {
+    fun run(address: InetAddress, config: FailoverHostConfig): BodyProbeOutcome {
+        val host = config.host
+        val port = config.port
+        val settings = checkNotNull(config.bodyProbe)
+        val maxBytes = settings.maxBytes
         val socket = sockets.open() ?: return BodyProbeOutcome.TCP_FAILED
         try {
             val start = clock.nanoTime()
@@ -39,7 +38,7 @@ internal class BodyProbe(
             val tls = handshake(socket, host, port) ?: return BodyProbeOutcome.TLS_FAILED
             return tls.use {
                 val isFullResponse = try {
-                    tls.outputStream.write(request(host, port, path, maxBytes))
+                    tls.outputStream.write(request(host, port, settings.path, maxBytes))
                     tls.outputStream.flush()
                     readResponse(tls.inputStream, maxBytes, start, "$host ${address.hostAddress}")
                 } catch (_: IOException) {

@@ -9,11 +9,12 @@ import java.util.concurrent.Executor
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.failover.network.NetworkSession
+import net.qrator.failoverbeacon.failover.probe.TcpProber
 
 internal class ResolveTasks(
     private val queryDns: (String) -> List<InetAddress>,
     private val executor: Executor,
-    private val onAnswer: (host: String) -> Unit
+    private val tcpProber: TcpProber
 ) : Closeable {
     private val running = ConcurrentHashMap<Task, CountDownLatch>()
 
@@ -50,7 +51,7 @@ internal class ResolveTasks(
         SdkRegistry.logger.debug { "[Failover] ${task.host}: ${addresses.size} addresses" }
         if (addresses.isNotEmpty()) {
             task.session.saveAnswer(task.host, addresses)
-            onAnswer(task.host)
+            tcpProber.probeIfStale(task.host)
         }
         addresses.isNotEmpty()
     } catch (e: UnknownHostException) {

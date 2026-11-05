@@ -16,15 +16,15 @@ import net.qrator.failoverbeacon.failover.fakes.FakeDns
 import net.qrator.failoverbeacon.failover.fakes.FakeTcpProbe
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
+import net.qrator.failoverbeacon.failover.fakes.idleBodyProber
+import net.qrator.failoverbeacon.failover.fakes.idleTcpProber
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.network
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
 import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
-import net.qrator.failoverbeacon.failover.probe.TcpProbeTasks
 import net.qrator.failoverbeacon.failover.probe.TcpProber
 import net.qrator.failoverbeacon.failover.resolve.AddressResolver
-import net.qrator.failoverbeacon.failover.resolve.ResolveTasks
 
 class FailoverDnsTest {
     private var now = 0L
@@ -148,10 +148,16 @@ class FailoverDnsTest {
         sessions = NetworkSessions(KnownNetworks(hosts, maxNetworks = 8), timer)
         sessions.switchTo(network(1))
         resolved?.let { session.saveAnswer(API, it) }
-        val tcpProber =
-            TcpProber(sessions, TcpProbeTasks(FakeTcpProbe()::run, probes, onResult = {}), true)
-        val tasks = ResolveTasks(resolver::lookup, executor) {}
-        val addressResolver = AddressResolver(sessions, tasks, timer, true, waitMillis)
+        val tcpProber = TcpProber(sessions, FakeTcpProbe()::run, probes, idleBodyProber(), true)
+        val addressResolver = AddressResolver(
+            sessions,
+            resolver::lookup,
+            executor,
+            idleTcpProber(),
+            timer,
+            true,
+            waitMillis
+        )
         return FailoverDns(sessions, tcpProber, addressResolver, timer)
     }
 

@@ -7,9 +7,12 @@ import kotlin.test.assertNotNull
 import net.qrator.failoverbeacon.failover.fakes.FakeTcpProbe
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
+import net.qrator.failoverbeacon.failover.fakes.idleBodyProber
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.network
 import net.qrator.failoverbeacon.failover.fakes.tcpResults
+import net.qrator.failoverbeacon.failover.model.BodyProbeConfig
+import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
 import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
 import net.qrator.failoverbeacon.failover.network.KnownNetworks
@@ -32,10 +35,42 @@ class TcpProberTest {
             now
         }, INTERVAL)
     ).apply { switchTo(network(1, key = WIFI)) }
-    private val tasks = TcpProbeTasks(tcpProbe::run, executor, onResult = {})
-    private val prober = TcpProber(sessions, tasks, probeOnNetworkChange = true)
+    private val prober =
+        TcpProber(sessions, tcpProbe::run, executor, idleBodyProber(), probeOnNetworkChange = true)
 
     private val session get() = assertNotNull(sessions.current)
+
+    @Test
+    fun `the last TCP result starts the body probe of the leader`() {
+        val timer = RefreshTimer({ now }, INTERVAL)
+        val probed = NetworkSessions(
+            KnownNetworks(
+                listOf(hostConfig(API, bodyProbe = BodyProbeConfig("/probe.bin", 1_024))),
+                maxNetworks = 8
+            ),
+            timer
+        ).apply { switchTo(network(1, key = WIFI)) }
+        val bodyProbes = mutableListOf<InetAddress>()
+        val bodyProber = BodyProber(
+            probed,
+            { address, _ ->
+                bodyProbes += address
+                BodyProbeOutcome.PASSED
+            },
+            timer,
+            executor,
+            probeOnNetworkChange = true
+        )
+        val prober = TcpProber(probed, tcpProbe::run, executor, bodyProber, true)
+        tcpProbe.answer(ip(1), LayerResult.Passed(nanos = 10))
+        tcpProbe.answer(ip(2), LayerResult.Passed(nanos = 20))
+        assertNotNull(probed.current).saveAnswer(API, listOf(ip(1), ip(2)))
+
+        prober.probeIfStale(API)
+        executor.runAll()
+
+        assertEquals(listOf(ip(1)), bodyProbes)
+    }
 
     @Test
     fun `each IPv4 address is connected and its result is recorded`() {
@@ -122,7 +157,14 @@ class TcpProberTest {
 
     @Test
     fun `with network change probes off the first network is probed, others are not`() {
-        val prober = TcpProber(sessions, tasks, probeOnNetworkChange = false)
+        val prober =
+            TcpProber(
+                sessions,
+                tcpProbe::run,
+                executor,
+                idleBodyProber(),
+                probeOnNetworkChange = false
+            )
         session.saveAnswer(API, listOf(ip(1)))
         prober.probeIfStale(API)
         val onFirstNetwork = executor.queued

@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import net.qrator.failoverbeacon.failover.fakes.FakeTcpProbe
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
+import net.qrator.failoverbeacon.failover.fakes.idleBodyProber
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.tcpResults
 import net.qrator.failoverbeacon.failover.model.HostState
@@ -16,8 +17,7 @@ import net.qrator.failoverbeacon.failover.network.NetworkState
 class TcpProbeTasksTest {
     private val tcpProbe = FakeTcpProbe()
     private val executor = ManualExecutor()
-    private val results = mutableListOf<String>()
-    private val tasks = TcpProbeTasks(tcpProbe::run, executor, onResult = { results += it })
+    private val tasks = TcpProbeTasks(tcpProbe::run, executor, idleBodyProber())
     private val config = hostConfig(API, listOf(ip(1)), port = PORT)
     private val session = NetworkSession(
         isFirstNetwork = true,
@@ -36,7 +36,6 @@ class TcpProbeTasksTest {
 
         assertEquals(listOf(ip(1) to PORT), tcpProbe.runs)
         assertEquals(connected, session[API]?.tcpResults?.get(ip(1)))
-        assertEquals(listOf(API), results)
     }
 
     @Test
