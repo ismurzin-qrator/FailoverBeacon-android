@@ -12,16 +12,16 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.thread.SdkExecutor
-import net.qrator.failoverbeacon.failover.fakes.FakeConnect
 import net.qrator.failoverbeacon.failover.fakes.FakeDns
+import net.qrator.failoverbeacon.failover.fakes.FakeTcpProbe
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.network
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
-import net.qrator.failoverbeacon.failover.probe.AddressProber
-import net.qrator.failoverbeacon.failover.probe.ProbeTasks
+import net.qrator.failoverbeacon.failover.probe.TcpProbeTasks
+import net.qrator.failoverbeacon.failover.probe.TcpProber
 import net.qrator.failoverbeacon.failover.resolve.AddressResolver
 import net.qrator.failoverbeacon.failover.resolve.ResolveTasks
 
@@ -41,7 +41,7 @@ class FailoverDnsTest {
             additional = listOf(ip(7)),
             otherHosts = listOf(SPARE)
         )
-        session.startProbeRoundIfStale(API)
+        session.startTcpProbeRoundIfStale(API)
         now = INTERVAL
 
         dns.lookup(API)
@@ -147,10 +147,11 @@ class FailoverDnsTest {
         sessions = NetworkSessions(hosts, timer, maxNetworks = 8)
         sessions.switchTo(network(1))
         resolved?.let { session.saveAnswer(API, it) }
-        val prober = AddressProber(sessions, ProbeTasks(FakeConnect()::connect, probes), true)
+        val tcpProber =
+            TcpProber(sessions, TcpProbeTasks(FakeTcpProbe()::run, probes, onResult = {}), true)
         val tasks = ResolveTasks(resolver::lookup, executor) {}
         val addressResolver = AddressResolver(sessions, tasks, timer, true, waitMillis)
-        return FailoverDns(sessions, prober, addressResolver, timer)
+        return FailoverDns(sessions, tcpProber, addressResolver, timer)
     }
 
     private companion object {

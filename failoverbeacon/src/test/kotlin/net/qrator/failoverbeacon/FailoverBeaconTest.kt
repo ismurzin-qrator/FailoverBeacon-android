@@ -283,7 +283,7 @@ class FailoverBeaconTest {
         val resolutions = CopyOnWriteArrayList<String>()
         val failoverConfig = FailoverBeaconConfig.Builder()
             .beacons(listOf("https://beacon.example"))
-            .failoverHosts(listOf(FailoverHost("api.example", probeConnections = false)))
+            .failoverHosts(listOf(FailoverHost("api.example", tcpProbe = false)))
             .dnsResolver {
                 resolutions += it
                 listOf(InetAddress.getByName("192.0.2.1"))
@@ -312,7 +312,7 @@ class FailoverBeaconTest {
                     FailoverHost(
                         "api.example",
                         additionalAddresses = listOf("192.0.2.1"),
-                        probeConnections = false
+                        tcpProbe = false
                     )
                 )
             )
@@ -365,7 +365,7 @@ class FailoverBeaconTest {
         val release = CountDownLatch(1)
         val failoverConfig = FailoverBeaconConfig.Builder()
             .beacons(listOf("https://beacon.example"))
-            .failoverHosts(listOf(FailoverHost("api.example", probeConnections = false)))
+            .failoverHosts(listOf(FailoverHost("api.example", tcpProbe = false)))
             .dnsResolver {
                 entered.countDown()
                 while (release.count > 0) {
@@ -396,7 +396,7 @@ class FailoverBeaconTest {
         val resolutions = CopyOnWriteArrayList<String>()
         val failoverConfig = FailoverBeaconConfig.Builder()
             .beacons(listOf("https://beacon.example"))
-            .failoverHosts(listOf(FailoverHost("api.example", probeConnections = false)))
+            .failoverHosts(listOf(FailoverHost("api.example", tcpProbe = false)))
             .dnsResolver {
                 resolutions += it
                 listOf(InetAddress.getByName("192.0.2.1"))

@@ -52,7 +52,7 @@ internal object SdkStartup {
         val failover = Failover(
             sdk = sdk,
             hostConfigs = config.failoverHosts.map {
-                FailoverHostConfig(it.host, it.port, it.additionalAddresses, it.probeConnections)
+                FailoverHostConfig(it.host, it.port, it.additionalAddresses, it.tcpProbe)
             },
             queryDns = config.dnsResolver::resolve,
             settings = FailoverSettings(

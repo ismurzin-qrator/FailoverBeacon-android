@@ -1,6 +1,6 @@
 package net.qrator.failoverbeacon.failover.model
 
-internal enum class CheckOutcome {
+internal enum class BodyProbeOutcome {
     PASSED,
     TCP_FAILED,
     TLS_FAILED,

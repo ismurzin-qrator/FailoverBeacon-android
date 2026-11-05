@@ -23,7 +23,7 @@ class TcpProbeTest {
 
     @Test
     fun `a connect is timed with the clock and its socket is closed`() {
-        val result = probe.connect(LOOPBACK, server.localPort)
+        val result = probe.run(LOOPBACK, server.localPort)
 
         assertEquals(LayerResult.Passed(nanos = 40), result)
         server.accept().use { assertEquals(-1, it.getInputStream().read()) }
@@ -34,12 +34,12 @@ class TcpProbeTest {
         val port = server.localPort
         server.close()
 
-        assertEquals(LayerResult.Failed, probe.connect(LOOPBACK, port))
+        assertEquals(LayerResult.Failed, probe.run(LOOPBACK, port))
     }
 
     @Test
     fun `probe sockets carry the SDK traffic tag`() {
-        probe.connect(LOOPBACK, server.localPort)
+        probe.run(LOOPBACK, server.localPort)
 
         assertEquals(0x4650, TrafficStats.getThreadStatsTag())
     }
@@ -48,7 +48,7 @@ class TcpProbeTest {
     fun `after close nothing is connected`() {
         probe.close()
 
-        assertEquals(LayerResult.Failed, probe.connect(LOOPBACK, server.localPort))
+        assertEquals(LayerResult.Failed, probe.run(LOOPBACK, server.localPort))
         assertFailsWith<SocketTimeoutException> { server.accept() }
     }
 

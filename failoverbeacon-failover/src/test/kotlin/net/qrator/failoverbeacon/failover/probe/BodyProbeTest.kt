@@ -13,14 +13,14 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import net.qrator.failoverbeacon.failover.model.CheckOutcome
+import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
-class AddressCheckTest {
+class BodyProbeTest {
     private val certificate = HeldCertificate.Builder().addSubjectAlternativeName(HOST).build()
     private val serverCertificates = HandshakeCertificates.Builder()
         .heldCertificate(certificate)
@@ -34,12 +34,12 @@ class AddressCheckTest {
     private var isNameValid = true
     private var now = 0L
     private var clockStepNanos = 0L
-    private val check = addressCheck(clientCertificates.sslSocketFactory())
+    private val probe = bodyProbe(clientCertificates.sslSocketFactory())
 
     @AfterTest
     fun tearDown() {
         release.countDown()
-        check.close()
+        probe.close()
         server.close()
     }
 
@@ -47,10 +47,10 @@ class AddressCheckTest {
     fun `reading up to the limit passes and sends the request`() {
         serve { socket -> socket.send(response("HTTP/1.1 200 OK", body = 4_096)) }
 
-        assertEquals(CheckOutcome.PASSED, runCheck(path = "/check.bin", maxBytes = 1_024))
+        assertEquals(BodyProbeOutcome.PASSED, runProbe(path = "/probe.bin", maxBytes = 1_024))
 
         val request = requests.toString(Charsets.US_ASCII.name())
-        assertTrue(request.startsWith("GET /check.bin HTTP/1.1\r\n"), request)
+        assertTrue(request.startsWith("GET /probe.bin HTTP/1.1\r\n"), request)
         assertTrue("\r\nHost: $HOST:${server.localPort}\r\n" in request, request)
         assertTrue("\r\nRange: bytes=0-1023\r\n" in request, request)
     }
@@ -59,14 +59,14 @@ class AddressCheckTest {
     fun `a short response of any status passes when it ends`() {
         serve { socket -> socket.send(response("HTTP/1.1 404 Not Found", body = 10)) }
 
-        assertEquals(CheckOutcome.PASSED, runCheck())
+        assertEquals(BodyProbeOutcome.PASSED, runProbe())
     }
 
     @Test
     fun `a response without a length passes when it ends`() {
         serve { socket -> socket.send("HTTP/1.1 200 OK\r\n\r\nbody".toByteArray()) }
 
-        assertEquals(CheckOutcome.PASSED, runCheck())
+        assertEquals(BodyProbeOutcome.PASSED, runProbe())
     }
 
     @Test
@@ -75,14 +75,14 @@ class AddressCheckTest {
             socket.send("HTTP/1.1 200 OK\r\ncontent-length: 100\r\n\r\nbody".toByteArray())
         }
 
-        assertEquals(CheckOutcome.BODY_FAILED, runCheck())
+        assertEquals(BodyProbeOutcome.BODY_FAILED, runProbe())
     }
 
     @Test
     fun `an end without a response fails`() {
         serve { }
 
-        assertEquals(CheckOutcome.BODY_FAILED, runCheck())
+        assertEquals(BodyProbeOutcome.BODY_FAILED, runProbe())
     }
 
     @Test
@@ -92,7 +92,7 @@ class AddressCheckTest {
             release.await()
         }
 
-        assertEquals(CheckOutcome.BODY_FAILED, runCheck())
+        assertEquals(BodyProbeOutcome.BODY_FAILED, runProbe())
     }
 
     @Test
@@ -100,14 +100,14 @@ class AddressCheckTest {
         clockStepNanos = TimeUnit.MILLISECONDS.toNanos(DEADLINE_MILLIS + 1)
         serve { socket -> socket.send(response("HTTP/1.1 200 OK", body = 10)) }
 
-        assertEquals(CheckOutcome.BODY_FAILED, runCheck())
+        assertEquals(BodyProbeOutcome.BODY_FAILED, runProbe())
     }
 
     @Test
     fun `a closed port fails on TCP`() {
         val closedPort = ServerSocket(0).use { it.localPort }
 
-        assertEquals(CheckOutcome.TCP_FAILED, runCheck(port = closedPort))
+        assertEquals(BodyProbeOutcome.TCP_FAILED, runProbe(port = closedPort))
     }
 
     @Test
@@ -115,10 +115,10 @@ class AddressCheckTest {
         serve { }
         val otherCertificates = HandshakeCertificates.Builder().build()
 
-        val outcome = addressCheck(otherCertificates.sslSocketFactory())
-            .check(LOOPBACK, HOST, server.localPort, "/", MAX_BYTES)
+        val outcome = bodyProbe(otherCertificates.sslSocketFactory())
+            .run(LOOPBACK, HOST, server.localPort, "/", MAX_BYTES)
 
-        assertEquals(CheckOutcome.TLS_FAILED, outcome)
+        assertEquals(BodyProbeOutcome.TLS_FAILED, outcome)
     }
 
     @Test
@@ -126,12 +126,12 @@ class AddressCheckTest {
         isNameValid = false
         serve { }
 
-        assertEquals(CheckOutcome.TLS_FAILED, runCheck())
+        assertEquals(BodyProbeOutcome.TLS_FAILED, runProbe())
         assertEquals(0, requests.size())
     }
 
     @Test
-    fun `close stops a read and later checks`() {
+    fun `close stops a read and later probes`() {
         val isReading = CountDownLatch(1)
         serve { socket ->
             isReading.countDown()
@@ -140,26 +140,26 @@ class AddressCheckTest {
         }
         thread {
             isReading.await()
-            check.close()
+            probe.close()
         }
 
-        assertEquals(CheckOutcome.BODY_FAILED, runCheck())
-        assertEquals(CheckOutcome.TCP_FAILED, runCheck())
+        assertEquals(BodyProbeOutcome.BODY_FAILED, runProbe())
+        assertEquals(BodyProbeOutcome.TCP_FAILED, runProbe())
     }
 
-    private fun addressCheck(socketFactory: SSLSocketFactory) = AddressCheck(
+    private fun bodyProbe(socketFactory: SSLSocketFactory) = BodyProbe(
         clock = { now.also { now += clockStepNanos } },
-        socketFactory = socketFactory,
+        socketFactory = { socketFactory },
         hostnameVerifier = { _, _ -> isNameValid },
         timeoutMillis = TIMEOUT_MILLIS,
         deadlineMillis = DEADLINE_MILLIS
     )
 
-    private fun runCheck(
+    private fun runProbe(
         port: Int = server.localPort,
         path: String = "/",
         maxBytes: Int = MAX_BYTES
-    ): CheckOutcome = check.check(LOOPBACK, HOST, port, path, maxBytes)
+    ): BodyProbeOutcome = probe.run(LOOPBACK, HOST, port, path, maxBytes)
 
     private fun serve(respond: (Socket) -> Unit) {
         thread(isDaemon = true) {

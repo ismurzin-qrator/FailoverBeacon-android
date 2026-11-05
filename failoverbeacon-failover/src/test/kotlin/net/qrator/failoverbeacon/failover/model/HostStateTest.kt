@@ -4,6 +4,7 @@ import java.net.InetAddress
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
@@ -26,9 +27,9 @@ class HostStateTest {
     fun `a new answer keeps the results of the addresses it still has`() {
         val resolved = state
             .answered(ip(1), ip(2))
-            .withProbe(ip(1), connected)
-            .withProbe(ip(2), LayerResult.Failed)
-            .withProbe(ip(7), LayerResult.Failed)
+            .withTcpProbe(ip(1), connected)
+            .withTcpProbe(ip(2), LayerResult.Failed)
+            .withTcpProbe(ip(7), LayerResult.Failed)
             .answered(ip(1), ip(3))
 
         assertEquals(
@@ -48,7 +49,7 @@ class HostStateTest {
 
     @Test
     fun `a failed resolution keeps the addresses and their results`() {
-        val probed = state.answered(ip(1)).withProbe(ip(1), connected)
+        val probed = state.answered(ip(1)).withTcpProbe(ip(1), connected)
 
         val failed = probed.withDns(probed.dns.withFailure(atNanos = 10))
 
@@ -59,8 +60,8 @@ class HostStateTest {
     fun `results change the order and those of unknown addresses are dropped`() {
         val resolved = state.answered(ip(1))
 
-        assertEquals(listOf(ip(7), ip(1)), resolved.withProbe(ip(7), connected).ips)
-        assertEquals(resolved.addresses, resolved.withProbe(ip(2), connected).addresses)
+        assertEquals(listOf(ip(7), ip(1)), resolved.withTcpProbe(ip(7), connected).ips)
+        assertEquals(resolved.addresses, resolved.withTcpProbe(ip(2), connected).addresses)
         assertEquals(
             resolved.addresses,
             resolved.withConnectOutcome("192.0.2.2", ConnectOutcome.TLS_FAILED).addresses
@@ -72,7 +73,7 @@ class HostStateTest {
         val failed = state
             .answered(ip(1))
             .withConnectOutcome(IP_1, ConnectOutcome.TLS_FAILED)
-            .withProbe(ip(1), connected)
+            .withTcpProbe(ip(1), connected)
 
         val cleared = failed.withConnectOutcome(IP_1, ConnectOutcome.CONNECTED_SECURE)
 
@@ -82,15 +83,70 @@ class HostStateTest {
 
     @Test
     fun `a probe round is stale after the interval and answers and probes keep its time`() {
-        val started = state.answered(ip(1)).withProbeRound(atNanos = 10)
-        val updated = started.answered(ip(1), ip(2)).withProbe(ip(2), LayerResult.Failed)
+        val started = state.answered(ip(1)).withTcpProbeRound(atNanos = 10)
+        val updated = started.answered(ip(1), ip(2)).withTcpProbe(ip(2), LayerResult.Failed)
         now = 9 + INTERVAL
-        val beforeInterval = updated.isProbeStale(timer)
+        val beforeInterval = updated.isTcpProbeStale(timer)
         now = 10 + INTERVAL
 
-        assertTrue(state.isProbeStale(timer))
+        assertTrue(state.isTcpProbeStale(timer))
         assertFalse(beforeInterval)
-        assertTrue(updated.isProbeStale(timer))
+        assertTrue(updated.isTcpProbeStale(timer))
+    }
+
+    @Test
+    fun `the leader is due for a body probe once every IPv4 address has a TCP result`() {
+        val answered = state.answered(ip(1))
+
+        val probing = answered.withTcpProbe(ip(1), connected)
+        val probed = probing.withTcpProbe(ip(7), LayerResult.Passed(nanos = 90))
+
+        assertNull(probing.addressToBodyProbe(timer))
+        assertEquals(ip(1), probed.addressToBodyProbe(timer))
+    }
+
+    @Test
+    fun `a single IPv4 address or a leader failed on TCP is not probed`() {
+        val single = HostState(hostConfig("api.example", additional = listOf(ip(7))))
+            .withTcpProbe(ip(7), connected)
+        val allFailed = state.answered(ip(1))
+            .withTcpProbe(ip(1), LayerResult.Failed)
+            .withTcpProbe(ip(7), LayerResult.Failed)
+
+        assertNull(single.addressToBodyProbe(timer))
+        assertNull(allFailed.addressToBodyProbe(timer))
+    }
+
+    @Test
+    fun `a passed leader is probed again only after the interval`() {
+        val probed = probedState(ip(1), ip(2))
+            .withBodyProbeOutcome(ip(1), BodyProbeOutcome.PASSED, atNanos = 10)
+
+        now = 9 + INTERVAL
+        assertNull(probed.addressToBodyProbe(timer))
+        now = 10 + INTERVAL
+        assertEquals(ip(1), probed.addressToBodyProbe(timer))
+    }
+
+    @Test
+    fun `a failed leader gives way to the next until the limit of fresh body probes`() {
+        val first = probedState(ip(1), ip(2), ip(3), ip(4))
+            .withBodyProbeOutcome(ip(1), BodyProbeOutcome.BODY_FAILED, atNanos = 0)
+        val second = first.withBodyProbeOutcome(ip(2), BodyProbeOutcome.TLS_FAILED, atNanos = 0)
+        val third = second.withBodyProbeOutcome(ip(3), BodyProbeOutcome.BODY_FAILED, atNanos = 0)
+
+        assertEquals(ip(2), first.addressToBodyProbe(timer))
+        assertEquals(ip(3), second.addressToBodyProbe(timer))
+        assertEquals(ip(4), third.ips.first())
+        assertNull(third.addressToBodyProbe(timer))
+    }
+
+    private fun probedState(vararg addresses: InetAddress): HostState {
+        var probed = HostState(hostConfig("api.example")).answered(*addresses)
+        addresses.forEachIndexed { index, address ->
+            probed = probed.withTcpProbe(address, LayerResult.Passed(nanos = 10L + index))
+        }
+        return probed
     }
 
     private fun HostState.answered(vararg addresses: InetAddress): HostState =

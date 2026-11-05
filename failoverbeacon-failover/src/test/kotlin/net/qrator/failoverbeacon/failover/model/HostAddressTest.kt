@@ -43,4 +43,36 @@ class HostAddressTest {
 
         assertEquals(HostAddress(ip(1), passed, LayerResult.Failed), connected)
     }
+
+    @Test
+    fun `a body probe writes the layers it reached and its time`() {
+        val address = HostAddress(ip(1), probed)
+
+        fun after(outcome: BodyProbeOutcome) = address.withBodyProbeOutcome(outcome, atNanos = 5)
+
+        assertEquals(
+            HostAddress(ip(1), probed, passed, passed, bodyProbedAtNanos = 5),
+            after(BodyProbeOutcome.PASSED)
+        )
+        assertEquals(
+            HostAddress(ip(1), LayerResult.Failed, bodyProbedAtNanos = 5),
+            after(BodyProbeOutcome.TCP_FAILED)
+        )
+        assertEquals(
+            HostAddress(ip(1), probed, LayerResult.Failed, bodyProbedAtNanos = 5),
+            after(BodyProbeOutcome.TLS_FAILED)
+        )
+        assertEquals(
+            HostAddress(ip(1), probed, passed, LayerResult.Failed, bodyProbedAtNanos = 5),
+            after(BodyProbeOutcome.BODY_FAILED)
+        )
+    }
+
+    @Test
+    fun `a real connection does not clear a body failure`() {
+        val connected = HostAddress(ip(1), probed, passed, LayerResult.Failed)
+            .withConnectOutcome(ConnectOutcome.CONNECTED_SECURE)
+
+        assertEquals(LayerResult.Failed, connected.body)
+    }
 }

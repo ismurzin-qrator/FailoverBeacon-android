@@ -24,10 +24,10 @@ class NetworkSessionsTest {
     @Test
     fun `each network keeps its own addresses and probe round`() {
         session.saveAnswer(API, listOf(ip(1)))
-        session.startProbeRoundIfStale(API)
+        session.startTcpProbeRoundIfStale(API)
         sessions.switchTo(network(2, key = CELLULAR))
         val onCellular = session[API]?.ips
-        val roundOnCellular = session.startProbeRoundIfStale(API)
+        val roundOnCellular = session.startTcpProbeRoundIfStale(API)
 
         sessions.switchTo(network(3, key = WIFI))
 

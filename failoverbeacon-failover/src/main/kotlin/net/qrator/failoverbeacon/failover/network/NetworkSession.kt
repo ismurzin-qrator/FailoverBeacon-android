@@ -1,6 +1,7 @@
 package net.qrator.failoverbeacon.failover.network
 
 import java.net.InetAddress
+import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
 import net.qrator.failoverbeacon.failover.model.ConnectOutcome
 import net.qrator.failoverbeacon.failover.model.HostState
 import net.qrator.failoverbeacon.failover.model.LayerResult
@@ -28,17 +29,24 @@ internal class NetworkSession(
         state.withDns(state.dns.withFailure(timer.now()))
     }
 
-    fun saveProbe(host: String, address: InetAddress, result: LayerResult) =
-        updateIfActive(host) { state -> state.withProbe(address, result) }
+    fun saveTcpProbe(host: String, address: InetAddress, result: LayerResult) =
+        updateIfActive(host) { state -> state.withTcpProbe(address, result) }
 
     fun saveConnectOutcome(host: String, peerAddress: String, outcome: ConnectOutcome) =
         updateIfActive(host) { state -> state.withConnectOutcome(peerAddress, outcome) }
 
-    fun startProbeRoundIfStale(host: String): Boolean {
+    fun saveBodyProbe(
+        host: String,
+        address: InetAddress,
+        outcome: BodyProbeOutcome,
+        atNanos: Long
+    ) = updateIfActive(host) { state -> state.withBodyProbeOutcome(address, outcome, atNanos) }
+
+    fun startTcpProbeRoundIfStale(host: String): Boolean {
         var isStarted = false
         updateIfActive(host) { state ->
-            isStarted = state.isProbeStale(timer)
-            if (isStarted) state.withProbeRound(timer.now()) else state
+            isStarted = state.isTcpProbeStale(timer)
+            if (isStarted) state.withTcpProbeRound(timer.now()) else state
         }
         return isStarted
     }

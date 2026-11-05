@@ -35,6 +35,16 @@ class AddressRankingTest {
     }
 
     @Test
+    fun `an address failed on the body goes last whatever its probe time`() {
+        val addresses = listOf(
+            HostAddress(ip(1), fast, body = LayerResult.Failed),
+            HostAddress(ip(2), slow)
+        )
+
+        assertEquals(listOf(ip(2), ip(1)), ranked(addresses))
+    }
+
+    @Test
     fun `an address passed without a time comes after timed ones and before unknown ones`() {
         val addresses = listOf(
             HostAddress(ip(1)),

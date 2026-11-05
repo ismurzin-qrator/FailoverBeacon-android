@@ -43,28 +43,28 @@ class NetworkSessionTest {
         session.end()
 
         session.saveAnswer(API, listOf(ip(1)))
-        session.saveProbe(API, ip(7), LayerResult.Failed)
+        session.saveTcpProbe(API, ip(7), LayerResult.Failed)
         session.saveConnectOutcome(API, "192.0.2.7", ConnectOutcome.TLS_FAILED)
         session.saveResolveFailure(API)
 
         assertFalse(session.isActive)
         assertEquals(listOf(HostAddress(ip(7))), session[API]?.addresses)
         assertTrue(dns.isAnswerNeeded(timer))
-        assertFalse(session.startProbeRoundIfStale(API))
+        assertFalse(session.startTcpProbeRoundIfStale(API))
     }
 
     @Test
     fun `a probe round starts once per interval`() {
-        val first = session.startProbeRoundIfStale(API)
-        val second = session.startProbeRoundIfStale(API)
+        val first = session.startTcpProbeRoundIfStale(API)
+        val second = session.startTcpProbeRoundIfStale(API)
         now += INTERVAL - 1
-        val beforeInterval = session.startProbeRoundIfStale(API)
+        val beforeInterval = session.startTcpProbeRoundIfStale(API)
         now += 1
 
         assertTrue(first)
         assertFalse(second)
         assertFalse(beforeInterval)
-        assertTrue(session.startProbeRoundIfStale(API))
+        assertTrue(session.startTcpProbeRoundIfStale(API))
     }
 
     @Test
@@ -75,7 +75,7 @@ class NetworkSessionTest {
         val rounds = List(callers) {
             pool.submit<Boolean> {
                 start.await()
-                session.startProbeRoundIfStale(API)
+                session.startTcpProbeRoundIfStale(API)
             }
         }
 

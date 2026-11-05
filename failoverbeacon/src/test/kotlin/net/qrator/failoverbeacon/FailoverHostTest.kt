@@ -13,7 +13,7 @@ class FailoverHostTest {
         assertEquals("api.example", host.host)
         assertEquals(443, host.port)
         assertEquals(emptyList(), host.additionalAddresses)
-        assertTrue(host.probeConnections)
+        assertTrue(host.tcpProbe)
     }
 
     @Test

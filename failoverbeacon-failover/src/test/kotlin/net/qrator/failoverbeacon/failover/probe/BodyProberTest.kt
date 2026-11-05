@@ -1,0 +1,128 @@
+package net.qrator.failoverbeacon.failover.probe
+
+import java.net.InetAddress
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
+import net.qrator.failoverbeacon.failover.fakes.hostConfig
+import net.qrator.failoverbeacon.failover.fakes.ip
+import net.qrator.failoverbeacon.failover.fakes.ips
+import net.qrator.failoverbeacon.failover.fakes.network
+import net.qrator.failoverbeacon.failover.model.BodyProbeConfig
+import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
+import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
+import net.qrator.failoverbeacon.failover.model.LayerResult
+import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.network.NetworkSession
+import net.qrator.failoverbeacon.failover.network.NetworkSessions
+
+class BodyProberTest {
+    private val executor = ManualExecutor()
+    private val timer = RefreshTimer({ 0L }, 100)
+    private val outcomes = mutableMapOf<InetAddress, BodyProbeOutcome>()
+    private val runs = mutableListOf<Pair<InetAddress, String>>()
+    private var onRun: () -> Unit = {}
+    private val sessions = NetworkSessions(
+        listOf(
+            hostConfig(API, bodyProbe = BodyProbeConfig("/probe.bin", 1_024)),
+            hostConfig(NO_BODY_PROBE)
+        ),
+        timer,
+        maxNetworks = 8
+    ).apply { switchTo(network(1)) }
+    private val prober = BodyProber(sessions, ::run, timer, executor, true)
+
+    private val session get() = assertNotNull(sessions.current)
+
+    @Test
+    fun `a host without a body probe is not probed`() {
+        session.probed(NO_BODY_PROBE)
+
+        prober.probeStaleHosts()
+
+        assertEquals(0, executor.queued)
+    }
+
+    @Test
+    fun `probes off on a network change also turn body probes off there`() {
+        val prober = BodyProber(sessions, ::run, timer, executor, false)
+        sessions.switchTo(network(2, key = "CELLULAR"))
+        session.probed(API)
+
+        prober.probeIfStale(API)
+
+        assertEquals(0, executor.queued)
+    }
+
+    @Test
+    fun `a passed leader ends the round and is not probed again`() {
+        session.probed(API)
+        outcomes[ip(1)] = BodyProbeOutcome.PASSED
+
+        prober.probeIfStale(API)
+        executor.runAll()
+        prober.probeIfStale(API)
+
+        assertEquals(listOf(ip(1) to API), runs)
+        assertEquals(LayerResult.Passed(nanos = null), session[API]?.addresses?.first()?.body)
+        assertEquals(0, executor.queued)
+    }
+
+    @Test
+    fun `a failed leader goes last and the next address is probed in the same round`() {
+        session.probed(API)
+        outcomes[ip(1)] = BodyProbeOutcome.BODY_FAILED
+        outcomes[ip(2)] = BodyProbeOutcome.PASSED
+
+        prober.probeIfStale(API)
+        executor.runAll()
+
+        assertEquals(listOf(ip(1), ip(2)), runs.map { it.first })
+        assertEquals(listOf(ip(2), ip(1)), session[API]?.ips)
+    }
+
+    @Test
+    fun `a host in a round is not queued again and can run after it finishes`() {
+        session.probed(API)
+        outcomes[ip(1)] = BodyProbeOutcome.PASSED
+
+        prober.probeIfStale(API)
+        prober.probeIfStale(API)
+        val whileRunning = executor.queued
+        executor.runAll()
+
+        assertEquals(1, whileRunning)
+        assertEquals(1, runs.size)
+    }
+
+    @Test
+    fun `a network change ends the round and drops its result`() {
+        session.probed(API)
+        val first = session
+        onRun = { sessions.switchTo(network(2, key = "CELLULAR")) }
+
+        prober.probeIfStale(API)
+        executor.runAll()
+
+        assertEquals(1, runs.size)
+        assertEquals(LayerResult.Unknown, first[API]?.addresses?.first()?.tls)
+    }
+
+    private fun run(address: InetAddress, config: FailoverHostConfig): BodyProbeOutcome {
+        runs += address to config.host
+        onRun()
+        return outcomes[address] ?: BodyProbeOutcome.TCP_FAILED
+    }
+
+    private fun NetworkSession.probed(host: String) {
+        saveAnswer(host, listOf(ip(1), ip(2)))
+        saveTcpProbe(host, ip(1), LayerResult.Passed(nanos = 10))
+        saveTcpProbe(host, ip(2), LayerResult.Passed(nanos = 20))
+    }
+
+    private companion object {
+        const val API = "api.example"
+        const val NO_BODY_PROBE = "other.example"
+    }
+}

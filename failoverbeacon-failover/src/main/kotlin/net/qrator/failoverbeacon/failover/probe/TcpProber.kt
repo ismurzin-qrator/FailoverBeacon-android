@@ -7,9 +7,9 @@ import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.network.NetworkSession
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
-internal class AddressProber(
+internal class TcpProber(
     private val sessions: NetworkSessions,
-    private val tasks: ProbeTasks,
+    private val tasks: TcpProbeTasks,
     private val probeOnNetworkChange: Boolean
 ) {
     fun probeStaleHosts() {
@@ -19,7 +19,7 @@ internal class AddressProber(
     fun probeIfStale(host: String) {
         val session = sessions.current ?: return
         val state = session[host] ?: return
-        if (!state.config.probeConnections) return
+        if (!state.config.tcpProbe) return
         if (!probeOnNetworkChange && !session.isFirstNetwork) return
         addressesToProbe(session, state).forEach { tasks.start(session, state.config, it) }
     }
@@ -27,7 +27,7 @@ internal class AddressProber(
     private fun addressesToProbe(session: NetworkSession, state: HostState): List<InetAddress> {
         val ipv4Addresses = state.addresses.filter { it.address is Inet4Address }
         if (ipv4Addresses.size < 2) return emptyList()
-        val isRoundStarted = session.startProbeRoundIfStale(state.config.host)
+        val isRoundStarted = session.startTcpProbeRoundIfStale(state.config.host)
         return ipv4Addresses
             .filter { isRoundStarted || it.tcp == LayerResult.Unknown }
             .map { it.address }

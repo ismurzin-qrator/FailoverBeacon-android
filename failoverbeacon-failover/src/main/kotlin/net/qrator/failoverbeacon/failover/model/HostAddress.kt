@@ -5,9 +5,15 @@ import java.net.InetAddress
 internal data class HostAddress(
     val address: InetAddress,
     val tcp: LayerResult = LayerResult.Unknown,
-    val tls: LayerResult = LayerResult.Unknown
+    val tls: LayerResult = LayerResult.Unknown,
+    val body: LayerResult = LayerResult.Unknown,
+    val bodyProbedAtNanos: Long? = null
 ) {
-    val hasFailure: Boolean get() = tcp == LayerResult.Failed || tls == LayerResult.Failed
+    val hasFailure: Boolean
+        get() = tcp == LayerResult.Failed || tls == LayerResult.Failed || body == LayerResult.Failed
+
+    fun isBodyProbeStale(timer: RefreshTimer): Boolean =
+        bodyProbedAtNanos == null || timer.isExpired(bodyProbedAtNanos)
 
     fun withConnectOutcome(outcome: ConnectOutcome): HostAddress = when (outcome) {
         ConnectOutcome.CONNECTED_PLAIN -> withTcpPassed()
@@ -19,6 +25,23 @@ internal data class HostAddress(
         ConnectOutcome.TCP_FAILED -> copy(tcp = LayerResult.Failed)
 
         ConnectOutcome.TLS_FAILED -> withTcpPassed().copy(tls = LayerResult.Failed)
+    }
+
+    fun withBodyProbeOutcome(outcome: BodyProbeOutcome, atNanos: Long): HostAddress {
+        val passed = LayerResult.Passed(nanos = null)
+        val updated = when (outcome) {
+            BodyProbeOutcome.PASSED -> withTcpPassed().copy(tls = passed, body = passed)
+
+            BodyProbeOutcome.TCP_FAILED -> copy(tcp = LayerResult.Failed)
+
+            BodyProbeOutcome.TLS_FAILED -> withTcpPassed().copy(tls = LayerResult.Failed)
+
+            BodyProbeOutcome.BODY_FAILED -> withTcpPassed().copy(
+                tls = passed,
+                body = LayerResult.Failed
+            )
+        }
+        return updated.copy(bodyProbedAtNanos = atNanos)
     }
 
     private fun withTcpPassed(): HostAddress =

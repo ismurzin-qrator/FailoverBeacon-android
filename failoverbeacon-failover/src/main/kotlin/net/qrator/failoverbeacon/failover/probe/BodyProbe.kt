@@ -14,29 +14,29 @@ import kotlin.math.min
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.core.time.MonotonicClock
-import net.qrator.failoverbeacon.failover.model.CheckOutcome
+import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
 
-internal class AddressCheck(
+internal class BodyProbe(
     private val clock: MonotonicClock,
-    private val socketFactory: SSLSocketFactory,
+    private val socketFactory: () -> SSLSocketFactory,
     private val hostnameVerifier: HostnameVerifier,
     private val timeoutMillis: Int,
     private val deadlineMillis: Long
 ) : Closeable {
     private val sockets = OpenSockets()
 
-    fun check(
+    fun run(
         address: InetAddress,
         host: String,
         port: Int,
         path: String,
         maxBytes: Int
-    ): CheckOutcome {
-        val socket = sockets.open() ?: return CheckOutcome.TCP_FAILED
+    ): BodyProbeOutcome {
+        val socket = sockets.open() ?: return BodyProbeOutcome.TCP_FAILED
         try {
             val start = clock.nanoTime()
-            if (!connect(socket, address, port)) return CheckOutcome.TCP_FAILED
-            val tls = handshake(socket, host, port) ?: return CheckOutcome.TLS_FAILED
+            if (!connect(socket, address, port)) return BodyProbeOutcome.TCP_FAILED
+            val tls = handshake(socket, host, port) ?: return BodyProbeOutcome.TLS_FAILED
             return tls.use {
                 val isFullResponse = try {
                     tls.outputStream.write(request(host, port, path, maxBytes))
@@ -45,7 +45,7 @@ internal class AddressCheck(
                 } catch (_: IOException) {
                     false
                 }
-                if (isFullResponse) CheckOutcome.PASSED else CheckOutcome.BODY_FAILED
+                if (isFullResponse) BodyProbeOutcome.PASSED else BodyProbeOutcome.BODY_FAILED
             }
         } finally {
             sockets.release(socket)
@@ -63,7 +63,7 @@ internal class AddressCheck(
     }
 
     private fun handshake(socket: Socket, host: String, port: Int): SSLSocket? = try {
-        val tls = socketFactory.createSocket(socket, host, port, true) as SSLSocket
+        val tls = socketFactory().createSocket(socket, host, port, true) as SSLSocket
         tls.startHandshake()
         // SSLSocket does not compare the certificate with the host name.
         tls.takeIf { hostnameVerifier.verify(host, it.session) }

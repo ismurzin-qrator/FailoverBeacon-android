@@ -2,7 +2,7 @@ package net.qrator.failoverbeacon.failover.probe
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import net.qrator.failoverbeacon.failover.fakes.FakeConnect
+import net.qrator.failoverbeacon.failover.fakes.FakeTcpProbe
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
@@ -12,10 +12,11 @@ import net.qrator.failoverbeacon.failover.model.RefreshTimer
 import net.qrator.failoverbeacon.failover.network.HostStates
 import net.qrator.failoverbeacon.failover.network.NetworkSession
 
-class ProbeTasksTest {
-    private val connect = FakeConnect()
+class TcpProbeTasksTest {
+    private val tcpProbe = FakeTcpProbe()
     private val executor = ManualExecutor()
-    private val tasks = ProbeTasks(connect::connect, executor)
+    private val results = mutableListOf<String>()
+    private val tasks = TcpProbeTasks(tcpProbe::run, executor, onResult = { results += it })
     private val config = hostConfig(API, listOf(ip(1)), port = PORT)
     private val session = NetworkSession(
         isFirstNetwork = true,
@@ -27,13 +28,14 @@ class ProbeTasksTest {
     @Test
     fun `an address is connected on the host's port and its result is saved`() {
         val connected = LayerResult.Passed(nanos = 40_000_000)
-        connect.answer(ip(1), connected)
+        tcpProbe.answer(ip(1), connected)
 
         tasks.start(session, config, ip(1))
         executor.runAll()
 
-        assertEquals(listOf(ip(1) to PORT), connect.connects)
+        assertEquals(listOf(ip(1) to PORT), tcpProbe.runs)
         assertEquals(connected, session[API]?.tcpResults?.get(ip(1)))
+        assertEquals(listOf(API), results)
     }
 
     @Test
@@ -56,14 +58,14 @@ class ProbeTasksTest {
 
         executor.runAll()
 
-        assertEquals(emptyList(), connect.connects)
+        assertEquals(emptyList(), tcpProbe.runs)
     }
 
     @Test
     fun `an unexpected failure keeps the earlier result and lets the address run again`() {
         val connected = LayerResult.Passed(nanos = 10)
-        session.saveProbe(API, ip(1), connected)
-        connect.fail(ip(1), SecurityException("no INTERNET permission"))
+        session.saveTcpProbe(API, ip(1), connected)
+        tcpProbe.fail(ip(1), SecurityException("no INTERNET permission"))
         tasks.start(session, config, ip(1))
 
         runCatching { executor.runAll() }

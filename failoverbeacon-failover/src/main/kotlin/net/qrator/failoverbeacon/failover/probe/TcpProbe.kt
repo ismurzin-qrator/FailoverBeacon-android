@@ -11,7 +11,7 @@ internal class TcpProbe(private val clock: MonotonicClock, private val timeoutMi
     Closeable {
     private val sockets = OpenSockets()
 
-    fun connect(address: InetAddress, port: Int): LayerResult {
+    fun run(address: InetAddress, port: Int): LayerResult {
         val socket = sockets.open() ?: return LayerResult.Failed
         try {
             val start = clock.nanoTime()

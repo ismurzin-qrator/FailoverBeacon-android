@@ -4,7 +4,7 @@ import java.net.InetAddress
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import net.qrator.failoverbeacon.failover.fakes.FakeConnect
+import net.qrator.failoverbeacon.failover.fakes.FakeTcpProbe
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
@@ -14,33 +14,33 @@ import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
-class AddressProberTest {
-    private val connect = FakeConnect()
+class TcpProberTest {
+    private val tcpProbe = FakeTcpProbe()
     private val executor = ManualExecutor()
     private var now = 0L
     private val sessions = NetworkSessions(
         listOf(
             hostConfig(API, listOf(ip(7)), port = PORT),
             hostConfig(SPARE, listOf(ip(4), ip(5)), port = PORT),
-            hostConfig(NO_PROBES, port = PORT, probeConnections = false)
+            hostConfig(NO_PROBES, port = PORT, tcpProbe = false)
         ),
         RefreshTimer({ now }, INTERVAL),
         maxNetworks = 8
     ).apply { switchTo(network(1, key = WIFI)) }
-    private val tasks = ProbeTasks(connect::connect, executor)
-    private val prober = AddressProber(sessions, tasks, probeOnNetworkChange = true)
+    private val tasks = TcpProbeTasks(tcpProbe::run, executor, onResult = {})
+    private val prober = TcpProber(sessions, tasks, probeOnNetworkChange = true)
 
     private val session get() = assertNotNull(sessions.current)
 
     @Test
     fun `each IPv4 address is connected and its result is recorded`() {
-        connect.answer(ip(1), LayerResult.Passed(nanos = 40_000_000))
+        tcpProbe.answer(ip(1), LayerResult.Passed(nanos = 40_000_000))
         session.saveAnswer(API, listOf(ip(1), ip(2), IPV6))
 
         prober.probeIfStale(API)
         executor.runAll()
 
-        assertEquals(listOf(ip(1), ip(2), ip(7)).map { it to PORT }, connect.connects)
+        assertEquals(listOf(ip(1), ip(2), ip(7)).map { it to PORT }, tcpProbe.runs)
         assertEquals(
             mapOf(
                 ip(1) to LayerResult.Passed(nanos = 40_000_000),
@@ -72,15 +72,15 @@ class AddressProberTest {
         session.saveAnswer(API, listOf(ip(1)))
         prober.probeIfStale(API)
         executor.runAll()
-        connect.connects.clear()
+        tcpProbe.runs.clear()
         prober.probeIfStale(API)
         val nothingNew = executor.queued
         now += INTERVAL - 1
         session.saveAnswer(API, listOf(ip(1), ip(3)))
         prober.probeIfStale(API)
         executor.runAll()
-        val newAddressOnly = connect.connects.map { it.first }
-        connect.connects.clear()
+        val newAddressOnly = tcpProbe.runs.map { it.first }
+        tcpProbe.runs.clear()
         now += 1
 
         prober.probeIfStale(API)
@@ -88,7 +88,7 @@ class AddressProberTest {
 
         assertEquals(0, nothingNew)
         assertEquals(listOf(ip(3)), newAddressOnly)
-        assertEquals(setOf(ip(1), ip(3), ip(7)), connect.connects.map { it.first }.toSet())
+        assertEquals(setOf(ip(1), ip(3), ip(7)), tcpProbe.runs.map { it.first }.toSet())
     }
 
     @Test
@@ -117,7 +117,7 @@ class AddressProberTest {
 
     @Test
     fun `with network change probes off the first network is probed, others are not`() {
-        val prober = AddressProber(sessions, tasks, probeOnNetworkChange = false)
+        val prober = TcpProber(sessions, tasks, probeOnNetworkChange = false)
         session.saveAnswer(API, listOf(ip(1)))
         prober.probeIfStale(API)
         val onFirstNetwork = executor.queued
@@ -141,7 +141,7 @@ class AddressProberTest {
 
         assertEquals(
             setOf(ip(1), ip(7), ip(4), ip(5)),
-            connect.connects.map { it.first }.toSet()
+            tcpProbe.runs.map { it.first }.toSet()
         )
     }
 

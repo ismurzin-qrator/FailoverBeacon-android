@@ -1,6 +1,7 @@
 package net.qrator.failoverbeacon.failover.fakes
 
 import java.net.InetAddress
+import net.qrator.failoverbeacon.failover.model.BodyProbeConfig
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.model.HostState
 import net.qrator.failoverbeacon.failover.model.LayerResult
@@ -14,5 +15,6 @@ internal fun hostConfig(
     host: String,
     additional: List<InetAddress> = emptyList(),
     port: Int = 443,
-    probeConnections: Boolean = true
-) = FailoverHostConfig(host, port, additional, probeConnections)
+    tcpProbe: Boolean = true,
+    bodyProbe: BodyProbeConfig? = null
+) = FailoverHostConfig(host, port, additional, tcpProbe, bodyProbe)

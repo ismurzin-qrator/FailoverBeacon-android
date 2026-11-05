@@ -5,9 +5,9 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import net.qrator.failoverbeacon.failover.model.LayerResult
 
-internal class FakeConnect {
+internal class FakeTcpProbe {
     private val results = ConcurrentHashMap<InetAddress, () -> LayerResult>()
-    val connects = CopyOnWriteArrayList<Pair<InetAddress, Int>>()
+    val runs = CopyOnWriteArrayList<Pair<InetAddress, Int>>()
 
     fun answer(address: InetAddress, result: LayerResult) {
         results[address] = { result }
@@ -17,8 +17,8 @@ internal class FakeConnect {
         results[address] = { throw failure }
     }
 
-    fun connect(address: InetAddress, port: Int): LayerResult {
-        connects += address to port
+    fun run(address: InetAddress, port: Int): LayerResult {
+        runs += address to port
         return results[address]?.invoke() ?: LayerResult.Failed
     }
 }

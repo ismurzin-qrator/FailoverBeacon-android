@@ -66,7 +66,7 @@ class FailoverEndToEndTest {
                     FailoverHost(
                         UNPROBED,
                         additionalAddresses = listOf(FIRST_ADDRESS, SECOND_ADDRESS),
-                        probeConnections = false
+                        tcpProbe = false
                     )
                 )
             )

@@ -40,7 +40,7 @@ class TrafficFeedbackTest {
 
     @Test
     fun `a failed connect is saved and moves the address last`() {
-        session.saveProbe(API, ip(1), probed)
+        session.saveTcpProbe(API, ip(1), probed)
 
         feedback.save(exchange(attempt(ip(1), failed(ExchangeStep.TLS))))
 
