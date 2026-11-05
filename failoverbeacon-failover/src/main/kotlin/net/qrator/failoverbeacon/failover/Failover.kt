@@ -79,6 +79,7 @@ class Failover(
         sessions.switchTo(usableNetwork)
         if (usableNetwork != null) {
             tcpProber.probeStaleHosts()
+            bodyProber.probeStaleHosts()
             resolver.preresolve()
         }
     }
