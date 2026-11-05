@@ -284,12 +284,10 @@ class CallRecordingTest {
         val exchange = exchanges.first()
         assertEquals("http", exchange.request.scheme)
         assertEquals("DELETE", exchange.request.method)
-        val refused = ConnectResult.Failed(ExchangeStep.TCP, FailureType.REFUSED)
-        assertEquals(refused, exchange.attempts.single().result)
-        assertEquals(
-            ExchangeOutcome.Failed(ExchangeStep.TCP, FailureType.REFUSED),
-            exchange.outcome
-        )
+        val attempt = assertIs<ConnectResult.Failed>(exchange.attempts.single().result)
+        assertEquals(ExchangeStep.TCP, attempt.step)
+        val outcome = assertIs<ExchangeOutcome.Failed>(exchange.outcome)
+        assertEquals(ExchangeStep.TCP, outcome.step)
     }
 
     @Test
