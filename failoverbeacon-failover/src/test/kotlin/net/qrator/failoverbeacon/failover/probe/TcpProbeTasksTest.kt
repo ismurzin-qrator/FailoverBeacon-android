@@ -7,10 +7,11 @@ import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.tcpResults
+import net.qrator.failoverbeacon.failover.model.HostState
 import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
-import net.qrator.failoverbeacon.failover.network.HostStates
 import net.qrator.failoverbeacon.failover.network.NetworkSession
+import net.qrator.failoverbeacon.failover.network.NetworkState
 
 class TcpProbeTasksTest {
     private val tcpProbe = FakeTcpProbe()
@@ -20,7 +21,7 @@ class TcpProbeTasksTest {
     private val config = hostConfig(API, listOf(ip(1)), port = PORT)
     private val session = NetworkSession(
         isFirstNetwork = true,
-        hostStates = HostStates(listOf(config)),
+        state = NetworkState(listOf(HostState(config))),
         timer = RefreshTimer({ 0L }, 100),
         networkHandle = 1L
     )

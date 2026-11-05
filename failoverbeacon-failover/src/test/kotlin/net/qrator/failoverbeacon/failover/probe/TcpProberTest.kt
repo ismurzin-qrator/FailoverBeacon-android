@@ -12,6 +12,7 @@ import net.qrator.failoverbeacon.failover.fakes.network
 import net.qrator.failoverbeacon.failover.fakes.tcpResults
 import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
 class TcpProberTest {
@@ -19,13 +20,17 @@ class TcpProberTest {
     private val executor = ManualExecutor()
     private var now = 0L
     private val sessions = NetworkSessions(
-        listOf(
-            hostConfig(API, listOf(ip(7)), port = PORT),
-            hostConfig(SPARE, listOf(ip(4), ip(5)), port = PORT),
-            hostConfig(NO_PROBES, port = PORT, tcpProbe = false)
+        KnownNetworks(
+            listOf(
+                hostConfig(API, listOf(ip(7)), port = PORT),
+                hostConfig(SPARE, listOf(ip(4), ip(5)), port = PORT),
+                hostConfig(NO_PROBES, port = PORT, tcpProbe = false)
+            ),
+            maxNetworks = 8
         ),
-        RefreshTimer({ now }, INTERVAL),
-        maxNetworks = 8
+        RefreshTimer({
+            now
+        }, INTERVAL)
     ).apply { switchTo(network(1, key = WIFI)) }
     private val tasks = TcpProbeTasks(tcpProbe::run, executor, onResult = {})
     private val prober = TcpProber(sessions, tasks, probeOnNetworkChange = true)

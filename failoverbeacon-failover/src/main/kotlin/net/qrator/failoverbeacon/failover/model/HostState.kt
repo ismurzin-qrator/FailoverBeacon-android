@@ -6,7 +6,7 @@ import java.net.InetAddress
 internal class HostState private constructor(
     val config: FailoverHostConfig,
     val dns: DnsState,
-    private val tcpProbeRoundAtNanos: Long?,
+    private val tcpProbeRoundAtMillis: Long?,
     val addresses: List<HostAddress>
 ) {
     constructor(config: FailoverHostConfig) : this(
@@ -17,7 +17,7 @@ internal class HostState private constructor(
     )
 
     fun isTcpProbeStale(timer: RefreshTimer): Boolean =
-        tcpProbeRoundAtNanos == null || timer.isExpired(tcpProbeRoundAtNanos)
+        tcpProbeRoundAtMillis == null || timer.isExpired(tcpProbeRoundAtMillis)
 
     // The leader, once TCP results are in.
     fun addressToBodyProbe(timer: RefreshTimer): InetAddress? {
@@ -31,38 +31,38 @@ internal class HostState private constructor(
         return leader.address.takeIf { isDue }
     }
 
-    fun withDns(dns: DnsState): HostState {
+    fun withDns(dns: DnsState, known: List<HostAddress> = addresses): HostState {
         val updatedAddresses = (dns.addresses + config.additionalAddresses).distinct()
         val updated = updatedAddresses.map { address ->
-            addresses.find { it.address == address } ?: HostAddress(address)
+            known.find { it.address == address } ?: HostAddress(address)
         }
         val updatedAddressesRanked = AddressRanking.rank(updated)
-        return HostState(config, dns, tcpProbeRoundAtNanos, updatedAddressesRanked)
+        return HostState(config, dns, tcpProbeRoundAtMillis, updatedAddressesRanked)
     }
 
-    fun withTcpProbeRound(atNanos: Long): HostState = HostState(config, dns, atNanos, addresses)
+    fun withTcpProbeRound(atMillis: Long): HostState = HostState(config, dns, atMillis, addresses)
 
     fun withTcpProbe(address: InetAddress, result: LayerResult): HostState {
         val updated = addresses.map { if (it.address == address) it.copy(tcp = result) else it }
-        return HostState(config, dns, tcpProbeRoundAtNanos, AddressRanking.rank(updated))
+        return HostState(config, dns, tcpProbeRoundAtMillis, AddressRanking.rank(updated))
     }
 
     fun withConnectOutcome(peerAddress: String, outcome: ConnectOutcome): HostState {
         val updated = addresses.map {
             if (it.address.hostAddress == peerAddress) it.withConnectOutcome(outcome) else it
         }
-        return HostState(config, dns, tcpProbeRoundAtNanos, AddressRanking.rank(updated))
+        return HostState(config, dns, tcpProbeRoundAtMillis, AddressRanking.rank(updated))
     }
 
     fun withBodyProbeOutcome(
         address: InetAddress,
         outcome: BodyProbeOutcome,
-        atNanos: Long
+        atMillis: Long
     ): HostState {
         val updated = addresses.map {
-            if (it.address == address) it.withBodyProbeOutcome(outcome, atNanos) else it
+            if (it.address == address) it.withBodyProbeOutcome(outcome, atMillis) else it
         }
-        return HostState(config, dns, tcpProbeRoundAtNanos, AddressRanking.rank(updated))
+        return HostState(config, dns, tcpProbeRoundAtMillis, AddressRanking.rank(updated))
     }
 
     private companion object {

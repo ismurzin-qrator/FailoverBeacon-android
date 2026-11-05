@@ -14,9 +14,10 @@ import net.qrator.failoverbeacon.failover.model.RefreshTimer
 
 class NetworkSessionsTest {
     private val sessions = NetworkSessions(
-        listOf(hostConfig(API, listOf(ip(7)))),
-        RefreshTimer({ 10L }, intervalNanos = 50),
-        maxNetworks = 2
+        KnownNetworks(listOf(hostConfig(API, listOf(ip(7)))), maxNetworks = 2),
+        RefreshTimer({
+            10L
+        }, intervalMillis = 50)
     ).apply { switchTo(network(1, key = WIFI)) }
 
     private val session get() = assertNotNull(sessions.current)
@@ -34,6 +35,18 @@ class NetworkSessionsTest {
         assertEquals(listOf(ip(7)), onCellular)
         assertTrue(roundOnCellular)
         assertEquals(listOf(ip(1), ip(7)), session[API]?.ips)
+    }
+
+    @Test
+    fun `the last applied network is kept for starting the session again`() {
+        val wifi = network(4, key = WIFI)
+
+        sessions.switchTo(wifi)
+        val onWifi = sessions.network
+        sessions.switchTo(null)
+
+        assertEquals(wifi, onWifi)
+        assertNull(sessions.network)
     }
 
     @Test
@@ -74,7 +87,13 @@ class NetworkSessionsTest {
         sessions.switchTo(network(2, key = WIFI))
         val onReconnect = session.isFirstNetwork
         sessions.switchTo(network(1, key = WIFI))
-        val startedWithout = NetworkSessions(emptyList(), RefreshTimer({ 0L }, 50), maxNetworks = 2)
+        val startedWithout =
+            NetworkSessions(
+                KnownNetworks(emptyList(), maxNetworks = 2),
+                RefreshTimer({
+                    0L
+                }, 50)
+            )
 
         startedWithout.switchTo(null)
         startedWithout.switchTo(network(5, key = WIFI))

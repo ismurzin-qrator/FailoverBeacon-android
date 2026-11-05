@@ -14,6 +14,7 @@ import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import net.qrator.failoverbeacon.failover.network.NetworkSession
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
@@ -24,12 +25,14 @@ class BodyProberTest {
     private val runs = mutableListOf<Pair<InetAddress, String>>()
     private var onRun: () -> Unit = {}
     private val sessions = NetworkSessions(
-        listOf(
-            hostConfig(API, bodyProbe = BodyProbeConfig("/probe.bin", 1_024)),
-            hostConfig(NO_BODY_PROBE)
+        KnownNetworks(
+            listOf(
+                hostConfig(API, bodyProbe = BodyProbeConfig("/probe.bin", 1_024)),
+                hostConfig(NO_BODY_PROBE)
+            ),
+            maxNetworks = 8
         ),
-        timer,
-        maxNetworks = 8
+        timer
     ).apply { switchTo(network(1)) }
     private val prober = BodyProber(sessions, ::run, timer, executor, true)
 

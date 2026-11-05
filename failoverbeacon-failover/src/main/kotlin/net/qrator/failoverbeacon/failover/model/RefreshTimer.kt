@@ -1,9 +1,9 @@
 package net.qrator.failoverbeacon.failover.model
 
-import net.qrator.failoverbeacon.core.time.MonotonicClock
+import net.qrator.failoverbeacon.core.time.EpochClock
 
-internal class RefreshTimer(private val clock: MonotonicClock, private val intervalNanos: Long) {
-    fun now(): Long = clock.nanoTime()
+internal class RefreshTimer(private val clock: EpochClock, private val intervalMillis: Long) {
+    fun now(): Long = clock.nowMillis()
 
-    fun isExpired(atNanos: Long): Boolean = now() - atNanos >= intervalNanos
+    fun isExpired(atMillis: Long): Boolean = now() - atMillis >= intervalMillis
 }

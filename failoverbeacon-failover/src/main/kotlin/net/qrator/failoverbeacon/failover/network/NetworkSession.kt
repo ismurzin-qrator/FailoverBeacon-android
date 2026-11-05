@@ -9,7 +9,7 @@ import net.qrator.failoverbeacon.failover.model.RefreshTimer
 
 internal class NetworkSession(
     val isFirstNetwork: Boolean,
-    private val hostStates: HostStates,
+    private val state: NetworkState,
     private val timer: RefreshTimer,
     val networkHandle: Long
 ) {
@@ -17,9 +17,9 @@ internal class NetworkSession(
     var isActive: Boolean = true
         private set
 
-    val states: List<HostState> get() = hostStates.all
+    val states: List<HostState> get() = state.hosts
 
-    operator fun get(host: String): HostState? = hostStates[host]
+    operator fun get(host: String): HostState? = state[host]
 
     fun saveAnswer(host: String, addresses: List<InetAddress>) = updateIfActive(host) { state ->
         state.withDns(state.dns.withAnswer(addresses, timer.now()))
@@ -39,8 +39,8 @@ internal class NetworkSession(
         host: String,
         address: InetAddress,
         outcome: BodyProbeOutcome,
-        atNanos: Long
-    ) = updateIfActive(host) { state -> state.withBodyProbeOutcome(address, outcome, atNanos) }
+        atMillis: Long
+    ) = updateIfActive(host) { state -> state.withBodyProbeOutcome(address, outcome, atMillis) }
 
     fun startTcpProbeRoundIfStale(host: String): Boolean {
         var isStarted = false
@@ -56,6 +56,6 @@ internal class NetworkSession(
     }
 
     private fun updateIfActive(host: String, change: (HostState) -> HostState) {
-        if (isActive) hostStates.update(host, change)
+        if (isActive) state.update(host, change)
     }
 }

@@ -19,6 +19,7 @@ import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.network
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 import net.qrator.failoverbeacon.failover.probe.TcpProbeTasks
 import net.qrator.failoverbeacon.failover.probe.TcpProber
@@ -144,7 +145,7 @@ class FailoverDnsTest {
     ): FailoverDns {
         val hosts = listOf(hostConfig(API, additional)) + otherHosts.map { hostConfig(it) }
         val timer = RefreshTimer({ now }, INTERVAL)
-        sessions = NetworkSessions(hosts, timer, maxNetworks = 8)
+        sessions = NetworkSessions(KnownNetworks(hosts, maxNetworks = 8), timer)
         sessions.switchTo(network(1))
         resolved?.let { session.saveAnswer(API, it) }
         val tcpProber =

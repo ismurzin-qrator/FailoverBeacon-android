@@ -51,7 +51,7 @@ class HostStateTest {
     fun `a failed resolution keeps the addresses and their results`() {
         val probed = state.answered(ip(1)).withTcpProbe(ip(1), connected)
 
-        val failed = probed.withDns(probed.dns.withFailure(atNanos = 10))
+        val failed = probed.withDns(probed.dns.withFailure(atMillis = 10))
 
         assertEquals(probed.tcpResults, failed.tcpResults)
     }
@@ -83,7 +83,7 @@ class HostStateTest {
 
     @Test
     fun `a probe round is stale after the interval and answers and probes keep its time`() {
-        val started = state.answered(ip(1)).withTcpProbeRound(atNanos = 10)
+        val started = state.answered(ip(1)).withTcpProbeRound(atMillis = 10)
         val updated = started.answered(ip(1), ip(2)).withTcpProbe(ip(2), LayerResult.Failed)
         now = 9 + INTERVAL
         val beforeInterval = updated.isTcpProbeStale(timer)
@@ -120,7 +120,7 @@ class HostStateTest {
     @Test
     fun `a passed leader is probed again only after the interval`() {
         val probed = probedState(ip(1), ip(2))
-            .withBodyProbeOutcome(ip(1), BodyProbeOutcome.PASSED, atNanos = 10)
+            .withBodyProbeOutcome(ip(1), BodyProbeOutcome.PASSED, atMillis = 10)
 
         now = 9 + INTERVAL
         assertNull(probed.addressToBodyProbe(timer))
@@ -131,9 +131,9 @@ class HostStateTest {
     @Test
     fun `a failed leader gives way to the next until the limit of fresh body probes`() {
         val first = probedState(ip(1), ip(2), ip(3), ip(4))
-            .withBodyProbeOutcome(ip(1), BodyProbeOutcome.BODY_FAILED, atNanos = 0)
-        val second = first.withBodyProbeOutcome(ip(2), BodyProbeOutcome.TLS_FAILED, atNanos = 0)
-        val third = second.withBodyProbeOutcome(ip(3), BodyProbeOutcome.BODY_FAILED, atNanos = 0)
+            .withBodyProbeOutcome(ip(1), BodyProbeOutcome.BODY_FAILED, atMillis = 0)
+        val second = first.withBodyProbeOutcome(ip(2), BodyProbeOutcome.TLS_FAILED, atMillis = 0)
+        val third = second.withBodyProbeOutcome(ip(3), BodyProbeOutcome.BODY_FAILED, atMillis = 0)
 
         assertEquals(ip(2), first.addressToBodyProbe(timer))
         assertEquals(ip(3), second.addressToBodyProbe(timer))
@@ -150,7 +150,7 @@ class HostStateTest {
     }
 
     private fun HostState.answered(vararg addresses: InetAddress): HostState =
-        withDns(dns.withAnswer(addresses.toList(), atNanos = 0))
+        withDns(dns.withAnswer(addresses.toList(), atMillis = 0))
 
     private companion object {
         const val INTERVAL = 50L

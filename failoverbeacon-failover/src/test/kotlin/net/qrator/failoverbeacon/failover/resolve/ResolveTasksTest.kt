@@ -10,9 +10,10 @@ import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.ips
+import net.qrator.failoverbeacon.failover.model.HostState
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
-import net.qrator.failoverbeacon.failover.network.HostStates
 import net.qrator.failoverbeacon.failover.network.NetworkSession
+import net.qrator.failoverbeacon.failover.network.NetworkState
 
 class ResolveTasksTest {
     private val resolver = FakeDns()
@@ -113,7 +114,7 @@ class ResolveTasksTest {
 
     private fun session() = NetworkSession(
         isFirstNetwork = true,
-        hostStates = HostStates(listOf(hostConfig(API), hostConfig(OTHER))),
+        state = NetworkState(listOf(HostState(hostConfig(API)), HostState(hostConfig(OTHER)))),
         timer = timer,
         networkHandle = 1L
     )

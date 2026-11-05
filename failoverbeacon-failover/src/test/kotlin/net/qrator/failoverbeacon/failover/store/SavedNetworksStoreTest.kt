@@ -16,9 +16,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
-class HostStateStoreTest {
+class SavedNetworksStoreTest {
     private val dir = createTempDirectory().toFile()
-    private val store = HostStateStore { dir }
+    private val store = SavedNetworksStore { dir }
     private val file = File(dir, "failoverbeacon-failover.json")
 
     private val networks = listOf(
@@ -72,7 +72,7 @@ class HostStateStoreTest {
     fun `read returns what was written`() {
         store.write(networks)
 
-        assertEquals(networks, HostStateStore { dir }.read())
+        assertEquals(networks, SavedNetworksStore { dir }.read())
     }
 
     @Test
@@ -91,6 +91,77 @@ class HostStateStoreTest {
         store.write(networks.take(1))
 
         assertEquals(networks.take(1), store.read())
+    }
+
+    @Test
+    fun `the same content is not written again`() {
+        store.write(networks)
+        file.delete()
+
+        store.write(networks)
+
+        assertFalse(file.exists())
+    }
+
+    @Test
+    fun `the content that was read is not written again`() {
+        store.write(networks)
+        val restarted = SavedNetworksStore { dir }
+        restarted.read()
+        file.delete()
+
+        restarted.write(networks)
+
+        assertFalse(file.exists())
+    }
+
+    @Test
+    fun `nothing to write leaves no file`() {
+        store.write(emptyList())
+
+        assertFalse(file.exists())
+    }
+
+    @Test
+    fun `an empty state replaces a saved one`() {
+        store.write(networks)
+
+        store.write(emptyList())
+
+        assertEquals(emptyList(), SavedNetworksStore { dir }.read())
+    }
+
+    @Test
+    fun `the same content is written again after clear`() {
+        store.write(networks)
+        store.clear()
+
+        store.write(networks)
+
+        assertEquals(networks, store.read())
+    }
+
+    @Test
+    fun `a damaged file is replaced by the next write`() {
+        file.writeText("garbage")
+        store.read()
+
+        store.write(networks)
+
+        assertEquals(networks, SavedNetworksStore { dir }.read())
+    }
+
+    @Test
+    fun `a failed write is tried again`() {
+        val notDir = File(dir, "blocked").apply { writeText("") }
+        val blocked = SavedNetworksStore { notDir }
+        blocked.write(networks)
+        notDir.delete()
+        notDir.mkdir()
+
+        blocked.write(networks)
+
+        assertEquals(networks, blocked.read())
     }
 
     @Test
@@ -130,7 +201,7 @@ class HostStateStoreTest {
     fun `failed write does not throw`() {
         val notDir = File(dir, "file").apply { writeText("") }
 
-        val blocked = HostStateStore { notDir }
+        val blocked = SavedNetworksStore { notDir }
         blocked.write(networks)
 
         assertEquals(emptyList(), blocked.read())

@@ -1,9 +1,9 @@
 package net.qrator.failoverbeacon.failover.model
 
 internal sealed interface ResolveAttempt {
-    val atNanos: Long
+    val atMillis: Long
 
-    data class Answered(override val atNanos: Long) : ResolveAttempt
+    data class Answered(override val atMillis: Long) : ResolveAttempt
 
-    data class Failed(override val atNanos: Long) : ResolveAttempt
+    data class Failed(override val atMillis: Long) : ResolveAttempt
 }

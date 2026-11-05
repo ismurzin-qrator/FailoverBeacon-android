@@ -7,13 +7,13 @@ internal data class HostAddress(
     val tcp: LayerResult = LayerResult.Unknown,
     val tls: LayerResult = LayerResult.Unknown,
     val body: LayerResult = LayerResult.Unknown,
-    val bodyProbedAtNanos: Long? = null
+    val bodyProbedAtMillis: Long? = null
 ) {
     val hasFailure: Boolean
         get() = tcp == LayerResult.Failed || tls == LayerResult.Failed || body == LayerResult.Failed
 
     fun isBodyProbeStale(timer: RefreshTimer): Boolean =
-        bodyProbedAtNanos == null || timer.isExpired(bodyProbedAtNanos)
+        bodyProbedAtMillis == null || timer.isExpired(bodyProbedAtMillis)
 
     fun withConnectOutcome(outcome: ConnectOutcome): HostAddress = when (outcome) {
         ConnectOutcome.CONNECTED_PLAIN -> withTcpPassed()
@@ -27,7 +27,7 @@ internal data class HostAddress(
         ConnectOutcome.TLS_FAILED -> withTcpPassed().copy(tls = LayerResult.Failed)
     }
 
-    fun withBodyProbeOutcome(outcome: BodyProbeOutcome, atNanos: Long): HostAddress {
+    fun withBodyProbeOutcome(outcome: BodyProbeOutcome, atMillis: Long): HostAddress {
         val passed = LayerResult.Passed(nanos = null)
         val updated = when (outcome) {
             BodyProbeOutcome.PASSED -> withTcpPassed().copy(tls = passed, body = passed)
@@ -41,7 +41,7 @@ internal data class HostAddress(
                 body = LayerResult.Failed
             )
         }
-        return updated.copy(bodyProbedAtNanos = atNanos)
+        return updated.copy(bodyProbedAtMillis = atMillis)
     }
 
     private fun withTcpPassed(): HostAddress =

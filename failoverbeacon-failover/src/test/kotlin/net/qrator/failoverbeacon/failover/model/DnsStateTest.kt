@@ -9,7 +9,7 @@ import net.qrator.failoverbeacon.failover.fakes.ip
 class DnsStateTest {
     private var now = 10L
     private val timer = RefreshTimer({ now }, INTERVAL)
-    private val answered = DnsState().withAnswer(listOf(ip(1)), atNanos = 10)
+    private val answered = DnsState().withAnswer(listOf(ip(1)), atMillis = 10)
 
     @Test
     fun `an empty state has no answer, needs one and is stale`() {
@@ -19,6 +19,11 @@ class DnsStateTest {
         assertFalse(state.isFresh(timer))
         assertTrue(state.isAnswerNeeded(timer))
         assertTrue(state.isStale(timer))
+    }
+
+    @Test
+    fun `a failure keeps the time of the last answer`() {
+        assertEquals(10, answered.withFailure(atMillis = 20).answeredAtMillis)
     }
 
     @Test
@@ -40,7 +45,7 @@ class DnsStateTest {
 
     @Test
     fun `after a failure nothing waits for an answer and it is stale after the interval`() {
-        val failed = answered.withFailure(atNanos = 200)
+        val failed = answered.withFailure(atMillis = 200)
         now = 199 + INTERVAL
         val beforeInterval = failed.isStale(timer)
         now = 200 + INTERVAL
@@ -54,7 +59,9 @@ class DnsStateTest {
 
     @Test
     fun `an answer ends the failure`() {
-        val recovered = answered.withFailure(atNanos = 200).withAnswer(listOf(ip(1)), atNanos = 300)
+        val recovered = answered.withFailure(
+            atMillis = 200
+        ).withAnswer(listOf(ip(1)), atMillis = 300)
         now = 300 + INTERVAL
 
         assertTrue(recovered.isAnswerNeeded(timer))

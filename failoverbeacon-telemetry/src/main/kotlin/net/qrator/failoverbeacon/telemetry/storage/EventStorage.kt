@@ -3,11 +3,11 @@ package net.qrator.failoverbeacon.telemetry.storage
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
-import java.security.MessageDigest
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.core.logging.warn
 import net.qrator.failoverbeacon.core.time.EpochClock
+import net.qrator.failoverbeacon.core.util.sha256Hex
 import net.qrator.failoverbeacon.telemetry.DropReason
 import net.qrator.failoverbeacon.telemetry.DroppedEvents
 
@@ -175,12 +175,7 @@ internal class EventStorage(
         const val MAX_AGE_MILLIS = 18 * 60 * 60 * 1000L
         const val CLOCK_TOLERANCE_MILLIS = 10 * 60 * 1000L
         const val DIR_NAME_LENGTH = 16
-        const val BYTE_MASK = 0xff
-        const val HEX = 16
 
-        fun dirName(beacon: String): String = MessageDigest.getInstance("SHA-256")
-            .digest(beacon.toByteArray(Charsets.UTF_8))
-            .joinToString("") { (it.toInt() and BYTE_MASK).toString(HEX).padStart(2, '0') }
-            .take(DIR_NAME_LENGTH)
+        fun dirName(beacon: String): String = sha256Hex(beacon).take(DIR_NAME_LENGTH)
     }
 }

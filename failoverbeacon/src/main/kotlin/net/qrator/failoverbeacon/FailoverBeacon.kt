@@ -75,7 +75,10 @@ public object FailoverBeacon {
         instance.applyConsent(toTrackingConsent(consent))
     }
 
-    /** Deletes stored events without changing consent. Ignored while the SDK is not running. */
+    /**
+     * Deletes stored events and saved failover state without changing consent. Ignored while the
+     * SDK is not running.
+     */
     @JvmStatic
     public fun clearAllData() {
         val instance = SdkRegistry.instance
@@ -88,8 +91,8 @@ public object FailoverBeacon {
 
     /**
      * Stops the SDK until the next [initialize]: calls are no longer recorded and the SDK stops
-     * watching the network and the app's activities. Stored events are kept. Ignored while the
-     * SDK is not running.
+     * watching the network and the app's activities. Stored data is kept. Ignored while the SDK
+     * is not running.
      */
     @JvmStatic
     public fun stop() {

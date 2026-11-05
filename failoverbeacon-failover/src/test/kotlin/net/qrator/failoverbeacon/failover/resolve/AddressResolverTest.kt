@@ -17,6 +17,7 @@ import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.ips
 import net.qrator.failoverbeacon.failover.fakes.network
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
 class AddressResolverTest {
@@ -25,10 +26,11 @@ class AddressResolverTest {
     private val executor = ManualExecutor()
     private val timer = RefreshTimer({ now }, INTERVAL)
     private val sessions = NetworkSessions(
-        listOf(hostConfig(API), hostConfig(OTHER)),
-        timer,
-        maxNetworks = 8
-    ).apply { switchTo(network(1)) }
+        KnownNetworks(listOf(hostConfig(API), hostConfig(OTHER)), maxNetworks = 8),
+        timer
+    ).apply {
+        switchTo(network(1))
+    }
     private val resolver = newResolver()
     private val onlyAnsweredHosts = newResolver(preresolveOnNetworkChange = false)
 

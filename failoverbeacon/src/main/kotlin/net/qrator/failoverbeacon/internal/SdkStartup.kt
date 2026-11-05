@@ -2,7 +2,6 @@ package net.qrator.failoverbeacon.internal
 
 import android.app.Application
 import android.content.Context
-import java.util.concurrent.TimeUnit
 import net.qrator.failoverbeacon.FailoverBeaconConfig
 import net.qrator.failoverbeacon.core.SdkInstance
 import net.qrator.failoverbeacon.core.SdkRegistry
@@ -14,7 +13,6 @@ import net.qrator.failoverbeacon.failover.FailoverSettings
 import net.qrator.failoverbeacon.internal.app.ForegroundMonitor
 import net.qrator.failoverbeacon.internal.mapper.FailoverHostMapper
 import net.qrator.failoverbeacon.internal.network.NetworkMonitor
-import net.qrator.failoverbeacon.internal.time.ElapsedRealtimeClock
 import net.qrator.failoverbeacon.internal.time.ElapsedRealtimeEpochClock
 import net.qrator.failoverbeacon.internal.time.NanoTimeClock
 import net.qrator.failoverbeacon.telemetry.Telemetry
@@ -34,7 +32,6 @@ internal object SdkStartup {
             appContext = appContext,
             consent = consent,
             clock = NanoTimeClock,
-            elapsedRealtimeClock = ElapsedRealtimeClock,
             epochClock = ElapsedRealtimeEpochClock(),
             exchangeBus = ExchangeBus(),
             networkSource = networkMonitor,
@@ -58,13 +55,13 @@ internal object SdkStartup {
             settings = FailoverSettings(
                 preresolveOnNetworkChange = config.options.preresolveOnNetworkChange,
                 probeOnNetworkChange = config.options.probeOnNetworkChange,
-                refreshIntervalNanos =
-                    TimeUnit.MILLISECONDS.toNanos(config.options.refreshIntervalMillis)
+                refreshIntervalMillis = config.options.refreshIntervalMillis
             )
         )
         failover.subscribe()
         if (!SdkRegistry.install(sdk)) return false
         try {
+            failover.start()
             networkMonitor.register(sdk::publishNetwork)
             foregroundMonitor?.register()
             telemetry.start()

@@ -80,6 +80,7 @@ class FailoverEndToEndTest {
             setLinkProperties(active, LinkProperties())
         }
         FailoverBeacon.initialize(app, config)
+        assertNotNull(SdkRegistry.instance).threads.storage.submit {}.get(5, TimeUnit.SECONDS)
     }
 
     @AfterTest
@@ -260,6 +261,7 @@ class FailoverEndToEndTest {
     @Test
     fun `without a network a configured host gets the app's DNS error`() {
         shadowOf(connectivity).networkCallbacks.single().onLost(active)
+        assertNotNull(SdkRegistry.instance).threads.storage.submit {}.get(5, TimeUnit.SECONDS)
 
         assertFailsWith<UnknownHostException> { execute(API) }
     }

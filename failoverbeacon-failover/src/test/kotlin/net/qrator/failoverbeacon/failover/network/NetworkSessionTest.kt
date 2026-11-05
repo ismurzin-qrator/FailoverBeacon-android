@@ -11,6 +11,7 @@ import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.model.ConnectOutcome
 import net.qrator.failoverbeacon.failover.model.HostAddress
+import net.qrator.failoverbeacon.failover.model.HostState
 import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
 
@@ -19,7 +20,7 @@ class NetworkSessionTest {
     private val timer = RefreshTimer({ now }, INTERVAL)
     private val session = NetworkSession(
         isFirstNetwork = true,
-        hostStates = HostStates(listOf(hostConfig(API, listOf(ip(7))))),
+        state = NetworkState(listOf(HostState(hostConfig(API, listOf(ip(7)))))),
         timer = timer,
         networkHandle = 1L
     )
