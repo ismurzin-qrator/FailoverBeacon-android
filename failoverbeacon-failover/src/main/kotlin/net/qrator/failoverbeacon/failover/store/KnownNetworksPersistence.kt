@@ -23,18 +23,23 @@ internal class KnownNetworksPersistence(
 ) {
     private val store = SavedNetworksStore(cacheDir)
     private val mapper = SavedHostMapper(hostConfigs, clock, bodyProbeTimer)
+    private val hasHosts = hostConfigs.isNotEmpty()
     private val isSaveScheduled = AtomicBoolean()
 
     fun restore() = storage.execute {
-        networks.putAll(
-            store.read().associate { network ->
-                network.key to network.hosts.mapNotNull(mapper::toState)
-            }
-        )
+        if (hasHosts) {
+            networks.putAll(
+                store.read().associate { network ->
+                    network.key to network.hosts.mapNotNull(mapper::toState)
+                }
+            )
+        } else {
+            store.clear()
+        }
     }
 
     fun saveLater() {
-        if (isSaveScheduled.compareAndSet(false, true)) {
+        if (hasHosts && isSaveScheduled.compareAndSet(false, true)) {
             val save = Runnable { storage.execute(::save) }
             scheduler.schedule(save, SAVE_DELAY_MILLIS, TimeUnit.MILLISECONDS)
         }

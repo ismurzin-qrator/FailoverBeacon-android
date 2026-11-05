@@ -14,6 +14,7 @@ import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.ips
 import net.qrator.failoverbeacon.failover.model.ConnectOutcome
 import net.qrator.failoverbeacon.failover.model.DnsState
+import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
 import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import org.junit.runner.RunWith
@@ -30,10 +31,13 @@ class KnownNetworksPersistenceTest {
     private val persistence = newPersistence(networks)
     private val state get() = networks.of(WIFI)
 
-    private fun newPersistence(networks: KnownNetworks) = KnownNetworksPersistence(
+    private fun newPersistence(
+        networks: KnownNetworks,
+        hostConfigs: List<FailoverHostConfig> = configs
+    ) = KnownNetworksPersistence(
         cacheDir = { dir },
         networks = networks,
-        hostConfigs = configs,
+        hostConfigs = hostConfigs,
         clock = { 10L },
         bodyProbeTimer = RefreshTimer({ 10L }, intervalMillis = 50),
         storage = storage,
@@ -98,6 +102,21 @@ class KnownNetworksPersistenceTest {
         persistence.clear()
 
         assertEquals(2, storage.queued)
+    }
+
+    @Test
+    fun `without hosts a file of an earlier config is deleted and nothing is read or saved`() {
+        answer(1)
+        persistence.saveLater()
+        runSave()
+        val withoutHosts = newPersistence(KnownNetworks(emptyList(), maxNetworks = 2), emptyList())
+
+        withoutHosts.restore()
+        storage.runAll()
+        withoutHosts.saveLater()
+
+        assertFalse(file.exists())
+        assertEquals(0, scheduler.queued)
     }
 
     @Test

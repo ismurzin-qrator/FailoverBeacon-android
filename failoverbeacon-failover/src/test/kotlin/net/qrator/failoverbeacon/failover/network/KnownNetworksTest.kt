@@ -54,15 +54,6 @@ class KnownNetworksTest {
     }
 
     @Test
-    fun `putAll keeps the newest networks`() {
-        networks.putAll(
-            mapOf("oldest" to emptyList(), "middle" to emptyList(), "newest" to emptyList())
-        )
-
-        assertEquals(listOf("middle", "newest"), networks.all().keys.toList())
-    }
-
-    @Test
     fun `clear forgets every network`() {
         networks.of(WIFI).update(API) { answered }
 

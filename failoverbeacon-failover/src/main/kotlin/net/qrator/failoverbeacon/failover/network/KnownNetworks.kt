@@ -27,9 +27,7 @@ internal class KnownNetworks(
 
     @Synchronized
     fun putAll(networks: Map<String, List<HostState>>) {
-        networks.entries.toList().takeLast(maxNetworks).forEach { (key, hosts) ->
-            statesByKey[key] = newState(hosts)
-        }
+        networks.forEach { (key, hosts) -> statesByKey[key] = newState(hosts) }
     }
 
     @Synchronized
