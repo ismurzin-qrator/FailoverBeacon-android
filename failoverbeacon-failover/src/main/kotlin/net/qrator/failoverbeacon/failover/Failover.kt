@@ -102,6 +102,7 @@ class Failover(
     }
 
     override fun close() {
+        sessions.endCurrent()
         tcpProbe.close()
         bodyProbe.close()
         resolver.close()
