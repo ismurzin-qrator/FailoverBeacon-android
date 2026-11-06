@@ -14,7 +14,8 @@ public class FailoverBeaconOptions private constructor(
     internal val memoryQueueSize: Int,
     internal val preresolveOnNetworkChange: Boolean,
     internal val probeOnNetworkChange: Boolean,
-    internal val refreshIntervalMillis: Long
+    internal val refreshIntervalMillis: Long,
+    internal val fallbackWithoutEch: Boolean
 ) {
     /** Builds [FailoverBeaconOptions]. Every setter is optional. */
     public class Builder {
@@ -24,6 +25,7 @@ public class FailoverBeaconOptions private constructor(
         private var preresolveOnNetworkChange = true
         private var probeOnNetworkChange = true
         private var refreshIntervalMillis = DEFAULT_REFRESH_INTERVAL_MILLIS
+        private var fallbackWithoutEch = true
 
         /**
          * Sets how often stored events are uploaded, from 1 second to 8 hours. The default value
@@ -97,6 +99,16 @@ public class FailoverBeaconOptions private constructor(
             refreshIntervalMillis = millis
         }
 
+        /**
+         * Sets whether, on Android 17 and later with a client DNS that supports ECH, a new
+         * connection to a failover host uses the SDK addresses without an ECH key while the
+         * client's DNS has not answered for that host. When disabled, such calls fail as they would
+         * without the SDK, and the host name is not sent in clear text. The default value is true.
+         */
+        public fun fallbackWithoutEch(enabled: Boolean): Builder = apply {
+            fallbackWithoutEch = enabled
+        }
+
         /** Creates the options. */
         public fun build(): FailoverBeaconOptions = FailoverBeaconOptions(
             uploadPeriodMillis,
@@ -104,7 +116,8 @@ public class FailoverBeaconOptions private constructor(
             memoryQueueSize,
             preresolveOnNetworkChange,
             probeOnNetworkChange,
-            refreshIntervalMillis
+            refreshIntervalMillis,
+            fallbackWithoutEch
         )
 
         private companion object {

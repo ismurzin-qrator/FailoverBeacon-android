@@ -140,7 +140,13 @@ class FailoverDnsTest {
             true,
             waitMillis
         )
-        return FailoverDns(sessions, tcpProber, addressResolver, timer)
+        return FailoverDns(
+            sessions,
+            tcpProber,
+            addressResolver,
+            timer,
+            isFallbackWithoutEchAllowed = true
+        )
     }
 
     private companion object {

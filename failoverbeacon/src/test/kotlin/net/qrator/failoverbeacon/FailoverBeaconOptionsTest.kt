@@ -17,6 +17,7 @@ class FailoverBeaconOptionsTest {
         assertTrue(options.preresolveOnNetworkChange)
         assertTrue(options.probeOnNetworkChange)
         assertEquals(600_000L, options.refreshIntervalMillis)
+        assertTrue(options.fallbackWithoutEch)
     }
 
     @Test

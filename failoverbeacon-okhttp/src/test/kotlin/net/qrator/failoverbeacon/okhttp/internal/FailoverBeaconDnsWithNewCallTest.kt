@@ -67,6 +67,8 @@ class FailoverBeaconDnsWithNewCallTest {
     }
 
     private class ManagesApi : SdkDns {
+        override val isFallbackWithoutEchAllowed = true
+
         override fun manages(host: String) = host == API
 
         override fun lookup(host: String): List<InetAddress>? = null

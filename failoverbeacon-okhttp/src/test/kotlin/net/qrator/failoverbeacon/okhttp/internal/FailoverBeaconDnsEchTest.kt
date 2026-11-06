@@ -83,6 +83,22 @@ class FailoverBeaconDnsEchTest {
     }
 
     @Test
+    fun `without the fallback a host fails until the app's DNS answers and then keeps its key`() {
+        sdkDns.isFallbackWithoutEchAllowed = false
+        val dns = FailoverBeaconDnsWithNewCall(appDns)
+        appDns.isFailing = true
+        assertFailsWith<UnknownHostException> { records(dns) }
+
+        appDns.isFailing = false
+        val answered = records(dns)
+        appDns.isFailing = true
+        val afterFailure = records(dns)
+
+        assertEquals(listOf(ipRecord(SDK_IP), metadata()), answered)
+        assertEquals(listOf(ipRecord(SDK_IP), metadata()), afterFailure)
+    }
+
+    @Test
     fun `without SDK addresses the app's addresses come with the metadata`() {
         sdkDns.addresses = null
 
@@ -129,6 +145,7 @@ class FailoverBeaconDnsEchTest {
     private fun records(): List<Dns.Record> = records(FailoverBeaconDnsWithNewCall(appDns))
 
     private class SdkAddresses : SdkDns {
+        override var isFallbackWithoutEchAllowed = true
         var addresses: List<InetAddress>? = listOf(SDK_IP)
 
         override fun manages(host: String): Boolean = host == API

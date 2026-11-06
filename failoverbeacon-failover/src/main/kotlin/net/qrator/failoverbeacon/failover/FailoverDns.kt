@@ -11,7 +11,8 @@ internal class FailoverDns(
     private val sessions: NetworkSessions,
     private val tcpProber: TcpProber,
     private val resolver: AddressResolver,
-    private val timer: RefreshTimer
+    private val timer: RefreshTimer,
+    override val isFallbackWithoutEchAllowed: Boolean
 ) : SdkDns {
     override fun manages(host: String): Boolean = sessions.current?.get(host) != null
 

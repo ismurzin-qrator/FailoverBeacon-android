@@ -55,7 +55,8 @@ internal object SdkStartup {
             settings = FailoverSettings(
                 preresolveOnNetworkChange = config.options.preresolveOnNetworkChange,
                 probeOnNetworkChange = config.options.probeOnNetworkChange,
-                refreshIntervalMillis = config.options.refreshIntervalMillis
+                refreshIntervalMillis = config.options.refreshIntervalMillis,
+                fallbackWithoutEch = config.options.fallbackWithoutEch
             )
         )
         failover.subscribe()

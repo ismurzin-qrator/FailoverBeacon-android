@@ -182,7 +182,8 @@ class FailoverTest {
         val settings = FailoverSettings(
             preresolveOnNetworkChange = true,
             probeOnNetworkChange = true,
-            refreshIntervalMillis = refreshIntervalMillis
+            refreshIntervalMillis = refreshIntervalMillis,
+            fallbackWithoutEch = true
         )
         Failover(sdk, listOf(host), ::resolve, settings).apply {
             subscribe()

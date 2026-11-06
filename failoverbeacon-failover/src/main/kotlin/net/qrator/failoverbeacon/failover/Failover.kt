@@ -29,6 +29,7 @@ class Failover(
 ) : SdkFeature,
     ExchangeSubscriber {
     private val timer = RefreshTimer(sdk.epochClock, settings.refreshIntervalMillis)
+    private val fallbackWithoutEch = settings.fallbackWithoutEch
     private val bodyProbeTimer = RefreshTimer(sdk.epochClock, BODY_PROBE_INTERVAL_MILLIS)
     private val networks = KnownNetworks(hostConfigs, MAX_NETWORKS)
     private val sessions = NetworkSessions(networks, timer)
@@ -77,7 +78,7 @@ class Failover(
     )
 
     fun subscribe() {
-        sdk.dns = FailoverDns(sessions, tcpProber, resolver, timer)
+        sdk.dns = FailoverDns(sessions, tcpProber, resolver, timer, fallbackWithoutEch)
         sdk.exchangeBus.subscribe(this)
         sdk.addFeature(this)
     }

@@ -51,6 +51,8 @@ class FailoverBeaconDnsTest {
     }
 
     private class FakeSdkDns : SdkDns {
+        override val isFallbackWithoutEchAllowed = true
+
         var addresses: List<InetAddress>? = null
         var failure: Throwable? = null
 

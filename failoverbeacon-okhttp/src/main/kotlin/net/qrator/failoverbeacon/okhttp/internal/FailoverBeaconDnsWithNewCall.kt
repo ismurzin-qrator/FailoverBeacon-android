@@ -14,10 +14,13 @@ internal class FailoverBeaconDnsWithNewCall(delegate: Dns) : FailoverBeaconDns(d
     }
 
     override fun newCall(request: Dns.Request): Dns.Call {
-        val isManagedBySdk = SdkRegistry.instance?.dns?.manages(request.hostname) ?: false
+        val sdkDns = SdkRegistry.instance?.dns
         return when {
-            !isManagedBySdk -> delegate.newCall(request)
-            isEchSupported && delegateHasOwnNewCall -> EchDnsCall(request, this, serviceMetadata)
+            sdkDns == null || !sdkDns.manages(request.hostname) -> delegate.newCall(request)
+
+            isEchSupported && delegateHasOwnNewCall ->
+                EchDnsCall(request, this, serviceMetadata, sdkDns.isFallbackWithoutEchAllowed)
+
             else -> super.newCall(request)
         }
     }
