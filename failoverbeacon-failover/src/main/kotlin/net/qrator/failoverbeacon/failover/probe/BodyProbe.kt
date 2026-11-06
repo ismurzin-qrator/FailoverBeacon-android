@@ -61,13 +61,21 @@ internal class BodyProbe(
         false
     }
 
-    private fun handshake(socket: Socket, host: String, port: Int): SSLSocket? = try {
-        val tls = socketFactory().createSocket(socket, host, port, true) as SSLSocket
-        tls.startHandshake()
-        // SSLSocket does not compare the certificate with the host name.
-        tls.takeIf { hostnameVerifier.verify(host, it.session) }
-    } catch (_: IOException) {
-        null
+    private fun handshake(socket: Socket, host: String, port: Int): SSLSocket? {
+        val tls = try {
+            socketFactory().createSocket(socket, host, port, true) as SSLSocket
+        } catch (_: IOException) {
+            return null
+        }
+        val isVerified = try {
+            tls.startHandshake()
+            // SSLSocket does not compare the certificate with the host name.
+            hostnameVerifier.verify(host, tls.session)
+        } catch (_: IOException) {
+            false
+        }
+        if (!isVerified) runCatching(tls::close)
+        return tls.takeIf { isVerified }
     }
 
     private fun request(host: String, port: Int, path: String, maxBytes: Int): ByteArray {
