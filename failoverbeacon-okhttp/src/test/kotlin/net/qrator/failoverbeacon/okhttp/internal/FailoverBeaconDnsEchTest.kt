@@ -106,10 +106,15 @@ class FailoverBeaconDnsEchTest {
     }
 
     @Test
-    fun `the system DNS is not asked for metadata`() {
-        val call = FailoverBeaconDnsWithNewCall(Dns.SYSTEM).newCall(Dns.Request(API))
+    fun `a DNS that only implements lookup is not asked for metadata`() {
+        val lookupOnly = Dns { error("the app's DNS was called") }
 
-        assertFalse(call is EchDnsCall)
+        for (appDns in listOf(Dns.SYSTEM, lookupOnly)) {
+            val dns = FailoverBeaconDnsWithNewCall(appDns)
+
+            assertFalse(dns.newCall(Dns.Request(API)) is EchDnsCall)
+        }
+        assertEquals(listOf(SDK_IP), FailoverBeaconDnsWithNewCall(lookupOnly).lookup(API))
     }
 
     @Test
