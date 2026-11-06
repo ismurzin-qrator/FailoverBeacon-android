@@ -66,6 +66,16 @@ class BodyProbeTest {
     }
 
     @Test
+    fun `a complete response passes while the server keeps the connection open`() {
+        serve { socket ->
+            socket.send(response("HTTP/1.1 200 OK", body = 10))
+            release.await()
+        }
+
+        assertEquals(BodyProbeOutcome.PASSED, runProbe())
+    }
+
+    @Test
     fun `a response without a length passes when it ends`() {
         serve { socket -> socket.send("HTTP/1.1 200 OK\r\n\r\nbody".toByteArray()) }
 

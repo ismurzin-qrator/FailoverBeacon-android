@@ -95,7 +95,7 @@ internal class BodyProbe(
         var expectedBytes: Long? = null
         var total = 0
         var isEnded = false
-        while (total < maxBytes && !isEnded) {
+        while (total < maxBytes && !isEnded && total < (expectedBytes ?: Long.MAX_VALUE)) {
             if (clock.nanoTime() - startNanos > deadlineNanos) return false
             val count = input.read(buffer, 0, min(buffer.size, maxBytes - total))
             if (count < 0) {
