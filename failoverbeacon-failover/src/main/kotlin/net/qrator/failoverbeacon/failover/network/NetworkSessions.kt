@@ -18,6 +18,11 @@ internal class NetworkSessions(
         private set
 
     @Synchronized
+    fun endCurrent() {
+        current?.end()
+    }
+
+    @Synchronized
     fun switchTo(network: DefaultNetwork?) {
         current?.end()
         this.network = network

@@ -153,6 +153,18 @@ class FailoverTest {
         assertEquals(true, isLeftByClient.poll(TIMEOUT_SECONDS, TimeUnit.SECONDS))
     }
 
+    @Test
+    fun `a network change closes probe sockets of the network left behind`() {
+        val isLeftByClient = LinkedBlockingQueue<Boolean>()
+        server.onBodyProbe = { socket -> isLeftByClient += socket.awaitClose() }
+        start()
+        awaitUntil { server.bodyProbes.get() == 1 }
+
+        changeNetwork()
+
+        assertEquals(true, isLeftByClient.poll(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+    }
+
     // Both addresses reach the server: the leader fails its probe and the other one is next.
     private fun assertProbeStopsAndLeaderGoesLast() {
         val arrived = LinkedBlockingQueue<Unit>()

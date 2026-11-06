@@ -51,6 +51,8 @@ internal class BodyProbe(
         }
     }
 
+    fun abort() = sockets.abortAll()
+
     override fun close() = sockets.close()
 
     private fun connect(socket: Socket, address: InetAddress, port: Int): Boolean = try {

@@ -109,6 +109,9 @@ class Failover(
 
     private fun startSession(network: DefaultNetwork?) {
         val usableNetwork = network?.takeIf { it.blocked != true }
+        sessions.endCurrent()
+        tcpProbe.abort()
+        bodyProbe.abort()
         sessions.switchTo(usableNetwork)
         if (usableNetwork != null) {
             tcpProber.probeStaleHosts()

@@ -24,12 +24,14 @@ internal class OpenSockets : Closeable {
         runCatching(socket::close)
     }
 
-    override fun close() {
-        val open = synchronized(lock) {
-            isClosed = true
-            sockets.toList()
-        }
+    fun abortAll() {
+        val open = synchronized(lock) { sockets.toList() }
         open.forEach { runCatching(it::close) }
+    }
+
+    override fun close() {
+        synchronized(lock) { isClosed = true }
+        abortAll()
     }
 
     private companion object {

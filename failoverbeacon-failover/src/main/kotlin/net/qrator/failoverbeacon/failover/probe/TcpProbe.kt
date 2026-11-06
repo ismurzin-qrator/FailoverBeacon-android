@@ -24,5 +24,7 @@ internal class TcpProbe(private val clock: MonotonicClock, private val timeoutMi
         }
     }
 
+    fun abort() = sockets.abortAll()
+
     override fun close() = sockets.close()
 }
