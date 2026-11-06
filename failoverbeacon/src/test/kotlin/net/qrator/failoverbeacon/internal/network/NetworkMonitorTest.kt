@@ -88,7 +88,9 @@ class NetworkMonitorTest {
                     transport = NetworkTransport.WIFI,
                     downstreamKbps = 30_000,
                     upstreamKbps = 10_000
-                )
+                ),
+            capabilities(transports = listOf(TRANSPORT_WIFI), signalStrength = -60) to
+                BASE.copy(transport = NetworkTransport.WIFI, signalStrength = -60)
         )
         for ((capabilities, expected) in cases) {
             monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities)
@@ -223,25 +225,6 @@ class NetworkMonitorTest {
     }
 
     @Test
-    @Config(sdk = [29])
-    fun `signal strength is reported from API 29`() {
-        monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(signalStrength = -60))
-
-        assertEquals(-60, connected().signalStrength)
-    }
-
-    @Test
-    @Config(sdk = [24])
-    fun `below API 26 a new default network is read when it becomes available`() {
-        shadowOf(app.getSystemService(ConnectivityManager::class.java))
-            .setNetworkCapabilities(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
-
-        monitor.onAvailable(WIFI_NETWORK)
-
-        assertEquals(NetworkTransport.WIFI, connected().transport)
-    }
-
-    @Test
     @Config(sdk = [26])
     fun `from API 26 a new default network waits for its capabilities`() {
         shadowOf(app.getSystemService(ConnectivityManager::class.java))
@@ -253,32 +236,18 @@ class NetworkMonitorTest {
     }
 
     @Test
-    fun `reports whether the system blocks the network for the app`() {
-        monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
-        val unreported = connected().blocked
-        monitor.onBlockedStatusChanged(WIFI_NETWORK, true)
-
-        assertNull(unreported)
-        assertEquals(true, connected().blocked)
-    }
-
-    @Test
-    fun `blocking survives a capabilities update`() {
+    fun `blocking is reported until another default network appears`() {
         val wifi = capabilities(listOf(TRANSPORT_WIFI))
         monitor.onCapabilitiesChanged(WIFI_NETWORK, wifi)
+        val unreported = connected().blocked
         monitor.onBlockedStatusChanged(WIFI_NETWORK, true)
         monitor.onCapabilitiesChanged(WIFI_NETWORK, wifi)
-
-        assertEquals(true, connected().blocked)
-    }
-
-    @Test
-    fun `a new default network does not keep the blocking of the previous one`() {
-        monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
-        monitor.onBlockedStatusChanged(WIFI_NETWORK, true)
+        val afterCapabilities = connected().blocked
         monitor.onAvailable(CELLULAR_NETWORK)
         monitor.onCapabilitiesChanged(CELLULAR_NETWORK, cellular())
 
+        assertNull(unreported)
+        assertEquals(true, afterCapabilities)
         assertNull(connected().blocked)
     }
 
@@ -323,7 +292,7 @@ class NetworkMonitorTest {
 
     @Test
     @Config(sdk = [24])
-    fun `below API 26 a new default network is reported when it becomes available`() {
+    fun `below API 26 a new default network is read and reported when it becomes available`() {
         shadowOf(app.getSystemService(ConnectivityManager::class.java)).apply {
             setNetworkCapabilities(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
             setLinkProperties(WIFI_NETWORK, linkProperties("192.0.2.10"))
@@ -336,6 +305,7 @@ class NetworkMonitorTest {
             DefaultNetwork(WIFI_NETWORK.networkHandle, "WIFI/192.0.2", blocked = null),
             reported.single()
         )
+        assertEquals(NetworkTransport.WIFI, connected().transport)
     }
 
     @Test
@@ -405,16 +375,6 @@ class NetworkMonitorTest {
     }
 
     @Test
-    fun `losing the default network is reported as none`() {
-        monitor.register(reported::add)
-        connect(WIFI_NETWORK, "192.0.2.10")
-
-        monitor.onLost(WIFI_NETWORK)
-
-        assertEquals(listOf(WIFI_NETWORK.networkHandle, null), reported.map { it?.handle })
-    }
-
-    @Test
     fun `the network key is the transport and the first IPv4 address without its last byte`() {
         monitor.register(reported::add)
 
@@ -457,10 +417,13 @@ class NetworkMonitorTest {
     }
 
     @Test
-    fun `losing the default network leaves none`() {
-        monitor.onCapabilitiesChanged(WIFI_NETWORK, capabilities(listOf(TRANSPORT_WIFI)))
+    fun `losing the default network is reported and leaves none`() {
+        monitor.register(reported::add)
+        connect(WIFI_NETWORK, "192.0.2.10")
+
         monitor.onLost(WIFI_NETWORK)
 
+        assertEquals(listOf(WIFI_NETWORK.networkHandle, null), reported.map { it?.handle })
         assertEquals(NetworkSnapshot.None, monitor.currentNetwork())
     }
 

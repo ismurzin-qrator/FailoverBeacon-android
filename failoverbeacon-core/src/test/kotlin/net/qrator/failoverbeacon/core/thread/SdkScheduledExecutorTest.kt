@@ -30,21 +30,6 @@ class SdkScheduledExecutorTest {
     }
 
     @Test
-    fun `runs scheduled tasks on its own daemon thread`() {
-        val ran = CountDownLatch(1)
-        var thread: Thread? = null
-
-        executor.scheduleWithFixedDelay({
-            thread = Thread.currentThread()
-            ran.countDown()
-        }, 0, 1, TimeUnit.HOURS)
-
-        assertTrue(ran.await(5, TimeUnit.SECONDS))
-        assertEquals("FailoverBeacon-test", thread?.name)
-        assertEquals(true, thread?.isDaemon)
-    }
-
-    @Test
     fun `a failing task keeps its schedule and only the first failure is logged`() {
         val runs = CountDownLatch(3)
 

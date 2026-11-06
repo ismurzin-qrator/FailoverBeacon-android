@@ -60,26 +60,19 @@ class KnownNetworksPersistenceTest {
     }
 
     @Test
-    fun `save requests wait for one scheduled save`() {
+    fun `save requests share one scheduled save and a later request schedules the next`() {
         answer(1)
         persistence.saveLater()
         persistence.saveLater()
-
-        assertEquals(1, scheduler.queued)
-        assertFalse(file.exists())
+        val scheduled = scheduler.queued
+        val savedBeforeRun = file.exists()
 
         runSave()
+        persistence.saveLater()
 
+        assertEquals(1, scheduled)
+        assertFalse(savedBeforeRun)
         assertTrue(file.exists())
-    }
-
-    @Test
-    fun `a request after the save schedules the next one`() {
-        persistence.saveLater()
-        runSave()
-
-        persistence.saveLater()
-
         assertEquals(1, scheduler.queued)
     }
 

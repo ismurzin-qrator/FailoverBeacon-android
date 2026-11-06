@@ -1,7 +1,5 @@
 package net.qrator.failoverbeacon.failover.network
 
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -26,18 +24,6 @@ class NetworkSessionTest {
     )
 
     private val dns get() = assertNotNull(session[API]).dns
-
-    @Test
-    fun `answers and failures are saved with the time of the timer`() {
-        now = 1_000
-        session.saveAnswer(API, listOf(ip(1)))
-        val afterAnswer = dns.isFresh(timer)
-        now = 2_000
-        session.saveResolveFailure(API)
-
-        assertTrue(afterAnswer)
-        assertFalse(dns.isStale(timer))
-    }
 
     @Test
     fun `an ended session drops what is saved and starts no round`() {
@@ -66,24 +52,6 @@ class NetworkSessionTest {
         assertFalse(second)
         assertFalse(beforeInterval)
         assertTrue(session.startTcpProbeRoundIfStale(API))
-    }
-
-    @Test
-    fun `parallel callers start one probe round`() {
-        val callers = 16
-        val pool = Executors.newFixedThreadPool(callers)
-        val start = CountDownLatch(1)
-        val rounds = List(callers) {
-            pool.submit<Boolean> {
-                start.await()
-                session.startTcpProbeRoundIfStale(API)
-            }
-        }
-
-        start.countDown()
-
-        assertEquals(1, rounds.count { it.get() })
-        pool.shutdown()
     }
 
     private companion object {

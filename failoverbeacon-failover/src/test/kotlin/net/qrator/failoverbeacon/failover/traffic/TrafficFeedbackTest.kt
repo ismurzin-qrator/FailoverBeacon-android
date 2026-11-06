@@ -72,8 +72,14 @@ class TrafficFeedbackTest {
     }
 
     @Test
-    fun `a result without an outcome writes nothing`() {
-        feedback.save(exchange(attempt(ip(1), ConnectResult.Superseded)))
+    fun `a lost race, a cancel and a failure without a type write nothing`() {
+        feedback.save(
+            exchange(
+                attempt(ip(1), ConnectResult.Superseded),
+                attempt(ip(1), ConnectResult.Canceled),
+                attempt(ip(1), ConnectResult.Failed(ExchangeStep.TCP, type = null))
+            )
+        )
 
         assertEquals(HostAddress(ip(1)), addressOf(ip(1)))
     }

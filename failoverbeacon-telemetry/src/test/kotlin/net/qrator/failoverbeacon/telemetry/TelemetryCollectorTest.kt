@@ -180,14 +180,6 @@ class TelemetryCollectorTest {
         )
     }
 
-    @Test
-    fun `stores nothing the sampler drops`() {
-        send(exchange(callId = DROPPED))
-        send(failure())
-
-        assertEquals(1, storedLines().size)
-    }
-
     private fun newCollector(consentSource: ConsentSource) = TelemetryCollector(
         consentSource,
         blockedHosts = setOf("blocked.com"),

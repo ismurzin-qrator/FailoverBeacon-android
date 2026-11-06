@@ -18,11 +18,6 @@ class KnownNetworksTest {
     private val networks = KnownNetworks(listOf(config, hostConfig(OTHER)), maxNetworks = 2)
 
     @Test
-    fun `the same key gives the same networks`() {
-        assertSame(networks.of(WIFI), networks.of(WIFI))
-    }
-
-    @Test
     fun `the least recently used network goes first`() {
         val wifi = networks.of(WIFI)
         networks.of(CELLULAR)

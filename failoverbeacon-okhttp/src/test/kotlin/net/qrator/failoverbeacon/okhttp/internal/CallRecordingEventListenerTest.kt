@@ -30,9 +30,7 @@ import net.qrator.failoverbeacon.core.time.MonotonicClock
 import net.qrator.failoverbeacon.okhttp.internal.mapper.OkHttpFailureMapper
 import okhttp3.Call
 import okhttp3.OkHttpClient
-import okhttp3.Protocol
 import okhttp3.Request
-import okhttp3.Response
 
 class CallRecordingEventListenerTest {
     private val logs = CopyOnWriteArrayList<Pair<String, Throwable?>>()
@@ -53,28 +51,20 @@ class CallRecordingEventListenerTest {
     }
 
     @Test
-    fun `an SDK exception stays out of the call and is logged`() {
+    fun `an SDK exception stays out of the call, is logged and ends the recording`() {
         val failure = IllegalStateException()
-        val call = call(OkHttpClient())
-
-        listener { throw failure }.dnsStart(call, "example.test")
-
-        assertSame(failure, logs.single().second)
-    }
-
-    @Test
-    fun `ignores the rest of the call after a failure`() {
         var clockReads = 0
         val call = call(OkHttpClient())
         val listener = listener {
             clockReads++
-            throw IllegalStateException()
+            throw failure
         }
 
         listener.dnsStart(call, "example.test")
         listener.dnsEnd(call, "example.test", emptyList())
         listener.callEnd(call)
 
+        assertSame(failure, logs.single().second)
         assertEquals(1, clockReads)
         assertTrue(published.isEmpty())
     }
@@ -168,13 +158,6 @@ class CallRecordingEventListenerTest {
 
     private fun call(client: OkHttpClient): Call =
         client.newCall(Request.Builder().url("http://example.test/").build())
-
-    private fun response(call: Call, code: Int): Response = Response.Builder()
-        .request(call.request())
-        .protocol(Protocol.HTTP_1_1)
-        .code(code)
-        .message("")
-        .build()
 
     private companion object {
         val FIRST = InetSocketAddress(InetAddress.getByAddress(byteArrayOf(10, 0, 0, 1)), 80)

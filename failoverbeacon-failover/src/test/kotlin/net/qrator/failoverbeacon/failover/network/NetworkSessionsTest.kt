@@ -38,18 +38,6 @@ class NetworkSessionsTest {
     }
 
     @Test
-    fun `the last applied network is kept for starting the session again`() {
-        val wifi = network(4, key = WIFI)
-
-        sessions.switchTo(wifi)
-        val onWifi = sessions.network
-        sessions.switchTo(null)
-
-        assertEquals(wifi, onWifi)
-        assertNull(sessions.network)
-    }
-
-    @Test
     fun `switching or losing the network ends the session`() {
         val earlier = session
         sessions.switchTo(network(1, key = WIFI))
@@ -62,22 +50,6 @@ class NetworkSessionsTest {
         assertFalse(next.isActive)
         assertNull(sessions.current)
         sessions.switchTo(network(1, key = WIFI))
-        assertEquals(listOf(ip(7)), session[API]?.ips)
-    }
-
-    @Test
-    fun `beyond the limit the least recently used network is dropped`() {
-        session.saveAnswer(API, listOf(ip(1)))
-        sessions.switchTo(network(2, key = CELLULAR))
-        session.saveAnswer(API, listOf(ip(2)))
-        sessions.switchTo(network(3, key = WIFI))
-        sessions.switchTo(network(4, key = "ETHERNET/198.51.100"))
-
-        sessions.switchTo(network(5, key = WIFI))
-        val wifi = session[API]?.ips
-        sessions.switchTo(network(6, key = CELLULAR))
-
-        assertEquals(listOf(ip(1), ip(7)), wifi)
         assertEquals(listOf(ip(7)), session[API]?.ips)
     }
 

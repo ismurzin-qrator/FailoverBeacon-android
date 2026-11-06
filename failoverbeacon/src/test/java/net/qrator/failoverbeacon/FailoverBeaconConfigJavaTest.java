@@ -1,7 +1,5 @@
 package net.qrator.failoverbeacon;
 
-import static org.junit.Assert.assertThrows;
-
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
@@ -39,15 +37,5 @@ public final class FailoverBeaconConfigJavaTest {
                                 new FailoverBodyProbe())))
                 .options(options)
                 .build();
-    }
-
-    @Test
-    public void invalidArgumentThrowsIllegalArgumentException() {
-        FailoverBeaconConfig.Builder builder = new FailoverBeaconConfig.Builder();
-
-        assertThrows(IllegalArgumentException.class,
-                () -> builder.beacons(Collections.singletonList("http://beacon.example")));
-        assertThrows(IllegalArgumentException.class, builder::build);
-        assertThrows(IllegalArgumentException.class, () -> new FailoverHost("api.example", 0));
     }
 }

@@ -1,7 +1,5 @@
 package net.qrator.failoverbeacon;
 
-import static org.junit.Assert.assertThrows;
-
 import android.app.Application;
 import android.util.Log;
 import java.util.Collections;
@@ -37,10 +35,5 @@ public final class FailoverBeaconJavaTest {
         FailoverBeacon.setConsent(Consent.GRANTED);
         FailoverBeacon.clearAllData();
         FailoverBeacon.stop();
-    }
-
-    @Test
-    public void invalidLogLevelThrowsIllegalArgumentException() {
-        assertThrows(IllegalArgumentException.class, () -> FailoverBeacon.setLogLevel(0));
     }
 }

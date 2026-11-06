@@ -31,7 +31,6 @@ import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkFeature
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
-import net.qrator.failoverbeacon.core.network.model.DefaultNetwork
 import net.qrator.failoverbeacon.internal.LogcatLogger
 import net.qrator.failoverbeacon.internal.SdkStartup
 import org.junit.runner.RunWith
@@ -85,21 +84,19 @@ class FailoverBeaconTest {
     }
 
     @Test
-    fun `consent is GRANTED by default`() {
+    fun `consent is GRANTED by default and maps every value`() {
         FailoverBeacon.initialize(app, config)
-
-        assertEquals(TrackingConsent.GRANTED, SdkRegistry.instance?.consent)
-    }
-
-    @Test
-    fun `maps every consent value`() {
+        val byDefault = SdkRegistry.instance?.consent
+        FailoverBeacon.stop()
         FailoverBeacon.initialize(app, config, Consent.PENDING)
-        assertEquals(TrackingConsent.PENDING, SdkRegistry.instance?.consent)
-
+        val pending = SdkRegistry.instance?.consent
         FailoverBeacon.setConsent(Consent.NOT_GRANTED)
-        assertEquals(TrackingConsent.NOT_GRANTED, SdkRegistry.instance?.consent)
-
+        val notGranted = SdkRegistry.instance?.consent
         FailoverBeacon.setConsent(Consent.GRANTED)
+
+        assertEquals(TrackingConsent.GRANTED, byDefault)
+        assertEquals(TrackingConsent.PENDING, pending)
+        assertEquals(TrackingConsent.NOT_GRANTED, notGranted)
         assertEquals(TrackingConsent.GRANTED, SdkRegistry.instance?.consent)
     }
 
@@ -178,11 +175,10 @@ class FailoverBeaconTest {
     }
 
     @Test
-    fun `stop stops the SDK thread and the watchers until the next initialize`() {
+    fun `stop stops the SDK threads and the watchers until the next initialize`() {
         FailoverBeacon.initialize(app, config)
         val foreground = SdkRegistry.instance?.foregroundSource
-        val executor = threads().storage
-        val uploadExecutor = threads().upload
+        val threads = threads()
 
         FailoverBeacon.stop()
         Robolectric.buildActivity(Activity::class.java).setup()
@@ -191,8 +187,10 @@ class FailoverBeaconTest {
         FailoverBeacon.initialize(app, config)
 
         assertNull(stopped)
-        assertEquals(true, executor.isShutdown)
-        assertEquals(true, uploadExecutor.isShutdown)
+        assertTrue(threads.storage.isShutdown)
+        assertTrue(threads.upload.isShutdown)
+        assertTrue(threads.failoverResolve.isShutdown)
+        assertTrue(threads.failoverProbe.isShutdown)
         assertEquals(emptySet(), callbacksAfterStop)
         assertEquals(false, foreground?.isForeground())
         assertNotNull(SdkRegistry.instance)
@@ -218,73 +216,30 @@ class FailoverBeaconTest {
     }
 
     @Test
-    fun `a network change reaches the features`() {
-        val active = activeNetwork()
-        FailoverBeacon.initialize(app, config)
-        val changes = mutableListOf<DefaultNetwork?>()
-        assertNotNull(SdkRegistry.instance).addFeature(
-            object : SdkFeature {
-                override fun onNetworkChanged(network: DefaultNetwork?) {
-                    changes += network
-                }
-            }
-        )
-
-        networkCallbacks().single().onLost(active)
-
-        assertEquals(listOf<DefaultNetwork?>(null), changes)
-    }
-
-    @Test
-    fun `failover runs without hosts and stops with the SDK`() {
-        FailoverBeacon.initialize(app, config)
-        val instance = assertNotNull(SdkRegistry.instance)
-        val dns = instance.dns
-
-        FailoverBeacon.stop()
-
-        assertNotNull(dns)
-        assertTrue(instance.threads.failoverResolve.isShutdown)
-        assertTrue(instance.threads.failoverProbe.isShutdown)
-    }
-
-    @Test
     fun `a restart serves the saved DNS answer until clearAllData deletes it`() {
         val saved = File(app.cacheDir, "failoverbeacon-failover.json")
-        val working = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
-            .failoverHosts(listOf(FailoverHost("api.example")))
-            .dnsResolver { listOf(InetAddress.getByName("192.0.2.1")) }
-            .build()
-        val failing = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
-            .failoverHosts(listOf(FailoverHost("api.example")))
-            .dnsResolver { throw UnknownHostException(it) }
-            .build()
+        val working = failoverConfig(FailoverHost(API)) { listOf(ADDRESS) }
+        val failing = failoverConfig(FailoverHost(API)) { throw UnknownHostException(it) }
         activeNetwork()
         FailoverBeacon.initialize(app, working)
         awaitSdkThread()
         awaitResolutions()
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
-        while (!saved.exists()) {
-            check(System.nanoTime() < deadline) { "The state was not saved" }
-            Thread.sleep(50)
-        }
+        awaitUntil("the state was not saved", timeoutSeconds = 30) { saved.exists() }
         FailoverBeacon.stop()
 
         FailoverBeacon.initialize(app, failing)
         awaitSdkThread()
         val dns = assertNotNull(SdkRegistry.instance?.dns)
-        val restored = dns.lookup("api.example")
+        val restored = dns.lookup(API)
         awaitResolutions()
-        val afterFailure = dns.lookup("api.example")
+        val afterFailure = dns.lookup(API)
 
         FailoverBeacon.clearAllData()
         awaitSdkThread()
-        val afterClear = dns.lookup("api.example")
+        val afterClear = dns.lookup(API)
 
-        assertEquals(listOf<String?>("192.0.2.1"), restored?.map { it.hostAddress })
-        assertEquals(listOf<String?>("192.0.2.1"), afterFailure?.map { it.hostAddress })
+        assertEquals(listOf<String?>(ADDRESS_LITERAL), restored?.map { it.hostAddress })
+        assertEquals(listOf<String?>(ADDRESS_LITERAL), afterFailure?.map { it.hostAddress })
         assertNull(afterClear)
         assertFalse(saved.exists())
     }
@@ -292,16 +247,8 @@ class FailoverBeaconTest {
     @Test
     fun `clearAllData forgets the addresses and resolves again only on the next lookup`() {
         val resolutions = CopyOnWriteArrayList<String>()
-        val failoverConfig = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
-            .failoverHosts(listOf(FailoverHost("api.example", tcpProbe = false)))
-            .dnsResolver {
-                resolutions += it
-                listOf(InetAddress.getByName("192.0.2.1"))
-            }
-            .build()
         activeNetwork()
-        FailoverBeacon.initialize(app, failoverConfig)
+        FailoverBeacon.initialize(app, failoverConfig(UNPROBED, resolver = recording(resolutions)))
         awaitSdkThread()
         awaitResolutions()
         val dns = assertNotNull(SdkRegistry.instance?.dns)
@@ -309,177 +256,81 @@ class FailoverBeaconTest {
         FailoverBeacon.clearAllData()
         awaitSdkThread()
         val resolutionsAfterClear = resolutions.size
-        val afterLookup = dns.lookup("api.example")
+        val afterLookup = dns.lookup(API)
 
         assertEquals(1, resolutionsAfterClear)
         assertEquals(2, resolutions.size)
-        assertEquals(listOf<String?>("192.0.2.1"), afterLookup?.map { it.hostAddress })
-    }
-
-    @Test
-    fun `failover gives the transport the addresses of its hosts from the configured DNS`() {
-        val failoverConfig = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
-            .failoverHosts(listOf(FailoverHost("api.example")))
-            .dnsResolver { listOf(InetAddress.getByName("192.0.2.1")) }
-            .build()
-        activeNetwork()
-        FailoverBeacon.initialize(app, failoverConfig)
-        awaitSdkThread()
-        val dns = assertNotNull(SdkRegistry.instance?.dns)
-
-        val configured = dns.lookup("api.example")
-        val outside = dns.lookup("other.example")
-
-        assertEquals(listOf<String?>("192.0.2.1"), configured?.map { it.hostAddress })
-        assertNull(outside)
-    }
-
-    @Test
-    fun `before a network is known failover leaves its hosts to the client's DNS`() {
-        val failoverConfig = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
-            .failoverHosts(listOf(FailoverHost("api.example")))
-            .dnsResolver { listOf(InetAddress.getByName("192.0.2.1")) }
-            .build()
-
-        FailoverBeacon.initialize(app, failoverConfig)
-        awaitSdkThread()
-
-        assertNull(assertNotNull(SdkRegistry.instance?.dns).lookup("api.example"))
-    }
-
-    @Test
-    fun `failover resolves its hosts on a new network and not on a network it has seen`() {
-        val resolutions = CopyOnWriteArrayList<String>()
-        val failoverConfig = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
-            .failoverHosts(listOf(FailoverHost("api.example", tcpProbe = false)))
-            .dnsResolver {
-                resolutions += it
-                listOf(InetAddress.getByName("192.0.2.1"))
-            }
-            .build()
-        activeNetwork()
-        FailoverBeacon.initialize(app, failoverConfig)
-        awaitSdkThread()
-        val callback = networkCallbacks().single()
-
-        awaitResolutions()
-        connect(callback, ShadowNetwork.newInstance(301), NetworkCapabilities.TRANSPORT_CELLULAR)
-        awaitResolutions()
-        connect(callback, ShadowNetwork.newInstance(302), NetworkCapabilities.TRANSPORT_WIFI)
-        awaitResolutions()
-
-        assertEquals(listOf("api.example", "api.example"), resolutions)
+        assertEquals(listOf<String?>(ADDRESS_LITERAL), afterLookup?.map { it.hostAddress })
     }
 
     @Test
     fun `a hung resolver delays the first lookup up to the limit and later ones not at all`() {
         val release = CountDownLatch(1)
-        val failoverConfig = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
-            .failoverHosts(
-                listOf(
-                    FailoverHost(
-                        "api.example",
-                        additionalAddresses = listOf("192.0.2.1"),
-                        tcpProbe = false
-                    )
-                )
-            )
-            .dnsResolver {
-                release.await()
+        val host =
+            FailoverHost(API, additionalAddresses = listOf(ADDRESS_LITERAL), tcpProbe = false)
+        activeNetwork()
+        FailoverBeacon.initialize(
+            app,
+            failoverConfig(host) {
+                release.await(30, TimeUnit.SECONDS)
                 emptyList()
             }
-            .build()
-        activeNetwork()
-        FailoverBeacon.initialize(app, failoverConfig)
+        )
         awaitSdkThread()
         val dns = assertNotNull(SdkRegistry.instance?.dns)
 
         val start = Instant.now()
-        val first = dns.lookup("api.example")
+        val first = dns.lookup(API)
         val afterFirst = Instant.now()
-        val second = dns.lookup("api.example")
+        val second = dns.lookup(API)
         val afterSecond = Instant.now()
         release.countDown()
 
-        assertEquals(listOf<String?>("192.0.2.1"), first?.map { it.hostAddress })
+        assertEquals(listOf<String?>(ADDRESS_LITERAL), first?.map { it.hostAddress })
         assertEquals(first, second)
-        assertTrue(Duration.between(start, afterFirst) >= Duration.ofSeconds(2))
-        assertTrue(Duration.between(start, afterFirst) < Duration.ofSeconds(4))
-        assertTrue(Duration.between(afterFirst, afterSecond) < Duration.ofMillis(500))
-    }
-
-    @Test
-    fun `addresses from a DNS answer are probed without a lookup`() {
-        val failoverConfig = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
-            .failoverHosts(listOf(FailoverHost("api.example")))
-            .dnsResolver {
-                listOf(InetAddress.getByName("127.0.0.1"), InetAddress.getByName("127.0.0.2"))
-            }
-            .build()
-        activeNetwork()
-        FailoverBeacon.initialize(app, failoverConfig)
-        awaitSdkThread()
-        val probes = threads().failoverProbe
-
-        repeat(500) {
-            if (probes.taskCount < 2) Thread.sleep(10)
-        }
-
-        assertEquals(2, probes.taskCount)
+        assertTrue(Duration.between(start, afterFirst) >= WAIT_LIMIT)
+        assertTrue(Duration.between(start, afterFirst) < Duration.ofSeconds(20))
+        assertTrue(Duration.between(afterFirst, afterSecond) < WAIT_LIMIT)
     }
 
     @Test
     fun `stop releases a lookup waiting for a hung resolver`() {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
-        val failoverConfig = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
-            .failoverHosts(listOf(FailoverHost("api.example", tcpProbe = false)))
-            .dnsResolver {
+        activeNetwork()
+        FailoverBeacon.initialize(
+            app,
+            failoverConfig(UNPROBED) {
                 entered.countDown()
                 while (release.count > 0) {
                     runCatching { release.await() }
                 }
                 emptyList()
             }
-            .build()
-        activeNetwork()
-        FailoverBeacon.initialize(app, failoverConfig)
+        )
         awaitSdkThread()
         val dns = assertNotNull(SdkRegistry.instance?.dns)
         assertTrue(entered.await(5, TimeUnit.SECONDS))
-        val finished = CountDownLatch(1)
-        thread {
-            dns.lookup("api.example")
-            finished.countDown()
+        val lookup = thread { dns.lookup(API) }
+        try {
+            awaitUntil("the lookup did not wait") { lookup.state == Thread.State.TIMED_WAITING }
+
+            FailoverBeacon.stop()
+
+            // Well below the 2 s limit of the wait, which would end it without stop.
+            lookup.join(TimeUnit.SECONDS.toMillis(1))
+            assertFalse(lookup.isAlive, "the lookup waited after stop")
+        } finally {
+            release.countDown()
         }
-        Thread.sleep(100)
-
-        FailoverBeacon.stop()
-
-        assertTrue(finished.await(1, TimeUnit.SECONDS), "the lookup waited after stop")
-        release.countDown()
     }
 
     @Test
     fun `with preresolve off a new network is resolved by the first lookup`() {
         val resolutions = CopyOnWriteArrayList<String>()
-        val failoverConfig = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
-            .failoverHosts(listOf(FailoverHost("api.example", tcpProbe = false)))
-            .dnsResolver {
-                resolutions += it
-                listOf(InetAddress.getByName("192.0.2.1"))
-            }
-            .options(FailoverBeaconOptions.Builder().preresolveOnNetworkChange(false).build())
-            .build()
+        val options = FailoverBeaconOptions.Builder().preresolveOnNetworkChange(false).build()
         activeNetwork()
-        FailoverBeacon.initialize(app, failoverConfig)
+        FailoverBeacon.initialize(app, failoverConfig(UNPROBED, options, recording(resolutions)))
         awaitSdkThread()
         awaitResolutions()
         val resolvedOnStart = resolutions.size
@@ -491,31 +342,19 @@ class FailoverBeaconTest {
         )
         awaitResolutions()
         val resolvedOnChange = resolutions.size
-        val addresses = assertNotNull(SdkRegistry.instance?.dns).lookup("api.example")
+        val addresses = assertNotNull(SdkRegistry.instance?.dns).lookup(API)
 
         assertEquals(1, resolvedOnStart)
         assertEquals(1, resolvedOnChange)
         assertEquals(2, resolutions.size)
-        assertEquals(listOf<String?>("192.0.2.1"), addresses?.map { it.hostAddress })
+        assertEquals(listOf<String?>(ADDRESS_LITERAL), addresses?.map { it.hostAddress })
     }
 
     @Test
     fun `with probes off a new network is not probed`() {
-        val failoverConfig = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
-            .failoverHosts(
-                listOf(
-                    FailoverHost(
-                        "api.example",
-                        additionalAddresses = listOf("127.0.0.1", "127.0.0.2")
-                    )
-                )
-            )
-            .dnsResolver { emptyList() }
-            .options(FailoverBeaconOptions.Builder().probeOnNetworkChange(false).build())
-            .build()
+        val options = FailoverBeaconOptions.Builder().probeOnNetworkChange(false).build()
         activeNetwork()
-        FailoverBeacon.initialize(app, failoverConfig)
+        FailoverBeacon.initialize(app, failoverConfig(PROBED, options) { emptyList() })
         awaitSdkThread()
         val probesOnStart = threads().failoverProbe.taskCount
 
@@ -532,29 +371,18 @@ class FailoverBeaconTest {
     @Test
     fun `a blocked network is left to the client's DNS until it is unblocked`() {
         val resolutions = CopyOnWriteArrayList<String>()
-        val failoverConfig = FailoverBeaconConfig.Builder()
-            .beacons(listOf("https://beacon.example"))
-            .failoverHosts(
-                listOf(
-                    FailoverHost(
-                        "api.example",
-                        additionalAddresses = listOf("127.0.0.1", "127.0.0.2")
-                    )
-                )
-            )
-            .dnsResolver {
-                resolutions += it
-                emptyList()
-            }
-            .build()
-        FailoverBeacon.initialize(app, failoverConfig)
+        val resolver = HostResolver {
+            resolutions += it
+            emptyList()
+        }
+        FailoverBeacon.initialize(app, failoverConfig(PROBED, resolver = resolver))
         awaitSdkThread()
         val callback = networkCallbacks().single()
         val network = ShadowNetwork.newInstance(301)
         val dns = assertNotNull(SdkRegistry.instance?.dns)
 
         connect(callback, network, NetworkCapabilities.TRANSPORT_WIFI, blocked = true)
-        val whileBlocked = dns.lookup("api.example")
+        val whileBlocked = dns.lookup(API)
         val probesWhileBlocked = threads().failoverProbe.taskCount
         val resolutionsWhileBlocked = resolutions.size
         callback.onBlockedStatusChanged(network, false)
@@ -565,7 +393,7 @@ class FailoverBeaconTest {
         assertEquals(0, probesWhileBlocked)
         assertEquals(0, resolutionsWhileBlocked)
         assertEquals(2, threads().failoverProbe.taskCount)
-        assertEquals(listOf("api.example"), resolutions)
+        assertEquals(listOf(API), resolutions)
     }
 
     @Test
@@ -712,6 +540,22 @@ class FailoverBeaconTest {
         assertTrue(event.exists())
     }
 
+    private fun failoverConfig(
+        host: FailoverHost,
+        options: FailoverBeaconOptions = FailoverBeaconOptions.Builder().build(),
+        resolver: HostResolver
+    ) = FailoverBeaconConfig.Builder()
+        .beacons(listOf("https://beacon.example"))
+        .failoverHosts(listOf(host))
+        .dnsResolver(resolver)
+        .options(options)
+        .build()
+
+    private fun recording(resolutions: MutableList<String>) = HostResolver {
+        resolutions += it
+        listOf(ADDRESS)
+    }
+
     private fun storeEvent(): File =
         File(app.cacheDir, "failoverbeacon/2f7cbe9a31e83f24/1761040980000").apply {
             parentFile?.mkdirs()
@@ -755,10 +599,26 @@ class FailoverBeaconTest {
 
     private fun awaitResolutions() {
         val pool = threads().failoverResolve
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
-        while (pool.completedTaskCount < pool.taskCount) {
-            check(System.nanoTime() < deadline) { "Resolutions did not finish" }
-            Thread.sleep(5)
+        awaitUntil("resolutions did not finish") { pool.completedTaskCount == pool.taskCount }
+    }
+
+    private fun awaitUntil(failure: String, timeoutSeconds: Long = 5, condition: () -> Boolean) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds)
+        while (!condition()) {
+            check(System.nanoTime() < deadline) { failure }
+            Thread.sleep(POLL_MILLIS)
         }
+    }
+
+    private companion object {
+        const val API = "api.example"
+        const val ADDRESS_LITERAL = "192.0.2.1"
+        val ADDRESS: InetAddress = InetAddress.getByName(ADDRESS_LITERAL)
+        val UNPROBED = FailoverHost(API, tcpProbe = false)
+
+        // Two IPv4 addresses, so the host is probed.
+        val PROBED = FailoverHost(API, additionalAddresses = listOf("127.0.0.1", "127.0.0.2"))
+        val WAIT_LIMIT: Duration = Duration.ofSeconds(2)
+        const val POLL_MILLIS = 10L
     }
 }

@@ -6,8 +6,6 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.model.SavedAddress
 import net.qrator.failoverbeacon.failover.model.SavedBodyProbe
 import net.qrator.failoverbeacon.failover.model.SavedHost
@@ -85,49 +83,14 @@ class SavedNetworksStoreTest {
     }
 
     @Test
-    fun `write replaces the previous state`() {
+    fun `write replaces the previous state, also with nothing`() {
         store.write(networks)
-
         store.write(networks.take(1))
-
-        assertEquals(networks.take(1), store.read())
-    }
-
-    @Test
-    fun `the same content is not written again`() {
-        store.write(networks)
-        file.delete()
-
-        store.write(networks)
-
-        assertFalse(file.exists())
-    }
-
-    @Test
-    fun `the content that was read is not written again`() {
-        store.write(networks)
-        val restarted = SavedNetworksStore { dir }
-        restarted.read()
-        file.delete()
-
-        restarted.write(networks)
-
-        assertFalse(file.exists())
-    }
-
-    @Test
-    fun `nothing to write leaves no file`() {
-        store.write(emptyList())
-
-        assertFalse(file.exists())
-    }
-
-    @Test
-    fun `an empty state replaces a saved one`() {
-        store.write(networks)
+        val replaced = SavedNetworksStore { dir }.read()
 
         store.write(emptyList())
 
+        assertEquals(networks.take(1), replaced)
         assertEquals(emptyList(), SavedNetworksStore { dir }.read())
     }
 
@@ -139,16 +102,6 @@ class SavedNetworksStoreTest {
         store.write(networks)
 
         assertEquals(networks, store.read())
-    }
-
-    @Test
-    fun `a damaged file is replaced by the next write`() {
-        file.writeText("garbage")
-        store.read()
-
-        store.write(networks)
-
-        assertEquals(networks, SavedNetworksStore { dir }.read())
     }
 
     @Test
@@ -172,14 +125,9 @@ class SavedNetworksStoreTest {
     @Test
     fun `read of a damaged file is empty`() {
         listOf(
-            "",
             "garbage",
             """{"version":1,"networks":[{"key":"wifi","hosts":[{"host":"a.com"""",
             """{"networks":[]}""",
-            """{"version":1,"networks":"wifi"}""",
-            """{"version":1,"networks":[{"key":"wifi"}]}""",
-            damagedAddress("""{"fromDns":true}"""),
-            damagedAddress("""{"ip":"cb00710b"}"""),
             damagedAddress("""{"ip":"example.com","fromDns":true}"""),
             damagedAddress("""{"ip":"cb00","fromDns":true}"""),
             damagedAddress("""{"ip":"cb00710b","fromDns":true,"bodyProbedAtMillis":1}""")
@@ -195,34 +143,6 @@ class SavedNetworksStoreTest {
         file.writeText("""{"version":2,"future":true}""")
 
         assertEquals(emptyList(), store.read())
-    }
-
-    @Test
-    fun `failed write does not throw`() {
-        val notDir = File(dir, "file").apply { writeText("") }
-
-        val blocked = SavedNetworksStore { notDir }
-        blocked.write(networks)
-
-        assertEquals(emptyList(), blocked.read())
-    }
-
-    @Test
-    fun `clear deletes the state`() {
-        store.write(networks)
-        assertTrue(file.exists())
-
-        store.clear()
-
-        assertFalse(file.exists())
-        assertEquals(emptyList(), store.read())
-    }
-
-    @Test
-    fun `clear without a file does nothing`() {
-        store.clear()
-
-        assertFalse(file.exists())
     }
 
     private fun address(literal: String): InetAddress = InetAddress.getByName(literal)

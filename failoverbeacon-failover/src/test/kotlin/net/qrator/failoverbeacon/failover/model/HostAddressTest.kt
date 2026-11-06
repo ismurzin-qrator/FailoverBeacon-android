@@ -9,20 +9,15 @@ class HostAddressTest {
     private val passed = LayerResult.Passed(nanos = null)
 
     @Test
-    fun `a failed handshake passes TCP and fails TLS`() {
+    fun `a failed handshake passes TCP and fails TLS, a failed connect fails only TCP`() {
         val unprobed = HostAddress(ip(1)).withConnectOutcome(ConnectOutcome.TLS_FAILED)
         val timed = HostAddress(ip(1), probed).withConnectOutcome(ConnectOutcome.TLS_FAILED)
+        val refused = HostAddress(ip(1), probed, passed)
+            .withConnectOutcome(ConnectOutcome.TCP_FAILED)
 
         assertEquals(HostAddress(ip(1), passed, LayerResult.Failed), unprobed)
         assertEquals(HostAddress(ip(1), probed, LayerResult.Failed), timed)
-    }
-
-    @Test
-    fun `a failed TCP connect fails TCP and leaves TLS`() {
-        val failed = HostAddress(ip(1), probed, passed)
-            .withConnectOutcome(ConnectOutcome.TCP_FAILED)
-
-        assertEquals(HostAddress(ip(1), LayerResult.Failed, passed), failed)
+        assertEquals(HostAddress(ip(1), LayerResult.Failed, passed), refused)
     }
 
     @Test

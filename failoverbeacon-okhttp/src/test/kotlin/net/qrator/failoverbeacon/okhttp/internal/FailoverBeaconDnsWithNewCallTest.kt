@@ -6,7 +6,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.dns.SdkDns
@@ -39,33 +38,16 @@ class FailoverBeaconDnsWithNewCallTest {
     }
 
     @Test
-    fun `hosts outside the config get the app's own DNS call`() {
+    fun `hosts the SDK does not manage get the app's own DNS call`() {
         assumeTrue(hasNewCall)
         val appDns = AppDns()
-
-        val call = FailoverBeaconDnsWithNewCall(appDns).newCall(Dns.Request(OTHER))
-
-        assertSame(appDns.call, call)
-    }
-
-    @Test
-    fun `configured hosts are looked up through the SDK`() {
-        assumeTrue(hasNewCall)
-        val appDns = AppDns()
-
-        val call = FailoverBeaconDnsWithNewCall(appDns).newCall(Dns.Request(API))
-
-        assertNotSame(appDns.call, call)
-        assertEquals(API, call.request.hostname)
-    }
-
-    @Test
-    fun `without the SDK every host gets the app's own DNS call`() {
-        assumeTrue(hasNewCall)
+        val other = FailoverBeaconDnsWithNewCall(appDns).newCall(Dns.Request(OTHER))
         SdkRegistry.clear()
-        val appDns = AppDns()
 
-        assertSame(appDns.call, FailoverBeaconDnsWithNewCall(appDns).newCall(Dns.Request(API)))
+        val withoutSdk = FailoverBeaconDnsWithNewCall(appDns).newCall(Dns.Request(API))
+
+        assertSame(appDns.call, other)
+        assertSame(appDns.call, withoutSdk)
     }
 
     private class AppDns : Dns {

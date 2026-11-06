@@ -378,22 +378,20 @@ class CallRecorderTest {
     }
 
     @Test
-    fun `a connect to another port of the same IP did not make the connection`() {
+    fun `a connection no connect of the exchange made is reused, without one nothing is`() {
         start()
         connect("1.1.1.1", port = 443)
         acquire("1.1.1.1", port = 8443)
         recorder.callEnd()
-
-        assertTrue(published.single().reusedConnection)
-        assertNull(published.single().timings.connectNanos)
-    }
-
-    @Test
-    fun `an exchange without a connection reuses none`() {
+        val acquired = published.single()
+        published.clear()
+        recorder = newRecorder()
         start()
         connect("1.1.1.1", failure = REFUSED)
         recorder.callFailed(REFUSED, CallStopReason.FAILED)
 
+        assertTrue(acquired.reusedConnection)
+        assertNull(acquired.timings.connectNanos)
         assertFalse(published.single().reusedConnection)
     }
 

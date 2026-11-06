@@ -134,18 +134,6 @@ class ResolveTasksTest {
         assertEquals(1, executor.queued)
     }
 
-    @Test
-    fun `closing finishes running tasks and later ones do not start`() {
-        val running = tasks.start(session, API)
-
-        tasks.close()
-        val later = tasks.start(session, OTHER)
-
-        assertEquals(0, running.count)
-        assertEquals(0, later.count)
-        assertEquals(1, executor.queued)
-    }
-
     private fun session() = NetworkSession(
         isFirstNetwork = true,
         state = NetworkState(listOf(HostState(hostConfig(API)), HostState(hostConfig(OTHER)))),

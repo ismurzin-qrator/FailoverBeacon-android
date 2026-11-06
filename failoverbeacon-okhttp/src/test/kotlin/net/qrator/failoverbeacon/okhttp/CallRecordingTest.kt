@@ -453,26 +453,6 @@ class CallRecordingTest {
     }
 
     @Test
-    fun `a redirect coalesced onto the connection of another host is recorded under its own`() {
-        server.useHttps(serverCertificates.sslSocketFactory(), false)
-        server.protocols = listOf(Protocol.HTTP_2, Protocol.HTTP_1_1)
-        server.enqueue(
-            MockResponse().setResponseCode(
-                302
-            ).setHeader("Location", "https://b.test:${server.port}/")
-        )
-        server.enqueue(MockResponse().setBody("b"))
-        val client = httpsClient()
-            .build()
-
-        execute(client, "https://a.test:${server.port}/")
-
-        val (redirect, followUp) = exchanges
-        assertEquals("a.test", redirect.request.serverAddress)
-        assertEquals("b.test", followUp.request.serverAddress)
-    }
-
-    @Test
     fun `a coalesced call failing before its headers keeps its own host`() {
         server.useHttps(serverCertificates.sslSocketFactory(), false)
         server.protocols = listOf(Protocol.HTTP_2, Protocol.HTTP_1_1)

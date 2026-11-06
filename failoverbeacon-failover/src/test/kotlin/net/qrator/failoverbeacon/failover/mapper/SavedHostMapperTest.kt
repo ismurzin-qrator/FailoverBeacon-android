@@ -71,20 +71,14 @@ class SavedHostMapperTest {
     }
 
     @Test
-    fun `a passed body with a failed layer is not saved`() {
-        val probed = state(1).withBodyProbeOutcome(ip(1), BodyProbeOutcome.PASSED, now)
+    fun `only a probe that read the body is saved, a pass only without a failed layer`() {
+        val passed = state(1).withBodyProbeOutcome(ip(1), BodyProbeOutcome.PASSED, now)
+        val tlsFailed = passed.withBodyProbeOutcome(ip(1), BodyProbeOutcome.TLS_FAILED, now)
+        val tcpFailed = state(1).withBodyProbeOutcome(ip(1), BodyProbeOutcome.TCP_FAILED, now)
 
-        val failed = probed.withBodyProbeOutcome(ip(1), BodyProbeOutcome.TLS_FAILED, now)
-
-        assertNotNull(address(assertNotNull(mapper.toSaved(probed)), 1).bodyProbe)
-        assertNull(address(assertNotNull(mapper.toSaved(failed)), 1).bodyProbe)
-    }
-
-    @Test
-    fun `a probe that never read a body is not saved`() {
-        val failed = state(1).withBodyProbeOutcome(ip(1), BodyProbeOutcome.TCP_FAILED, now)
-
-        assertNull(address(assertNotNull(mapper.toSaved(failed)), 1).bodyProbe)
+        assertNotNull(address(assertNotNull(mapper.toSaved(passed)), 1).bodyProbe)
+        assertNull(address(assertNotNull(mapper.toSaved(tlsFailed)), 1).bodyProbe)
+        assertNull(address(assertNotNull(mapper.toSaved(tcpFailed)), 1).bodyProbe)
     }
 
     @Test
@@ -126,24 +120,17 @@ class SavedHostMapperTest {
     }
 
     @Test
-    fun `an answer younger than the interval stays fresh after a restart`() {
+    fun `a restored answer is fresh within the interval, then served and resolved again`() {
         val saved = assertNotNull(mapper.toSaved(state(1)))
         now += TimeUnit.MINUTES.toMillis(9)
+        val isFreshWithinInterval = assertNotNull(mapper.toState(saved)).dns.isFresh(timer)
+        now += TimeUnit.MINUTES.toMillis(2)
 
-        val restored = assertNotNull(mapper.toState(saved))
+        val afterInterval = assertNotNull(mapper.toState(saved))
 
-        assertTrue(restored.dns.isFresh(timer))
-    }
-
-    @Test
-    fun `an older answer is served but needs a new one`() {
-        val saved = assertNotNull(mapper.toSaved(state(1)))
-        now += TimeUnit.MINUTES.toMillis(11)
-
-        val restored = assertNotNull(mapper.toState(saved))
-
-        assertTrue(restored.dns.hasAnswer)
-        assertTrue(restored.dns.isAnswerNeeded(timer))
+        assertTrue(isFreshWithinInterval)
+        assertTrue(afterInterval.dns.hasAnswer)
+        assertTrue(afterInterval.dns.isAnswerNeeded(timer))
     }
 
     @Test

@@ -8,7 +8,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
@@ -43,19 +42,9 @@ class WithFailoverBeaconTest {
         server.enqueue(MockResponse().setBody("ok"))
         val withoutSdk = RecordingEventListener()
         val withSdk = RecordingEventListener()
-
         execute(clientWith(withoutSdk))
         execute(clientWith(withSdk).withFailoverBeacon())
-
-        assertEquals(withoutSdk.log, withSdk.log)
-    }
-
-    @Test
-    fun `app listener receives the same events on a connection failure`() {
-        server.start(0)
         server.shutdown()
-        val withoutSdk = RecordingEventListener()
-        val withSdk = RecordingEventListener()
 
         assertFailsWith<IOException> { execute(clientWith(withoutSdk)) }
         assertFailsWith<IOException> { execute(clientWith(withSdk).withFailoverBeacon()) }
@@ -88,47 +77,18 @@ class WithFailoverBeaconTest {
     }
 
     @Test
-    fun `wraps a DNS set later on a copy of a returned client`() {
+    fun `wraps a DNS or a listener set later on a copy of a returned client`() {
         val client = OkHttpClient().withFailoverBeacon()
         val appDns = Dns { listOf(InetAddress.getLoopbackAddress()) }
 
-        val copy = client.newBuilder().dns(appDns).build().withFailoverBeacon()
+        val withDns = client.newBuilder().dns(appDns).build().withFailoverBeacon()
+        val withListener =
+            client.newBuilder().eventListener(EventListener.NONE).build().withFailoverBeacon()
 
-        assertEquals(FailoverBeaconDnsFactory.create(appDns), copy.dns)
-        assertSame(client.eventListenerFactory, copy.eventListenerFactory)
-    }
-
-    @Test
-    fun `wraps a listener set later on a copy of a returned client`() {
-        val client = OkHttpClient().withFailoverBeacon()
-
-        val copy = client.newBuilder().eventListener(
-            EventListener.NONE
-        ).build().withFailoverBeacon()
-
-        assertTrue(copy.eventListenerFactory is FailoverBeaconEventListenerFactory)
-        assertSame(client.dns, copy.dns)
-    }
-
-    @Test
-    fun `leaves the original client unchanged`() {
-        val factory = EventListener.Factory { EventListener.NONE }
-        val original = OkHttpClient.Builder().eventListenerFactory(factory).build()
-
-        val client = original.withFailoverBeacon()
-
-        assertNotSame(original, client)
-        assertSame(factory, original.eventListenerFactory)
-    }
-
-    @Test
-    fun `shares the connection pool and dispatcher with the original client`() {
-        val original = OkHttpClient()
-
-        val client = original.withFailoverBeacon()
-
-        assertSame(original.connectionPool, client.connectionPool)
-        assertSame(original.dispatcher, client.dispatcher)
+        assertEquals(FailoverBeaconDnsFactory.create(appDns), withDns.dns)
+        assertSame(client.eventListenerFactory, withDns.eventListenerFactory)
+        assertTrue(withListener.eventListenerFactory is FailoverBeaconEventListenerFactory)
+        assertSame(client.dns, withListener.dns)
     }
 
     @Test

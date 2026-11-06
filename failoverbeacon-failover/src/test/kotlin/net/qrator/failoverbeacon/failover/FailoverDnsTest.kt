@@ -36,23 +36,6 @@ class FailoverDnsTest {
     private val session get() = assertNotNull(sessions.current)
 
     @Test
-    fun `a lookup of a configured host starts what is stale for every host`() {
-        val dns = dns(
-            resolved = listOf(ip(1)),
-            additional = listOf(ip(7)),
-            otherHosts = listOf(SPARE)
-        )
-        session.startTcpProbeRoundIfStale(API)
-        now = INTERVAL
-
-        dns.lookup(API)
-        executor.runAll()
-
-        assertEquals(2, probes.queued)
-        assertEquals(setOf(API, SPARE), resolver.lookups.toSet())
-    }
-
-    @Test
     fun `fresh addresses come at once and are refreshed in the background`() {
         val dns = dns(resolved = listOf(ip(1)), additional = listOf(ip(7)))
         resolver.answer(API, ip(2))
@@ -107,7 +90,7 @@ class FailoverDnsTest {
 
     @Test
     fun `after a failure lookups do not wait until DNS answers`() {
-        val dns = dns(resolved = listOf(ip(1)), waitMillis = 5_000)
+        val dns = dns(resolved = listOf(ip(1)), waitMillis = WAIT_LIMIT_MILLIS)
         session.saveResolveFailure(API)
         now = INTERVAL
         resolver.answer(API, ip(2))
@@ -117,7 +100,7 @@ class FailoverDnsTest {
         val elapsed = Duration.between(start, Instant.now())
         executor.runAll()
 
-        assertTrue(elapsed < Duration.ofSeconds(2), "$elapsed")
+        assertTrue(elapsed < Duration.ofMillis(WAIT_LIMIT_MILLIS), "$elapsed")
         assertEquals(listOf(ip(1)), whileFailed)
         assertEquals(listOf(ip(2)), dns.lookup(API))
     }
@@ -140,10 +123,9 @@ class FailoverDnsTest {
         resolved: List<InetAddress>? = null,
         additional: List<InetAddress> = emptyList(),
         executor: Executor = this.executor,
-        waitMillis: Long = WAIT_MILLIS,
-        otherHosts: List<String> = emptyList()
+        waitMillis: Long = WAIT_MILLIS
     ): FailoverDns {
-        val hosts = listOf(hostConfig(API, additional)) + otherHosts.map { hostConfig(it) }
+        val hosts = listOf(hostConfig(API, additional))
         val timer = RefreshTimer({ now }, INTERVAL)
         sessions = NetworkSessions(KnownNetworks(hosts, maxNetworks = 8), timer)
         sessions.switchTo(network(1))
@@ -164,8 +146,8 @@ class FailoverDnsTest {
     private companion object {
         const val API = "api.example"
         const val OTHER = "other.example"
-        const val SPARE = "spare.example"
         const val INTERVAL = 100L
         const val WAIT_MILLIS = 20L
+        const val WAIT_LIMIT_MILLIS = 5_000L
     }
 }

@@ -25,33 +25,21 @@ class FailoverBeaconEventListenerFactoryTest {
     }
 
     @Test
-    fun `returns the app listener while the SDK is not running`() {
+    fun `returns the app listener without the SDK, a subscriber or a compatible OkHttp`() {
         val appListener = RecordingEventListener()
-
-        val listener = FailoverBeaconEventListenerFactory { appListener }.create(call)
-
-        assertSame(appListener, listener)
-    }
-
-    @Test
-    fun `returns the app listener while nothing subscribes to exchanges`() {
+        val factory = FailoverBeaconEventListenerFactory { appListener }
+        val withoutSdk = factory.create(call)
         installSdk()
-        val appListener = RecordingEventListener()
-
-        val listener = FailoverBeaconEventListenerFactory { appListener }.create(call)
-
-        assertSame(appListener, listener)
-    }
-
-    @Test
-    fun `returns the app listener once the OkHttp version is incompatible`() {
+        val withoutSubscriber = factory.create(call)
+        SdkRegistry.clear()
         installSdk({})
         CallRecordingEventListener.incompatible = true
-        val appListener = RecordingEventListener()
 
-        val listener = FailoverBeaconEventListenerFactory { appListener }.create(call)
+        val incompatible = factory.create(call)
 
-        assertSame(appListener, listener)
+        assertSame(appListener, withoutSdk)
+        assertSame(appListener, withoutSubscriber)
+        assertSame(appListener, incompatible)
     }
 
     @Test

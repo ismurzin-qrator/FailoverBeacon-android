@@ -57,7 +57,7 @@ class FailoverBeaconDnsEchTest {
     }
 
     @Test
-    fun `a refresh replaces the metadata`() {
+    fun `a finished refresh replaces the metadata and lets the next one start`() {
         val dns = FailoverBeaconDnsWithNewCall(appDns)
         records(dns)
         appDns.isAnswering = false
@@ -66,6 +66,7 @@ class FailoverBeaconDnsEchTest {
         appDns.answerPending(listOf(metadata(port = 8443)))
 
         assertEquals(listOf(ipRecord(SDK_IP), metadata(port = 8443)), records(dns))
+        assertEquals(1, appDns.pending.size)
     }
 
     @Test

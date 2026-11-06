@@ -20,7 +20,8 @@ import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
 class BodyProberTest {
     private val executor = ManualExecutor()
-    private val timer = RefreshTimer({ 0L }, 100)
+    private var now = 0L
+    private val timer = RefreshTimer({ now }, INTERVAL)
     private val outcomes = mutableMapOf<InetAddress, BodyProbeOutcome>()
     private val runs = mutableListOf<Pair<InetAddress, String>>()
     private var onRun: () -> Unit = {}
@@ -86,7 +87,7 @@ class BodyProberTest {
     }
 
     @Test
-    fun `a host in a round is not queued again and can run after it finishes`() {
+    fun `a host in a round is not queued again and a later round runs after it finishes`() {
         session.probed(API)
         outcomes[ip(1)] = BodyProbeOutcome.PASSED
 
@@ -94,9 +95,12 @@ class BodyProberTest {
         prober.probeIfStale(API)
         val whileRunning = executor.queued
         executor.runAll()
+        now += INTERVAL
+        prober.probeIfStale(API)
+        executor.runAll()
 
         assertEquals(1, whileRunning)
-        assertEquals(1, runs.size)
+        assertEquals(listOf(ip(1), ip(1)), runs.map { it.first })
     }
 
     @Test
@@ -127,5 +131,6 @@ class BodyProberTest {
     private companion object {
         const val API = "api.example"
         const val NO_BODY_PROBE = "other.example"
+        const val INTERVAL = 100L
     }
 }

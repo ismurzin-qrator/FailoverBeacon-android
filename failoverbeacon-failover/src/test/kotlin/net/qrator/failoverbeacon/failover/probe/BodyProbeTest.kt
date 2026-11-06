@@ -12,6 +12,7 @@ import kotlin.concurrent.thread
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.model.BodyProbeConfig
@@ -133,31 +134,36 @@ class BodyProbeTest {
     }
 
     @Test
-    fun `close stops a read and later probes`() {
+    fun `close ends a read long before the socket timeout and stops later probes`() {
         val isReading = CountDownLatch(1)
-        serve { socket ->
+        serve {
             isReading.countDown()
             release.await()
-            socket.close()
         }
-        thread {
-            isReading.await()
-            probe.close()
-        }
+        val probe = bodyProbe(clientCertificates.sslSocketFactory(), timeoutMillis = 60_000)
+        var outcome: BodyProbeOutcome? = null
+        val reader = thread { outcome = runProbe(probe) }
+        assertTrue(isReading.await(5, TimeUnit.SECONDS))
 
-        assertEquals(BodyProbeOutcome.BODY_FAILED, runProbe())
-        assertEquals(BodyProbeOutcome.TCP_FAILED, runProbe())
+        probe.close()
+        reader.join(TimeUnit.SECONDS.toMillis(5))
+
+        assertFalse(reader.isAlive, "the read waited for the socket timeout")
+        assertEquals(BodyProbeOutcome.BODY_FAILED, outcome)
+        assertEquals(BodyProbeOutcome.TCP_FAILED, runProbe(probe))
     }
 
-    private fun bodyProbe(socketFactory: SSLSocketFactory) = BodyProbe(
-        clock = { now.also { now += clockStepNanos } },
-        socketFactory = { socketFactory },
-        hostnameVerifier = { _, _ -> isNameValid },
-        timeoutMillis = TIMEOUT_MILLIS,
-        deadlineMillis = DEADLINE_MILLIS
-    )
+    private fun bodyProbe(socketFactory: SSLSocketFactory, timeoutMillis: Int = TIMEOUT_MILLIS) =
+        BodyProbe(
+            clock = { now.also { now += clockStepNanos } },
+            socketFactory = { socketFactory },
+            hostnameVerifier = { _, _ -> isNameValid },
+            timeoutMillis = timeoutMillis,
+            deadlineMillis = DEADLINE_MILLIS
+        )
 
     private fun runProbe(
+        probe: BodyProbe = this.probe,
         port: Int = server.localPort,
         path: String = "/",
         maxBytes: Int = MAX_BYTES

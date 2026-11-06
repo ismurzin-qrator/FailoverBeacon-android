@@ -132,6 +132,44 @@ class TcpProberTest {
     }
 
     @Test
+    fun `an address being probed is not queued again`() {
+        session.saveAnswer(API, listOf(ip(1)))
+
+        prober.probeIfStale(API)
+        prober.probeIfStale(API)
+
+        assertEquals(2, executor.queued)
+    }
+
+    @Test
+    fun `a queued probe of an ended session does not connect`() {
+        session.saveAnswer(API, listOf(ip(1)))
+        prober.probeIfStale(API)
+
+        sessions.switchTo(null)
+        executor.runAll()
+
+        assertEquals(emptyList(), tcpProbe.runs)
+    }
+
+    @Test
+    fun `an unexpected failure keeps the earlier result and lets the address run again`() {
+        val connected = LayerResult.Passed(nanos = 10)
+        session.saveAnswer(API, listOf(ip(1)))
+        session.saveTcpProbe(API, ip(1), connected)
+        tcpProbe.fail(ip(1), SecurityException("no INTERNET permission"))
+        prober.probeIfStale(API)
+
+        runCatching { executor.runAll() }
+        executor.runAll()
+        now += INTERVAL
+        prober.probeIfStale(API)
+
+        assertEquals(connected, session[API]?.tcpResults?.get(ip(1)))
+        assertEquals(2, executor.queued)
+    }
+
+    @Test
     fun `a new session of a known network keeps its results`() {
         session.saveAnswer(API, listOf(ip(1)))
         prober.probeIfStale(API)

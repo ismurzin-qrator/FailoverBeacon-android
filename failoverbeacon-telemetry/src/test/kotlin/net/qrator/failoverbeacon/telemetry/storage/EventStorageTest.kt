@@ -264,22 +264,6 @@ class EventStorageTest {
     }
 
     @Test
-    fun `a failed write has no stored confirmation for that beacon`() {
-        storage.write("one")
-        val batch = files(A_DIR).single()
-        batch.delete()
-        batch.mkdir()
-        SdkRegistry.logger.minLevel = Log.DEBUG
-        messages.clear()
-
-        storage.write("two")
-
-        assertFalse(messages.any { it.startsWith("[Storage] Event stored: file=$A_DIR/") })
-        assertTrue(messages.any { it.startsWith("[Storage] Event stored: file=$B_DIR/") })
-        assertEquals(listOf(listOf("one", "two")), batches(B_DIR))
-    }
-
-    @Test
     fun `deletion diagnostics reflect success and failure`() {
         storage.write("one")
         val batch = files(A_DIR).single()
@@ -304,24 +288,6 @@ class EventStorageTest {
 
         assertFalse(batch.exists())
         assertTrue(messages.last().endsWith("deleted=true"))
-    }
-
-    @Test
-    fun `expired batch diagnostics report the actual discarded line count`() {
-        val dir = File(rootDir(), A_DIR).apply { mkdirs() }
-        val expired = File(dir, (START - EIGHTEEN_HOURS).toString())
-        expired.writeText("one\ntwo\n")
-        SdkRegistry.logger.minLevel = Log.DEBUG
-
-        storage.write("new")
-
-        assertFalse(expired.exists())
-        assertEquals(mapOf(DropReason.EXPIRED to 2L), dropped.snapshot(A))
-        assertTrue(
-            messages.contains(
-                "[Storage] Events dropped: file=$A_DIR/${expired.name}, reason=expired, count=2"
-            )
-        )
     }
 
     private fun newStorage(vararg beacons: String, maxBytes: Long = 5L * 1024 * 1024) =

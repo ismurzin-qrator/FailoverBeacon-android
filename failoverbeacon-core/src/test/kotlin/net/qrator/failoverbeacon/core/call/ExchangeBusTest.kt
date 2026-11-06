@@ -60,25 +60,17 @@ class ExchangeBusTest {
     }
 
     @Test
-    fun `a failing subscriber does not stop the others`() {
+    fun `a failing subscriber does not stop the others and only its first failure is logged`() {
+        val failure = IllegalStateException()
         val received = mutableListOf<String>()
-        bus.subscribe { throw IllegalStateException() }
+        bus.subscribe { throw failure }
         bus.subscribe { throw NoSuchMethodError() }
         bus.subscribe { received += "last" }
 
         bus.publish(exchange)
-
-        assertEquals(listOf("last"), received)
-    }
-
-    @Test
-    fun `logs only the first subscriber failure`() {
-        val failure = IllegalStateException()
-        bus.subscribe { throw failure }
-
-        bus.publish(exchange)
         bus.publish(exchange)
 
+        assertEquals(listOf("last", "last"), received)
         val (level, throwable) = logged.single()
         assertEquals(Log.ERROR, level)
         assertSame(failure, throwable)

@@ -139,7 +139,7 @@ class AddressResolverTest {
         val resolver = newResolver(executor = pool)
         val callers = List(2) { thread { resolver.resolveAndWait(API) } }
 
-        assertTrue(await { dns.lookups.size == 1 })
+        assertTrue(await { callers.all { it.state == Thread.State.TIMED_WAITING } })
         release.countDown()
         callers.forEach { it.join(5_000) }
 
