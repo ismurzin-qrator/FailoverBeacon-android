@@ -42,14 +42,22 @@ internal class NetworkSession(
         atMillis: Long
     ) = updateIfActive(host) { state -> state.withBodyProbeOutcome(address, outcome, atMillis) }
 
-    fun startTcpProbeRoundIfStale(host: String): Boolean {
-        var isStarted = false
+    fun startTcpProbeRoundIfStale(host: String): Long? {
+        var roundAtMillis: Long? = null
         updateIfActive(host) { state ->
-            isStarted = state.isTcpProbeStale(timer)
-            if (isStarted) state.withTcpProbeRound(timer.now()) else state
+            if (state.isTcpProbeStale(timer)) {
+                val now = timer.now()
+                roundAtMillis = now
+                state.withTcpProbeRound(now)
+            } else {
+                state
+            }
         }
-        return isStarted
+        return roundAtMillis
     }
+
+    fun cancelTcpProbeRound(host: String, roundAtMillis: Long) =
+        state.update(host) { it.withoutTcpProbeRound(roundAtMillis) }
 
     fun end() {
         isActive = false

@@ -182,6 +182,23 @@ class TcpProberTest {
     }
 
     @Test
+    fun `a round cut by a network change runs again on return to that network`() {
+        prober.probeIfStale(SPARE)
+        executor.runAll()
+        now += INTERVAL
+        prober.probeIfStale(SPARE)
+        sessions.switchTo(network(2, key = CELLULAR))
+        executor.runAll()
+        sessions.switchTo(network(3, key = WIFI))
+        val runsBefore = tcpProbe.runs.size
+
+        prober.probeIfStale(SPARE)
+        executor.runAll()
+
+        assertEquals(runsBefore + 2, tcpProbe.runs.size)
+    }
+
+    @Test
     fun `a new network is probed while a probe of the earlier one is running`() {
         session.saveAnswer(API, listOf(ip(1)))
         prober.probeIfStale(API)

@@ -17,12 +17,17 @@ internal class TcpProbeTasks(
 ) {
     private val running = ConcurrentHashMap.newKeySet<Probe>()
 
-    fun start(session: NetworkSession, config: FailoverHostConfig, address: InetAddress) {
+    fun start(
+        session: NetworkSession,
+        config: FailoverHostConfig,
+        address: InetAddress,
+        roundAtMillis: Long?
+    ) {
         val probe = Probe(session, config, address)
-        if (running.add(probe)) executor.execute { run(probe) }
+        if (running.add(probe)) executor.execute { run(probe, roundAtMillis) }
     }
 
-    private fun run(probe: Probe) {
+    private fun run(probe: Probe, roundAtMillis: Long?) {
         try {
             if (!probe.session.isActive) return
             val result = connect(probe.address, probe.config.port)
@@ -32,6 +37,9 @@ internal class TcpProbeTasks(
             probe.session.saveTcpProbe(probe.config.host, probe.address, result)
             bodyProber.probeIfStale(probe.config.host)
         } finally {
+            if (!probe.session.isActive && roundAtMillis != null) {
+                probe.session.cancelTcpProbeRound(probe.config.host, roundAtMillis)
+            }
             running -= probe
         }
     }

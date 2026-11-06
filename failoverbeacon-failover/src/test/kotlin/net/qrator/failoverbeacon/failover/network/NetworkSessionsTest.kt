@@ -33,7 +33,7 @@ class NetworkSessionsTest {
         sessions.switchTo(network(3, key = WIFI))
 
         assertEquals(listOf(ip(7)), onCellular)
-        assertTrue(roundOnCellular)
+        assertNotNull(roundOnCellular)
         assertEquals(listOf(ip(1), ip(7)), session[API]?.ips)
     }
 

@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
@@ -37,7 +38,7 @@ class NetworkSessionTest {
         assertFalse(session.isActive)
         assertEquals(listOf(HostAddress(ip(7))), session[API]?.addresses)
         assertTrue(dns.isAnswerNeeded(timer))
-        assertFalse(session.startTcpProbeRoundIfStale(API))
+        assertNull(session.startTcpProbeRoundIfStale(API))
     }
 
     @Test
@@ -48,10 +49,10 @@ class NetworkSessionTest {
         val beforeInterval = session.startTcpProbeRoundIfStale(API)
         now += 1
 
-        assertTrue(first)
-        assertFalse(second)
-        assertFalse(beforeInterval)
-        assertTrue(session.startTcpProbeRoundIfStale(API))
+        assertNotNull(first)
+        assertNull(second)
+        assertNull(beforeInterval)
+        assertNotNull(session.startTcpProbeRoundIfStale(API))
     }
 
     private companion object {

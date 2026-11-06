@@ -42,6 +42,9 @@ internal class HostState private constructor(
 
     fun withTcpProbeRound(atMillis: Long): HostState = HostState(config, dns, atMillis, addresses)
 
+    fun withoutTcpProbeRound(atMillis: Long): HostState =
+        if (tcpProbeRoundAtMillis == atMillis) HostState(config, dns, null, addresses) else this
+
     fun withTcpProbe(address: InetAddress, result: LayerResult): HostState {
         val updated = addresses.map { if (it.address == address) it.copy(tcp = result) else it }
         return HostState(config, dns, tcpProbeRoundAtMillis, AddressRanking.rank(updated))
