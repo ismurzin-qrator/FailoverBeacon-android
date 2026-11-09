@@ -44,6 +44,11 @@ internal data class HostAddress(
         return updated.copy(bodyProbedAtMillis = atMillis)
     }
 
+    fun withResponse(isAnswered: Boolean, atMillis: Long): HostAddress = copy(
+        body = if (isAnswered) LayerResult.Passed(nanos = null) else LayerResult.Failed,
+        bodyProbedAtMillis = atMillis
+    )
+
     private fun withTcpPassed(): HostAddress =
         if (tcp is LayerResult.Passed) this else copy(tcp = LayerResult.Passed(nanos = null))
 }

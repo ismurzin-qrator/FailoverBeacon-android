@@ -60,6 +60,13 @@ internal class HostState private constructor(
         return HostState(config, dns, tcpProbeRoundAtMillis, AddressRanking.rank(updated))
     }
 
+    fun withResponse(peerAddress: String, isAnswered: Boolean, atMillis: Long): HostState {
+        val updated = addresses.map {
+            if (it.address.hostAddress == peerAddress) it.withResponse(isAnswered, atMillis) else it
+        }
+        return HostState(config, dns, tcpProbeRoundAtMillis, AddressRanking.rank(updated))
+    }
+
     fun withBodyProbeOutcome(
         address: InetAddress,
         outcome: BodyProbeOutcome,

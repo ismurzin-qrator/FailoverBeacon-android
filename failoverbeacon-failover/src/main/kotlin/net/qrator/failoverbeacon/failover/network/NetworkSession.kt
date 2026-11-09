@@ -34,6 +34,9 @@ internal class NetworkSession(
     fun saveConnectOutcome(host: String, peerAddress: String, outcome: ConnectOutcome) =
         updateIfActive(host) { state -> state.withConnectOutcome(peerAddress, outcome) }
 
+    fun saveResponse(host: String, peerAddress: String, isAnswered: Boolean) =
+        updateIfActive(host) { state -> state.withResponse(peerAddress, isAnswered, maxAge.now()) }
+
     fun saveBodyProbe(
         host: String,
         address: InetAddress,
