@@ -23,6 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkInstance
+import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.core.call.ExchangeBus
 import net.qrator.failoverbeacon.core.call.model.Exchange
@@ -62,6 +63,7 @@ class FailoverTest {
 
     @AfterTest
     fun tearDown() {
+        SdkRegistry.isFailoverEnabled = true
         sdk.close()
         server.close()
     }
@@ -163,6 +165,31 @@ class FailoverTest {
         changeNetwork()
 
         assertEquals(true, isLeftByClient.poll(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun `while failover is off exchanges and network changes start no tests, a lookup does`() {
+        start()
+        awaitUntil { server.tcpProbes.get() >= 1 && server.bodyProbes.get() == 1 }
+        awaitIdle()
+
+        SdkRegistry.isFailoverEnabled = false
+        val tcpProbesWhenOff = server.tcpProbes.get()
+        val resolutionsWhenOff = resolutions.size
+        now += REFRESH_MILLIS
+        sdk.exchangeBus.publish(OTHER_HOST_EXCHANGE)
+        changeNetwork()
+        awaitIdle()
+        val tcpProbesWhileOff = server.tcpProbes.get() - tcpProbesWhenOff
+        val resolutionsWhileOff = resolutions.size - resolutionsWhenOff
+        SdkRegistry.isFailoverEnabled = true
+        lookup()
+
+        assertEquals(0, tcpProbesWhileOff)
+        assertEquals(0, resolutionsWhileOff)
+        awaitUntil {
+            server.tcpProbes.get() > tcpProbesWhenOff && resolutions.size > resolutionsWhenOff
+        }
     }
 
     // Both addresses reach the server: the leader fails its probe and the other one is next.

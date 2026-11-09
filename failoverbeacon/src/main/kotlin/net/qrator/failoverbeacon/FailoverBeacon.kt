@@ -90,6 +90,16 @@ public object FailoverBeacon {
     }
 
     /**
+     * Enables or disables failover dynamically. When disabled, new connections use standard DNS
+     * and probing stops. The SDK does not persist this value. Default is true.
+     */
+    @JvmStatic
+    public fun setFailoverEnabled(enabled: Boolean) {
+        SdkRegistry.isFailoverEnabled = enabled
+        SdkRegistry.logger.info { "[SDK] Failover ${if (enabled) "enabled" else "disabled"}" }
+    }
+
+    /**
      * Stops the SDK until the next [initialize]: calls are no longer recorded and the SDK stops
      * watching the network and the app's activities. Stored data is kept. Ignored while the SDK
      * is not running.

@@ -5,6 +5,10 @@ import net.qrator.failoverbeacon.core.logging.InternalLogger
 object SdkRegistry {
     val logger: InternalLogger = InternalLogger()
 
+    /** Whether failover hosts get SDK addresses. */
+    @Volatile
+    var isFailoverEnabled: Boolean = true
+
     /** The running SDK; null until it is installed. */
     @Volatile
     var instance: SdkInstance? = null

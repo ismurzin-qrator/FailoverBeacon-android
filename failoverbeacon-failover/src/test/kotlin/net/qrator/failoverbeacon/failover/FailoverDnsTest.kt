@@ -118,11 +118,30 @@ class FailoverDnsTest {
         assertEquals(emptyList(), resolver.lookups)
     }
 
+    @Test
+    fun `while failover is off hosts are left to the client's DNS until it is on again`() {
+        var isEnabled = false
+        val dns = dns(resolved = listOf(ip(1)), isEnabled = { isEnabled })
+        now = INTERVAL
+
+        val isManagedWhileOff = dns.manages(API)
+        val whileOff = dns.lookup(API)
+        val queuedWhileOff = probes.queued + executor.queued
+        isEnabled = true
+
+        assertFalse(isManagedWhileOff)
+        assertNull(whileOff)
+        assertEquals(0, queuedWhileOff)
+        assertTrue(dns.manages(API))
+        assertEquals(listOf(ip(1)), dns.lookup(API))
+    }
+
     private fun dns(
         resolved: List<InetAddress>? = null,
         additional: List<InetAddress> = emptyList(),
         executor: Executor = this.executor,
-        waitMillis: Long = WAIT_MILLIS
+        waitMillis: Long = WAIT_MILLIS,
+        isEnabled: () -> Boolean = { true }
     ): FailoverDns {
         val hosts = listOf(hostConfig(API, additional))
         val maxAge = MaxAge({ now }, INTERVAL)
@@ -143,7 +162,8 @@ class FailoverDnsTest {
             tcpProber,
             addressResolver,
             maxAge,
-            isFallbackWithoutEchAllowed = true
+            isFallbackWithoutEchAllowed = true,
+            isEnabled = isEnabled
         )
     }
 

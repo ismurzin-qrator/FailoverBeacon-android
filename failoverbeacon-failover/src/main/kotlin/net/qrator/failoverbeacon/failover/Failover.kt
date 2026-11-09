@@ -6,6 +6,7 @@ import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLSocketFactory
 import net.qrator.failoverbeacon.core.SdkFeature
 import net.qrator.failoverbeacon.core.SdkInstance
+import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
 import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.network.model.DefaultNetwork
@@ -75,7 +76,9 @@ class Failover(
     )
 
     fun subscribe() {
-        sdk.dns = FailoverDns(sessions, tcpProber, resolver, maxAge, fallbackWithoutEch)
+        sdk.dns = FailoverDns(sessions, tcpProber, resolver, maxAge, fallbackWithoutEch) {
+            SdkRegistry.isFailoverEnabled
+        }
         sdk.exchangeBus.subscribe(this)
         sdk.addFeature(this)
     }
@@ -86,6 +89,7 @@ class Failover(
         sdk.threads.serial.execute { startSession(network) }
 
     override fun onExchange(exchange: Exchange) {
+        if (!SdkRegistry.isFailoverEnabled) return
         feedback.save(exchange)
         tcpProber.probeStaleHosts()
         bodyProber.probeStaleHosts()
@@ -111,7 +115,7 @@ class Failover(
         tcpProbe.abort()
         bodyProbe.abort()
         sessions.switchTo(usableNetwork)
-        if (usableNetwork != null) {
+        if (usableNetwork != null && SdkRegistry.isFailoverEnabled) {
             tcpProber.probeStaleHosts()
             bodyProber.probeStaleHosts()
             resolver.preresolve()

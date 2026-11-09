@@ -12,11 +12,13 @@ internal class FailoverDns(
     private val tcpProber: TcpProber,
     private val resolver: AddressResolver,
     private val maxAge: MaxAge,
-    override val isFallbackWithoutEchAllowed: Boolean
+    override val isFallbackWithoutEchAllowed: Boolean,
+    private val isEnabled: () -> Boolean
 ) : SdkDns {
-    override fun manages(host: String): Boolean = sessions.current?.get(host) != null
+    override fun manages(host: String): Boolean = isEnabled() && sessions.current?.get(host) != null
 
     override fun lookup(host: String): List<InetAddress>? {
+        if (!isEnabled()) return null
         val state = sessions.current?.get(host) ?: return null
         tcpProber.probeStaleHosts()
         resolver.resolveStaleHosts()

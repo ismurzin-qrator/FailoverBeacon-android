@@ -59,6 +59,7 @@ class FailoverBeaconTest {
     @AfterTest
     fun tearDown() {
         SdkRegistry.clear()
+        SdkRegistry.isFailoverEnabled = true
         SdkRegistry.logger.minLevel = Log.WARN
         SdkRegistry.logger.output = LogcatLogger
     }
@@ -261,6 +262,25 @@ class FailoverBeaconTest {
         assertEquals(1, resolutionsAfterClear)
         assertEquals(2, resolutions.size)
         assertEquals(listOf<String?>(ADDRESS_LITERAL), afterLookup?.map { it.hostAddress })
+    }
+
+    @Test
+    fun `failover turned off before initialize leaves hosts to the client's DNS until it is on`() {
+        val resolutions = CopyOnWriteArrayList<String>()
+        activeNetwork()
+        FailoverBeacon.setFailoverEnabled(false)
+        FailoverBeacon.initialize(app, failoverConfig(UNPROBED, resolver = recording(resolutions)))
+        awaitSdkThread()
+        val dns = assertNotNull(SdkRegistry.instance?.dns)
+        val whileOff = dns.lookup(API)
+        val resolutionsWhileOff = resolutions.size
+
+        FailoverBeacon.setFailoverEnabled(true)
+        awaitSdkThread()
+
+        assertNull(whileOff)
+        assertEquals(0, resolutionsWhileOff)
+        assertEquals(listOf<String?>(ADDRESS_LITERAL), dns.lookup(API)?.map { it.hostAddress })
     }
 
     @Test
