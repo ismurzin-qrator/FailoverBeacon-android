@@ -15,7 +15,7 @@ import net.qrator.failoverbeacon.FailoverBeacon
 import net.qrator.failoverbeacon.FailoverBeaconConfig
 import net.qrator.failoverbeacon.FailoverHost
 import net.qrator.failoverbeacon.core.SdkRegistry
-import okhttp3.Interceptor
+import net.qrator.failoverbeacon.okhttp.fakes.isRetryControlSupported
 import okhttp3.MediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -105,7 +105,6 @@ class RetryControlTest {
         assertEquals(Result(isDelivered = false, requests = 2), result)
     }
 
-    // A GET opens a connection; the POST on it is read and the connection drops before a response.
     private fun postOnDroppedConnection(
         host: String,
         client: OkHttpClient = this.client,
@@ -145,12 +144,5 @@ class RetryControlTest {
                 sink.writeUtf8("payment")
             }
         }
-
-        val isRetryControlSupported = runCatching {
-            Interceptor.Chain::class.java.getMethod(
-                "withRetryOnConnectionFailure",
-                Boolean::class.javaPrimitiveType
-            )
-        }.isSuccess
     }
 }

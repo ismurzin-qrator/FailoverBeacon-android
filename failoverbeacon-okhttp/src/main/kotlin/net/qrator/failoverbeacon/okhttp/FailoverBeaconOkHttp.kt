@@ -3,6 +3,7 @@
 package net.qrator.failoverbeacon.okhttp
 
 import net.qrator.failoverbeacon.FailoverBeacon
+import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconAttemptInterceptor
 import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconDns
 import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconDnsFactory
 import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconEventListenerFactory
@@ -22,18 +23,22 @@ public fun OkHttpClient.withFailoverBeacon(): OkHttpClient {
     val hasSdkListener = eventListenerFactory is FailoverBeaconEventListenerFactory
     val hasSdkDns = dns is FailoverBeaconDns
     val hasSdkInterceptor = interceptors.any { it is FailoverBeaconRetryInterceptor }
-    if (hasSdkListener && hasSdkDns && hasSdkInterceptor) return this
+    val hasSdkNetworkInterceptor = networkInterceptors.any {
+        it is FailoverBeaconAttemptInterceptor
+    }
+    if (hasSdkListener && hasSdkDns && hasSdkInterceptor && hasSdkNetworkInterceptor) return this
     return newBuilder().apply {
         if (!hasSdkListener) {
             eventListenerFactory(FailoverBeaconEventListenerFactory(eventListenerFactory))
         }
         if (!hasSdkDns) dns(FailoverBeaconDnsFactory.create(dns))
         if (!hasSdkInterceptor) addInterceptor(FailoverBeaconRetryInterceptor())
+        if (!hasSdkNetworkInterceptor) addNetworkInterceptor(FailoverBeaconAttemptInterceptor())
     }.build()
 }
 
 /**
- * Marks the request as idempotent, allowing OkHttp to safely retry it after connection failures.
+ * Marks the request as idempotent, so it may be sent again after a connection failure or timeout.
  *
  * GET, HEAD, OPTIONS, TRACE, PUT, and DELETE methods are treated as idempotent by default.
  */

@@ -6,13 +6,10 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.ServerSocket
-import java.net.Socket
-import java.net.SocketAddress
 import java.net.UnknownHostException
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
-import javax.net.SocketFactory
 import kotlin.concurrent.thread
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -25,6 +22,7 @@ import net.qrator.failoverbeacon.FailoverBeacon
 import net.qrator.failoverbeacon.FailoverBeaconConfig
 import net.qrator.failoverbeacon.FailoverHost
 import net.qrator.failoverbeacon.core.SdkRegistry
+import net.qrator.failoverbeacon.okhttp.fakes.PortsByAddress
 import okhttp3.Call
 import okhttp3.EventListener
 import okhttp3.OkHttpClient
@@ -255,35 +253,6 @@ class FailoverEndToEndTest {
         override fun connectStart(call: Call, inetSocketAddress: InetSocketAddress, proxy: Proxy) {
             connects += inetSocketAddress.address
         }
-    }
-
-    private class PortsByAddress(private val ports: Map<InetAddress, Int>) : SocketFactory() {
-        override fun createSocket(): Socket = object : Socket() {
-            override fun connect(endpoint: SocketAddress, timeout: Int) {
-                val port = ports.getValue((endpoint as InetSocketAddress).address)
-                super.connect(InetSocketAddress(LOOPBACK, port), timeout)
-            }
-        }
-
-        override fun createSocket(host: String, port: Int): Socket =
-            throw UnsupportedOperationException()
-
-        override fun createSocket(
-            host: String,
-            port: Int,
-            localHost: InetAddress,
-            localPort: Int
-        ): Socket = throw UnsupportedOperationException()
-
-        override fun createSocket(host: InetAddress, port: Int): Socket =
-            throw UnsupportedOperationException()
-
-        override fun createSocket(
-            address: InetAddress,
-            port: Int,
-            localAddress: InetAddress,
-            localPort: Int
-        ): Socket = throw UnsupportedOperationException()
     }
 
     private companion object {
