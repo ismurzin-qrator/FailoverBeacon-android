@@ -70,6 +70,18 @@ class AddressRankingTest {
         assertEquals(listOf(IPV6, ip(2), OTHER_IPV6, ip(7), ip(1)), ranked(addresses))
     }
 
+    @Test
+    fun `an IPv6 address with a failed connection goes after every IPv4 address`() {
+        val addresses = listOf(
+            HostAddress(IPV6, LayerResult.Failed),
+            HostAddress(ip(1), LayerResult.Failed),
+            HostAddress(OTHER_IPV6, LayerResult.Passed(nanos = null), LayerResult.Failed),
+            HostAddress(ip(2))
+        )
+
+        assertEquals(listOf(ip(2), ip(1), IPV6, OTHER_IPV6), ranked(addresses))
+    }
+
     private fun ranked(addresses: List<HostAddress>): List<InetAddress> =
         AddressRanking.rank(addresses).map { it.address }
 
