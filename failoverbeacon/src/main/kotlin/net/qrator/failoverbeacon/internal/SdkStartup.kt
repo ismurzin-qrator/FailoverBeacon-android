@@ -53,8 +53,6 @@ internal object SdkStartup {
             hostConfigs = config.failoverHosts.map(hostMapper::toConfig),
             queryDns = config.dnsResolver::resolve,
             settings = FailoverSettings(
-                preresolveOnNetworkChange = config.options.preresolveOnNetworkChange,
-                probeOnNetworkChange = config.options.probeOnNetworkChange,
                 refreshIntervalMillis = config.options.refreshIntervalMillis,
                 fallbackWithoutEch = config.options.fallbackWithoutEch
             )

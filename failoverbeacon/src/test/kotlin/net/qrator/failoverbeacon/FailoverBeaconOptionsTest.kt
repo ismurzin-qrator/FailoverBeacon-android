@@ -14,8 +14,6 @@ class FailoverBeaconOptionsTest {
         assertEquals(60_000L, options.uploadPeriodMillis)
         assertEquals(5L * 1024 * 1024, options.diskQueueBytes)
         assertEquals(1000, options.memoryQueueSize)
-        assertTrue(options.preresolveOnNetworkChange)
-        assertTrue(options.probeOnNetworkChange)
         assertEquals(600_000L, options.refreshIntervalMillis)
         assertTrue(options.fallbackWithoutEch)
     }

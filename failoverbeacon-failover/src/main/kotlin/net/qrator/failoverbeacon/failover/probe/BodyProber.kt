@@ -15,8 +15,7 @@ internal class BodyProber(
     private val sessions: NetworkSessions,
     private val probe: (InetAddress, FailoverHostConfig) -> BodyProbeOutcome,
     private val timer: RefreshTimer,
-    private val executor: Executor,
-    private val probeOnNetworkChange: Boolean
+    private val executor: Executor
 ) {
     private val running = ConcurrentHashMap.newKeySet<Round>()
 
@@ -27,7 +26,6 @@ internal class BodyProber(
     fun probeIfStale(host: String) {
         val session = sessions.current ?: return
         val state = session[host] ?: return
-        if (!probeOnNetworkChange && !session.isFirstNetwork) return
         if (state.config.bodyProbe == null || state.addressToBodyProbe(timer) == null) return
         val round = Round(session, state.config)
         if (running.add(round)) executor.execute { run(round) }

@@ -8,7 +8,6 @@ import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.model.RefreshTimer
 
 internal class NetworkSession(
-    val isFirstNetwork: Boolean,
     private val state: NetworkState,
     private val timer: RefreshTimer,
     val networkHandle: Long

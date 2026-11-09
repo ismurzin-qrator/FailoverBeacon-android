@@ -12,8 +12,6 @@ public class FailoverBeaconOptions private constructor(
     internal val uploadPeriodMillis: Long,
     internal val diskQueueBytes: Long,
     internal val memoryQueueSize: Int,
-    internal val preresolveOnNetworkChange: Boolean,
-    internal val probeOnNetworkChange: Boolean,
     internal val refreshIntervalMillis: Long,
     internal val fallbackWithoutEch: Boolean
 ) {
@@ -22,8 +20,6 @@ public class FailoverBeaconOptions private constructor(
         private var uploadPeriodMillis = DEFAULT_UPLOAD_PERIOD_MILLIS
         private var diskQueueBytes = DEFAULT_DISK_QUEUE_BYTES
         private var memoryQueueSize = DEFAULT_MEMORY_QUEUE_SIZE
-        private var preresolveOnNetworkChange = true
-        private var probeOnNetworkChange = true
         private var refreshIntervalMillis = DEFAULT_REFRESH_INTERVAL_MILLIS
         private var fallbackWithoutEch = true
 
@@ -66,24 +62,6 @@ public class FailoverBeaconOptions private constructor(
         }
 
         /**
-         * Sets whether failover hosts are resolved in the background when the default network
-         * changes. When disabled, the first new connection to a host on that network waits for
-         * DNS. The default value is true.
-         */
-        public fun preresolveOnNetworkChange(enabled: Boolean): Builder = apply {
-            preresolveOnNetworkChange = enabled
-        }
-
-        /**
-         * Sets whether the addresses of failover hosts are tested with connections when the
-         * default network changes. When disabled, they are tested only on the network the SDK
-         * started on. The default value is true.
-         */
-        public fun probeOnNetworkChange(enabled: Boolean): Builder = apply {
-            probeOnNetworkChange = enabled
-        }
-
-        /**
          * Sets how often failover hosts are resolved and their addresses tested with connections
          * while the app makes requests, from 1 minute to 1 hour. A new connection to a host with
          * an older DNS answer waits for DNS up to 2 seconds. The default value is 10 minutes.
@@ -114,8 +92,6 @@ public class FailoverBeaconOptions private constructor(
             uploadPeriodMillis,
             diskQueueBytes,
             memoryQueueSize,
-            preresolveOnNetworkChange,
-            probeOnNetworkChange,
             refreshIntervalMillis,
             fallbackWithoutEch
         )

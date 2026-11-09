@@ -33,7 +33,6 @@ class AddressResolverTest {
         switchTo(network(1))
     }
     private val resolver = newResolver()
-    private val onlyAnsweredHosts = newResolver(preresolveOnNetworkChange = false)
 
     private val session get() = assertNotNull(sessions.current)
 
@@ -83,36 +82,6 @@ class AddressResolverTest {
         resolver.resolveAndWait(API)
 
         assertEquals(0, executor.queued)
-    }
-
-    @Test
-    fun `with preresolve off the first network resolves every host, a later one does not`() {
-        onlyAnsweredHosts.preresolve()
-        val onEventOfFirstNetwork = executor.queued
-        executor.runAll()
-        sessions.switchTo(network(2, key = "CELLULAR/001-01"))
-        onlyAnsweredHosts.preresolve()
-        val onEventOfLaterNetwork = executor.queued
-
-        assertEquals(2, onEventOfFirstNetwork)
-        assertEquals(0, onEventOfLaterNetwork)
-    }
-
-    @Test
-    fun `with preresolve off stale resolution covers the first network and answered hosts`() {
-        onlyAnsweredHosts.resolveStaleHosts()
-        val onFirstNetwork = executor.queued
-        executor.runAll()
-        dns.lookups.clear()
-        sessions.switchTo(network(2, key = "CELLULAR/001-01"))
-        session.saveAnswer(API, listOf(ip(1)))
-        now += INTERVAL
-
-        onlyAnsweredHosts.resolveStaleHosts()
-        executor.runAll()
-
-        assertEquals(2, onFirstNetwork)
-        assertEquals(listOf(API), dns.lookups)
     }
 
     @Test
@@ -188,19 +157,15 @@ class AddressResolverTest {
         assertTrue(isAnswerNeeded())
     }
 
-    private fun newResolver(
-        preresolveOnNetworkChange: Boolean = true,
-        executor: Executor = this.executor,
-        waitMillis: Long = 5_000
-    ) = AddressResolver(
-        sessions,
-        dns::lookup,
-        executor,
-        idleTcpProber(),
-        timer,
-        preresolveOnNetworkChange,
-        waitMillis
-    )
+    private fun newResolver(executor: Executor = this.executor, waitMillis: Long = 5_000) =
+        AddressResolver(
+            sessions,
+            dns::lookup,
+            executor,
+            idleTcpProber(),
+            timer,
+            waitMillis
+        )
 
     private fun isAnswerNeeded() = assertNotNull(session[API]).dns.isAnswerNeeded(timer)
 

@@ -17,14 +17,12 @@ internal fun idleBodyProber() = BodyProber(
     idleSessions(),
     { _, _ -> BodyProbeOutcome.PASSED },
     RefreshTimer({ 0L }, 1),
-    ManualExecutor(),
-    probeOnNetworkChange = true
+    ManualExecutor()
 )
 
 internal fun idleTcpProber() = TcpProber(
     idleSessions(),
     FakeTcpProbe()::run,
     ManualExecutor(),
-    idleBodyProber(),
-    probeOnNetworkChange = true
+    idleBodyProber()
 )

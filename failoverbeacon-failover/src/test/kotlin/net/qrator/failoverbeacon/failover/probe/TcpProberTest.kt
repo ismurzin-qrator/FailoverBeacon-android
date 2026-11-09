@@ -36,7 +36,7 @@ class TcpProberTest {
         }, INTERVAL)
     ).apply { switchTo(network(1, key = WIFI)) }
     private val prober =
-        TcpProber(sessions, tcpProbe::run, executor, idleBodyProber(), probeOnNetworkChange = true)
+        TcpProber(sessions, tcpProbe::run, executor, idleBodyProber())
 
     private val session get() = assertNotNull(sessions.current)
 
@@ -58,10 +58,9 @@ class TcpProberTest {
                 BodyProbeOutcome.PASSED
             },
             timer,
-            executor,
-            probeOnNetworkChange = true
+            executor
         )
-        val prober = TcpProber(probed, tcpProbe::run, executor, bodyProber, true)
+        val prober = TcpProber(probed, tcpProbe::run, executor, bodyProber)
         tcpProbe.answer(ip(1), LayerResult.Passed(nanos = 10))
         tcpProbe.answer(ip(2), LayerResult.Passed(nanos = 20))
         assertNotNull(probed.current).saveAnswer(API, listOf(ip(1), ip(2)))
@@ -208,29 +207,6 @@ class TcpProberTest {
         prober.probeIfStale(API)
 
         assertEquals(4, executor.queued)
-    }
-
-    @Test
-    fun `with network change probes off the first network is probed, others are not`() {
-        val prober =
-            TcpProber(
-                sessions,
-                tcpProbe::run,
-                executor,
-                idleBodyProber(),
-                probeOnNetworkChange = false
-            )
-        session.saveAnswer(API, listOf(ip(1)))
-        prober.probeIfStale(API)
-        val onFirstNetwork = executor.queued
-        executor.runAll()
-        sessions.switchTo(network(2, key = CELLULAR))
-        session.saveAnswer(API, listOf(ip(1)))
-
-        prober.probeIfStale(API)
-
-        assertEquals(2, onFirstNetwork)
-        assertEquals(0, executor.queued)
     }
 
     @Test

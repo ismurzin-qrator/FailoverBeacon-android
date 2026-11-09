@@ -35,7 +35,7 @@ class BodyProberTest {
         ),
         timer
     ).apply { switchTo(network(1)) }
-    private val prober = BodyProber(sessions, ::run, timer, executor, true)
+    private val prober = BodyProber(sessions, ::run, timer, executor)
 
     private val session get() = assertNotNull(sessions.current)
 
@@ -44,17 +44,6 @@ class BodyProberTest {
         session.probed(NO_BODY_PROBE)
 
         prober.probeStaleHosts()
-
-        assertEquals(0, executor.queued)
-    }
-
-    @Test
-    fun `probes off on a network change also turn body probes off there`() {
-        val prober = BodyProber(sessions, ::run, timer, executor, false)
-        sessions.switchTo(network(2, key = "CELLULAR"))
-        session.probed(API)
-
-        prober.probeIfStale(API)
 
         assertEquals(0, executor.queued)
     }

@@ -18,24 +18,21 @@ internal class AddressResolver(
     executor: Executor,
     tcpProber: TcpProber,
     private val timer: RefreshTimer,
-    private val preresolveOnNetworkChange: Boolean,
     private val waitMillis: Long
 ) : Closeable {
     private val tasks = ResolveTasks(queryDns, executor, tcpProber)
 
     fun preresolve() {
         val session = sessions.current ?: return
-        if (preresolveOnNetworkChange || session.isFirstNetwork) {
-            session.states
-                .filterNot { it.dns.isFresh(timer) }
-                .forEach { tasks.start(session, it.config.host) }
-        }
+        session.states
+            .filterNot { it.dns.isFresh(timer) }
+            .forEach { tasks.start(session, it.config.host) }
     }
 
     fun resolveStaleHosts() {
         val session = sessions.current ?: return
         session.states
-            .filter { isResolveAllowed(session, it) && it.dns.isStale(timer) }
+            .filter { it.dns.isStale(timer) }
             .forEach { tasks.start(session, it.config.host) }
     }
 
@@ -58,7 +55,4 @@ internal class AddressResolver(
     }
 
     override fun close() = tasks.close()
-
-    private fun isResolveAllowed(session: NetworkSession, state: HostState): Boolean =
-        preresolveOnNetworkChange || session.isFirstNetwork || state.dns.hasAnswer
 }

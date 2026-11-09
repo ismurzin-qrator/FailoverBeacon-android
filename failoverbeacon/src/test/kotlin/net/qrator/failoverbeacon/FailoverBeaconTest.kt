@@ -326,49 +326,6 @@ class FailoverBeaconTest {
     }
 
     @Test
-    fun `with preresolve off a new network is resolved by the first lookup`() {
-        val resolutions = CopyOnWriteArrayList<String>()
-        val options = FailoverBeaconOptions.Builder().preresolveOnNetworkChange(false).build()
-        activeNetwork()
-        FailoverBeacon.initialize(app, failoverConfig(UNPROBED, options, recording(resolutions)))
-        awaitSdkThread()
-        awaitResolutions()
-        val resolvedOnStart = resolutions.size
-
-        connect(
-            networkCallbacks().single(),
-            ShadowNetwork.newInstance(301),
-            NetworkCapabilities.TRANSPORT_CELLULAR
-        )
-        awaitResolutions()
-        val resolvedOnChange = resolutions.size
-        val addresses = assertNotNull(SdkRegistry.instance?.dns).lookup(API)
-
-        assertEquals(1, resolvedOnStart)
-        assertEquals(1, resolvedOnChange)
-        assertEquals(2, resolutions.size)
-        assertEquals(listOf<String?>(ADDRESS_LITERAL), addresses?.map { it.hostAddress })
-    }
-
-    @Test
-    fun `with probes off a new network is not probed`() {
-        val options = FailoverBeaconOptions.Builder().probeOnNetworkChange(false).build()
-        activeNetwork()
-        FailoverBeacon.initialize(app, failoverConfig(PROBED, options) { emptyList() })
-        awaitSdkThread()
-        val probesOnStart = threads().failoverProbe.taskCount
-
-        connect(
-            networkCallbacks().single(),
-            ShadowNetwork.newInstance(301),
-            NetworkCapabilities.TRANSPORT_CELLULAR
-        )
-
-        assertEquals(2, probesOnStart)
-        assertEquals(2, threads().failoverProbe.taskCount)
-    }
-
-    @Test
     fun `a blocked network is left to the client's DNS until it is unblocked`() {
         val resolutions = CopyOnWriteArrayList<String>()
         val resolver = HostResolver {

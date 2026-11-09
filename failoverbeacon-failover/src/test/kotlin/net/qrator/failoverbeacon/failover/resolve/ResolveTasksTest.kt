@@ -56,7 +56,7 @@ class ResolveTasksTest {
         sessions.switchTo(network(1))
         val session = assertNotNull(sessions.current)
         session.startTcpProbeRoundIfStale(API)
-        val tcpProber = TcpProber(sessions, tcpProbe::run, probes, idleBodyProber(), true)
+        val tcpProber = TcpProber(sessions, tcpProbe::run, probes, idleBodyProber())
         val tasks = ResolveTasks(resolver::lookup, executor, tcpProber)
 
         resolver.fail(API)
@@ -135,7 +135,6 @@ class ResolveTasksTest {
     }
 
     private fun session() = NetworkSession(
-        isFirstNetwork = true,
         state = NetworkState(listOf(HostState(hostConfig(API)), HostState(hostConfig(OTHER)))),
         timer = timer,
         networkHandle = 1L

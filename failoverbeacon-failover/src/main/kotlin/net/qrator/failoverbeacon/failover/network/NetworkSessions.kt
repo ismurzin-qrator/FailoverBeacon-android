@@ -7,8 +7,6 @@ internal class NetworkSessions(
     private val networks: KnownNetworks,
     private val timer: RefreshTimer
 ) {
-    private var firstHandle: Long? = null
-
     @Volatile
     var network: DefaultNetwork? = null
         private set
@@ -26,10 +24,8 @@ internal class NetworkSessions(
     fun switchTo(network: DefaultNetwork?) {
         current?.end()
         this.network = network
-        if (firstHandle == null) firstHandle = network?.handle
         current = network?.let {
             NetworkSession(
-                isFirstNetwork = it.handle == firstHandle,
                 state = networks.of(it.key),
                 timer = timer,
                 networkHandle = it.handle

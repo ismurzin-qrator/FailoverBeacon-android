@@ -53,29 +53,6 @@ class NetworkSessionsTest {
         assertEquals(listOf(ip(7)), session[API]?.ips)
     }
 
-    @Test
-    fun `the first network is the first one that appears`() {
-        val onStart = session.isFirstNetwork
-        sessions.switchTo(network(2, key = WIFI))
-        val onReconnect = session.isFirstNetwork
-        sessions.switchTo(network(1, key = WIFI))
-        val startedWithout =
-            NetworkSessions(
-                KnownNetworks(emptyList(), maxNetworks = 2),
-                RefreshTimer({
-                    0L
-                }, 50)
-            )
-
-        startedWithout.switchTo(null)
-        startedWithout.switchTo(network(5, key = WIFI))
-
-        assertTrue(onStart)
-        assertFalse(onReconnect)
-        assertTrue(session.isFirstNetwork)
-        assertTrue(assertNotNull(startedWithout.current).isFirstNetwork)
-    }
-
     private companion object {
         const val API = "api.example"
         const val WIFI = "WIFI/192.0.2"

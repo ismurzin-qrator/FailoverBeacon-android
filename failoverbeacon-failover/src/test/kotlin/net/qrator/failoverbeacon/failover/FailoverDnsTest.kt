@@ -130,14 +130,13 @@ class FailoverDnsTest {
         sessions = NetworkSessions(KnownNetworks(hosts, maxNetworks = 8), timer)
         sessions.switchTo(network(1))
         resolved?.let { session.saveAnswer(API, it) }
-        val tcpProber = TcpProber(sessions, FakeTcpProbe()::run, probes, idleBodyProber(), true)
+        val tcpProber = TcpProber(sessions, FakeTcpProbe()::run, probes, idleBodyProber())
         val addressResolver = AddressResolver(
             sessions,
             resolver::lookup,
             executor,
             idleTcpProber(),
             timer,
-            true,
             waitMillis
         )
         return FailoverDns(

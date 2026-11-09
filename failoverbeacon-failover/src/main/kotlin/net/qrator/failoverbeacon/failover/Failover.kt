@@ -57,15 +57,13 @@ class Failover(
         sessions = sessions,
         probe = bodyProbe::run,
         timer = bodyProbeTimer,
-        executor = sdk.threads.failoverProbe,
-        probeOnNetworkChange = settings.probeOnNetworkChange
+        executor = sdk.threads.failoverProbe
     )
     private val tcpProber = TcpProber(
         sessions = sessions,
         connect = tcpProbe::run,
         executor = sdk.threads.failoverProbe,
-        bodyProber = bodyProber,
-        probeOnNetworkChange = settings.probeOnNetworkChange
+        bodyProber = bodyProber
     )
     private val resolver = AddressResolver(
         sessions = sessions,
@@ -73,7 +71,6 @@ class Failover(
         executor = sdk.threads.failoverResolve,
         tcpProber = tcpProber,
         timer = timer,
-        preresolveOnNetworkChange = settings.preresolveOnNetworkChange,
         waitMillis = RESOLVE_WAIT_MILLIS
     )
 

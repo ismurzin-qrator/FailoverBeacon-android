@@ -10,8 +10,7 @@ internal class TcpProber(
     private val sessions: NetworkSessions,
     connect: (InetAddress, Int) -> LayerResult,
     executor: Executor,
-    bodyProber: BodyProber,
-    private val probeOnNetworkChange: Boolean
+    bodyProber: BodyProber
 ) {
     private val tasks = TcpProbeTasks(connect, executor, bodyProber)
 
@@ -23,7 +22,6 @@ internal class TcpProber(
         val session = sessions.current ?: return
         val state = session[host] ?: return
         if (!state.config.tcpProbe) return
-        if (!probeOnNetworkChange && !session.isFirstNetwork) return
         val ipv4Addresses = state.addresses.filter { it.address is Inet4Address }
         if (ipv4Addresses.size < 2) return
         val roundAtMillis = session.startTcpProbeRoundIfStale(host)

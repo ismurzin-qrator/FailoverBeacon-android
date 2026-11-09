@@ -192,8 +192,6 @@ class FailoverTest {
         val addresses = listOf(LOOPBACK, otherAddress)
         val host = FailoverHostConfig(HOST, server.port, addresses, tcpProbe = true, bodyProbe)
         val settings = FailoverSettings(
-            preresolveOnNetworkChange = true,
-            probeOnNetworkChange = true,
             refreshIntervalMillis = refreshIntervalMillis,
             fallbackWithoutEch = true
         )

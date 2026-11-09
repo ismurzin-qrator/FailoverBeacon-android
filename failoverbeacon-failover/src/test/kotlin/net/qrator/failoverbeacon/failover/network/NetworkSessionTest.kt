@@ -18,7 +18,6 @@ class NetworkSessionTest {
     private var now = 10L
     private val timer = RefreshTimer({ now }, INTERVAL)
     private val session = NetworkSession(
-        isFirstNetwork = true,
         state = NetworkState(listOf(HostState(hostConfig(API, listOf(ip(7)))))),
         timer = timer,
         networkHandle = 1L
