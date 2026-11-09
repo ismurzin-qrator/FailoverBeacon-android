@@ -6,9 +6,7 @@ import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.debug
-import net.qrator.failoverbeacon.failover.model.HostState
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
-import net.qrator.failoverbeacon.failover.network.NetworkSession
+import net.qrator.failoverbeacon.failover.model.MaxAge
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 import net.qrator.failoverbeacon.failover.probe.TcpProber
 
@@ -17,7 +15,7 @@ internal class AddressResolver(
     queryDns: (String) -> List<InetAddress>,
     executor: Executor,
     tcpProber: TcpProber,
-    private val timer: RefreshTimer,
+    private val maxAge: MaxAge,
     private val waitMillis: Long
 ) : Closeable {
     private val tasks = ResolveTasks(queryDns, executor, tcpProber)
@@ -25,14 +23,14 @@ internal class AddressResolver(
     fun preresolve() {
         val session = sessions.current ?: return
         session.states
-            .filterNot { it.dns.isFresh(timer) }
+            .filterNot { it.dns.isFresh(maxAge) }
             .forEach { tasks.start(session, it.config.host) }
     }
 
     fun resolveStaleHosts() {
         val session = sessions.current ?: return
         session.states
-            .filter { it.dns.isStale(timer) }
+            .filter { it.dns.isResolveDue(maxAge) }
             .forEach { tasks.start(session, it.config.host) }
     }
 

@@ -13,8 +13,6 @@ class ExchangeBus :
     Closeable {
     private val subscribers = CopyOnWriteArrayList<ExchangeSubscriber>()
 
-    val hasSubscribers: Boolean get() = subscribers.isNotEmpty()
-
     fun subscribe(subscriber: ExchangeSubscriber) {
         subscribers += subscriber
     }

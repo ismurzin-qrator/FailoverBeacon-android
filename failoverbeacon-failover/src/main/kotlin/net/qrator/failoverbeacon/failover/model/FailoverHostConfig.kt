@@ -7,5 +7,5 @@ class FailoverHostConfig(
     val port: Int,
     val additionalAddresses: List<InetAddress>,
     val tcpProbe: Boolean,
-    val bodyProbe: BodyProbeConfig? = null
+    val bodyProbe: BodyProbeConfig?
 )

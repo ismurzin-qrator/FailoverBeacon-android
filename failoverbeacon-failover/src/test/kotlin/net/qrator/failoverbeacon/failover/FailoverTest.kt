@@ -210,14 +210,14 @@ class FailoverTest {
 
     private fun changeNetwork() {
         sdk.publishNetwork(DefaultNetwork(++networkHandle, "WIFI/192.0.2", blocked = false))
-        sdk.threads.storage.submit {}.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        sdk.threads.serial.submit {}.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
     }
 
     private fun lookup(): List<InetAddress> = assertNotNull(assertNotNull(sdk.dns).lookup(HOST))
 
     private fun awaitIdle() {
-        awaitUntil { sdk.threads.failoverResolve.isIdle() }
-        awaitUntil { sdk.threads.failoverProbe.isIdle() }
+        awaitUntil { sdk.threads.dns.isIdle() }
+        awaitUntil { sdk.threads.probes.isIdle() }
     }
 
     private fun ThreadPoolExecutor.isIdle() = completedTaskCount == taskCount

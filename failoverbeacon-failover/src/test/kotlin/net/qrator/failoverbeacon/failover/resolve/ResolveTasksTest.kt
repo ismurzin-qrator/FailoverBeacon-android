@@ -1,10 +1,15 @@
 package net.qrator.failoverbeacon.failover.resolve
 
+import android.util.Log
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertSame
+import net.qrator.failoverbeacon.core.SdkRegistry
+import net.qrator.failoverbeacon.core.logging.LogOutput
 import net.qrator.failoverbeacon.failover.fakes.FakeDns
 import net.qrator.failoverbeacon.failover.fakes.FakeTcpProbe
 import net.qrator.failoverbeacon.failover.fakes.ManualExecutor
@@ -15,20 +20,27 @@ import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.ips
 import net.qrator.failoverbeacon.failover.fakes.network
 import net.qrator.failoverbeacon.failover.model.HostState
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.model.MaxAge
 import net.qrator.failoverbeacon.failover.network.KnownNetworks
+import net.qrator.failoverbeacon.failover.network.NetworkHosts
 import net.qrator.failoverbeacon.failover.network.NetworkSession
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
-import net.qrator.failoverbeacon.failover.network.NetworkState
 import net.qrator.failoverbeacon.failover.probe.TcpProber
 
 class ResolveTasksTest {
+    private val previousOutput = SdkRegistry.logger.output
     private val resolver = FakeDns()
     private val executor = ManualExecutor()
     private var now = 0L
-    private val timer = RefreshTimer({ now }, 100)
+    private val maxAge = MaxAge({ now }, 100)
     private val tasks = ResolveTasks(resolver::lookup, executor, idleTcpProber())
     private val session = session()
+
+    @AfterTest
+    fun tearDown() {
+        SdkRegistry.logger.output = previousOutput
+        SdkRegistry.clear()
+    }
 
     @Test
     fun `an answer is saved in the background and finishes the callers`() {
@@ -51,7 +63,7 @@ class ResolveTasksTest {
         val probes = ManualExecutor()
         val sessions = NetworkSessions(
             KnownNetworks(listOf(hostConfig(API, listOf(ip(1), ip(2)))), 8),
-            timer
+            maxAge
         )
         sessions.switchTo(network(1))
         val session = assertNotNull(sessions.current)
@@ -123,24 +135,33 @@ class ResolveTasksTest {
     }
 
     @Test
-    fun `an unexpected failure is recorded and lets the host be resolved again`() {
+    fun `a failing app resolver is recorded and logged once as a warning with the host`() {
+        val logged = CopyOnWriteArrayList<Pair<Int, String>>()
+        SdkRegistry.logger.output = LogOutput { level, message, _ -> logged += level to message }
         resolver.answer(API) { throw SecurityException("no INTERNET permission") }
-        tasks.start(session, API)
 
-        runCatching { executor.runAll() }
-        tasks.start(session, API)
+        repeat(2) {
+            tasks.start(session, API)
+            executor.runAll()
+        }
 
         assertFalse(isAnswerNeeded())
-        assertEquals(1, executor.queued)
+        assertEquals(listOf(API, API), resolver.lookups)
+        assertEquals(
+            listOf(
+                Log.WARN to "[Failover] $API: dnsResolver failed. Further failures are not logged"
+            ),
+            logged
+        )
     }
 
     private fun session() = NetworkSession(
-        state = NetworkState(listOf(HostState(hostConfig(API)), HostState(hostConfig(OTHER)))),
-        timer = timer,
+        hosts = NetworkHosts(listOf(HostState(hostConfig(API)), HostState(hostConfig(OTHER)))),
+        maxAge = maxAge,
         networkHandle = 1L
     )
 
-    private fun isAnswerNeeded() = assertNotNull(session[API]).dns.isAnswerNeeded(timer)
+    private fun isAnswerNeeded() = assertNotNull(session[API]).dns.isAnswerNeeded(maxAge)
 
     private companion object {
         const val API = "api.example"

@@ -8,6 +8,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.debug
+import net.qrator.failoverbeacon.core.logging.warn
 import net.qrator.failoverbeacon.failover.network.NetworkSession
 import net.qrator.failoverbeacon.failover.probe.TcpProber
 
@@ -56,6 +57,11 @@ internal class ResolveTasks(
         addresses.isNotEmpty()
     } catch (e: UnknownHostException) {
         SdkRegistry.logger.debug(e) { "[Failover] ${task.host}: DNS failed" }
+        false
+    } catch (e: Exception) {
+        SdkRegistry.logger.warn(e, onlyOnce = true) {
+            "[Failover] ${task.host}: dnsResolver failed. Further failures are not logged"
+        }
         false
     }
 

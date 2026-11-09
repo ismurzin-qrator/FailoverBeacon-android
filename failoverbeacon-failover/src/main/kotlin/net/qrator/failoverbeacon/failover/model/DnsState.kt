@@ -4,22 +4,23 @@ import java.net.InetAddress
 
 internal data class DnsState(
     val addresses: List<InetAddress> = emptyList(),
-    private val lastAttempt: ResolveAttempt? = null,
-    val answeredAtMillis: Long? = null
+    val answeredAtMillis: Long? = null,
+    private val failedAtMillis: Long? = null
 ) {
     val hasAnswer: Boolean get() = addresses.isNotEmpty()
 
-    fun isFresh(timer: RefreshTimer): Boolean =
-        lastAttempt is ResolveAttempt.Answered && !timer.isExpired(lastAttempt.atMillis)
+    fun isFresh(maxAge: MaxAge): Boolean =
+        failedAtMillis == null && answeredAtMillis != null && !maxAge.isOver(answeredAtMillis)
 
-    fun isStale(timer: RefreshTimer): Boolean =
-        lastAttempt == null || timer.isExpired(lastAttempt.atMillis)
+    fun isResolveDue(maxAge: MaxAge): Boolean {
+        val lastAttemptAtMillis = failedAtMillis ?: answeredAtMillis
+        return lastAttemptAtMillis == null || maxAge.isOver(lastAttemptAtMillis)
+    }
 
-    fun isAnswerNeeded(timer: RefreshTimer): Boolean =
-        lastAttempt !is ResolveAttempt.Failed && !isFresh(timer)
+    fun isAnswerNeeded(maxAge: MaxAge): Boolean = failedAtMillis == null && !isFresh(maxAge)
 
     fun withAnswer(addresses: List<InetAddress>, atMillis: Long): DnsState =
-        DnsState(addresses, ResolveAttempt.Answered(atMillis), atMillis)
+        DnsState(addresses, answeredAtMillis = atMillis)
 
-    fun withFailure(atMillis: Long): DnsState = copy(lastAttempt = ResolveAttempt.Failed(atMillis))
+    fun withFailure(atMillis: Long): DnsState = copy(failedAtMillis = atMillis)
 }

@@ -21,16 +21,16 @@ import net.qrator.failoverbeacon.failover.fakes.ips
 import net.qrator.failoverbeacon.failover.fakes.network
 import net.qrator.failoverbeacon.failover.model.HostAddress
 import net.qrator.failoverbeacon.failover.model.LayerResult
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.model.MaxAge
 import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
 class TrafficFeedbackTest {
     private val sessions = NetworkSessions(
         KnownNetworks(listOf(hostConfig(API, listOf(ip(1), ip(2)))), maxNetworks = 8),
-        RefreshTimer({
+        MaxAge({
             0L
-        }, intervalMillis = 50)
+        }, millis = 50)
     ).apply { switchTo(network(1)) }
     private val feedback = TrafficFeedback(sessions)
     private val session get() = assertNotNull(sessions.current)

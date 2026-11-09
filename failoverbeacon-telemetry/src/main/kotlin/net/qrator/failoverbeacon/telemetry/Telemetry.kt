@@ -32,14 +32,14 @@ class Telemetry(
         failureSampleRate = failureSampleRate,
         successSampleRate = successSampleRate,
         memoryQueueSize = memoryQueueSize,
-        executor = sdk.threads.storage,
+        executor = sdk.threads.serial,
         storage = storage,
         dropped = dropped
     )
     private val uploader = TelemetryUploader(
         beacons = beacons,
         storage = storage,
-        storageExecutor = sdk.threads.storage,
+        storageExecutor = sdk.threads.serial,
         consentSource = sdk,
         networkSource = sdk.networkSource,
         clock = sdk.epochClock,
@@ -52,7 +52,7 @@ class Telemetry(
     }
 
     fun start() {
-        sdk.threads.upload.scheduleWithFixedDelay(
+        sdk.threads.scheduler.scheduleWithFixedDelay(
             uploader::upload,
             0,
             uploadPeriodMillis,

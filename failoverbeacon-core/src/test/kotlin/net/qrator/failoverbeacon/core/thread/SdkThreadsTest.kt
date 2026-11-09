@@ -14,19 +14,19 @@ class SdkThreadsTest {
     fun tearDown() = threads.close()
 
     @Test
-    fun `close stops every pool and lets queued storage work finish`() {
+    fun `close stops every pool and lets queued serial work finish`() {
         val release = CountDownLatch(1)
         val isQueuedWorkDone = AtomicBoolean()
-        threads.storage.execute { release.await() }
-        threads.storage.execute { isQueuedWorkDone.set(true) }
+        threads.serial.execute { release.await() }
+        threads.serial.execute { isQueuedWorkDone.set(true) }
 
         threads.close()
         release.countDown()
 
-        assertTrue(threads.upload.isShutdown)
-        assertTrue(threads.failoverResolve.isShutdown)
-        assertTrue(threads.failoverProbe.isShutdown)
-        assertTrue(threads.storage.awaitTermination(5, TimeUnit.SECONDS))
+        assertTrue(threads.scheduler.isShutdown)
+        assertTrue(threads.dns.isShutdown)
+        assertTrue(threads.probes.isShutdown)
+        assertTrue(threads.serial.awaitTermination(5, TimeUnit.SECONDS))
         assertTrue(isQueuedWorkDone.get())
     }
 }

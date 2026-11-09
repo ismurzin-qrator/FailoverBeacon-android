@@ -10,14 +10,14 @@ import net.qrator.failoverbeacon.failover.fakes.hostConfig
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.ips
 import net.qrator.failoverbeacon.failover.fakes.network
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.model.MaxAge
 
 class NetworkSessionsTest {
     private val sessions = NetworkSessions(
         KnownNetworks(listOf(hostConfig(API, listOf(ip(7)))), maxNetworks = 2),
-        RefreshTimer({
+        MaxAge({
             10L
-        }, intervalMillis = 50)
+        }, millis = 50)
     ).apply { switchTo(network(1, key = WIFI)) }
 
     private val session get() = assertNotNull(sessions.current)

@@ -16,18 +16,21 @@ internal class HostState private constructor(
         config.additionalAddresses.map { HostAddress(it) }
     )
 
-    fun isTcpProbeStale(timer: RefreshTimer): Boolean =
-        tcpProbeRoundAtMillis == null || timer.isExpired(tcpProbeRoundAtMillis)
+    val ipv4Addresses: List<HostAddress> = addresses.filter { it.address is Inet4Address }
+
+    val isRankable: Boolean get() = ipv4Addresses.size > 1
+
+    fun isTcpProbeStale(maxAge: MaxAge): Boolean =
+        tcpProbeRoundAtMillis == null || maxAge.isOver(tcpProbeRoundAtMillis)
 
     // The leader, once TCP results are in.
-    fun addressToBodyProbe(timer: RefreshTimer): InetAddress? {
-        val ipv4Addresses = addresses.filter { it.address is Inet4Address }
+    fun addressToBodyProbe(maxAge: MaxAge): InetAddress? {
         val leader = ipv4Addresses.firstOrNull() ?: return null
-        val isDue = ipv4Addresses.size > 1 &&
+        val isDue = isRankable &&
             ipv4Addresses.none { it.tcp == LayerResult.Unknown } &&
             leader.tcp != LayerResult.Failed &&
-            leader.isBodyProbeStale(timer) &&
-            ipv4Addresses.count { !it.isBodyProbeStale(timer) } < MAX_FRESH_BODY_PROBES
+            leader.isBodyProbeStale(maxAge) &&
+            ipv4Addresses.count { !it.isBodyProbeStale(maxAge) } < MAX_FRESH_BODY_PROBES
         return leader.address.takeIf { isDue }
     }
 

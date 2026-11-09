@@ -14,7 +14,7 @@ import net.qrator.failoverbeacon.failover.fakes.tcpResults
 import net.qrator.failoverbeacon.failover.model.BodyProbeConfig
 import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
 import net.qrator.failoverbeacon.failover.model.LayerResult
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.model.MaxAge
 import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
@@ -31,7 +31,7 @@ class TcpProberTest {
             ),
             maxNetworks = 8
         ),
-        RefreshTimer({
+        MaxAge({
             now
         }, INTERVAL)
     ).apply { switchTo(network(1, key = WIFI)) }
@@ -42,27 +42,27 @@ class TcpProberTest {
 
     @Test
     fun `the last TCP result starts the body probe of the leader`() {
-        val timer = RefreshTimer({ now }, INTERVAL)
+        val maxAge = MaxAge({ now }, INTERVAL)
         val probed = NetworkSessions(
             KnownNetworks(
                 listOf(hostConfig(API, bodyProbe = BodyProbeConfig("/probe.bin", 1_024))),
                 maxNetworks = 8
             ),
-            timer
+            maxAge
         ).apply { switchTo(network(1, key = WIFI)) }
         val bodyProbes = mutableListOf<InetAddress>()
         val bodyProber = BodyProber(
             probed,
-            { address, _ ->
+            { address, _, _, _ ->
                 bodyProbes += address
                 BodyProbeOutcome.PASSED
             },
-            timer,
+            maxAge,
             executor
         )
         val prober = TcpProber(probed, tcpProbe::run, executor, bodyProber)
-        tcpProbe.answer(ip(1), LayerResult.Passed(nanos = 10))
-        tcpProbe.answer(ip(2), LayerResult.Passed(nanos = 20))
+        tcpProbe.answer(ip(1), nanos = 10)
+        tcpProbe.answer(ip(2), nanos = 20)
         assertNotNull(probed.current).saveAnswer(API, listOf(ip(1), ip(2)))
 
         prober.probeIfStale(API)
@@ -73,7 +73,7 @@ class TcpProberTest {
 
     @Test
     fun `each IPv4 address is connected and its result is recorded`() {
-        tcpProbe.answer(ip(1), LayerResult.Passed(nanos = 40_000_000))
+        tcpProbe.answer(ip(1), nanos = 40_000_000)
         session.saveAnswer(API, listOf(ip(1), ip(2), IPV6))
 
         prober.probeIfStale(API)

@@ -12,7 +12,7 @@ internal class EchDnsCall(
     private val serviceMetadata: ServiceMetadataCache,
     private val isFallbackWithoutEchAllowed: Boolean
 ) : Dns.Call {
-    @Volatile private var canceled = false
+    @Volatile private var isCanceled = false
 
     override fun enqueue(callback: Dns.Callback) {
         val records = try {
@@ -26,7 +26,7 @@ internal class EchDnsCall(
             callback.onFailure(this, e)
             return
         }
-        if (canceled) {
+        if (isCanceled) {
             callback.onFailure(this, IOException("canceled"))
         } else {
             callback.onRecords(this, last = true, records = records)
@@ -34,8 +34,8 @@ internal class EchDnsCall(
     }
 
     override fun cancel() {
-        canceled = true
+        isCanceled = true
     }
 
-    override fun isCanceled(): Boolean = canceled
+    override fun isCanceled(): Boolean = isCanceled
 }

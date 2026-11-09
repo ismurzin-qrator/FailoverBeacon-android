@@ -46,7 +46,7 @@ class CallRecordingEventListenerTest {
     @AfterTest
     fun tearDown() {
         SdkRegistry.logger.output = previousOutput
-        CallRecordingEventListener.incompatible = false
+        CallRecordingEventListener.isIncompatible = false
         SdkRegistry.clear()
     }
 
@@ -73,7 +73,7 @@ class CallRecordingEventListenerTest {
     fun `a linkage error marks the OkHttp version incompatible`() {
         listener { throw NoSuchMethodError() }.dnsStart(call(OkHttpClient()), "example.test")
 
-        assertTrue(CallRecordingEventListener.incompatible)
+        assertTrue(CallRecordingEventListener.isIncompatible)
         assertEquals(
             "[OkHttp] Version is incompatible with the SDK. New calls are not observed",
             logs.single().first

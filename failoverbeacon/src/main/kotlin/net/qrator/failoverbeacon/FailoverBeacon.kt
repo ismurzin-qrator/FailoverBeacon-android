@@ -24,8 +24,8 @@ public object FailoverBeacon {
     /**
      * Starts the SDK. Call it from `Application.onCreate`; it does no disk or network I/O on the
      * calling thread. Failover hosts from [FailoverBeaconConfig] are resolved and checked in the
-     * background right away. Apps with a consent banner pass [Consent.PENDING] as [consent] until the user
-     * decides. The default value is [Consent.GRANTED].
+     * background right away. Apps with a consent banner pass [Consent.PENDING] as [consent] until
+     * the user decides. The default value is [Consent.GRANTED].
      *
      * Works only in the app's main process. A repeated call is ignored.
      */

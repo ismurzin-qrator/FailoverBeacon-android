@@ -6,6 +6,11 @@ import java.net.InetAddress
 import java.util.Locale
 
 private const val FORBIDDEN_DOMAIN_CHARS = "#%/:<>?@[\\]^|"
+private const val MAX_DOMAIN_LENGTH = 253
+private const val MAX_LABEL_LENGTH = 63
+private const val IPV4_OCTETS = 4
+private const val MAX_OCTET_DIGITS = 3
+private const val MAX_OCTET = 255
 
 /** Returns [host] as a lowercase ASCII domain name, or null if it is not a valid one. */
 internal fun canonicalHost(host: String): String? {
@@ -14,9 +19,9 @@ internal fun canonicalHost(host: String): String? {
     } catch (_: IllegalArgumentException) {
         return null
     }
-    val valid = ascii.length <= 253 &&
+    val valid = ascii.length <= MAX_DOMAIN_LENGTH &&
         ascii.none { it <= ' ' || it >= '\u007f' || it in FORBIDDEN_DOMAIN_CHARS } &&
-        ascii.split('.').all { it.length in 1..63 }
+        ascii.split('.').all { it.length in 1..MAX_LABEL_LENGTH }
     return if (valid) ascii else null
 }
 
@@ -31,12 +36,12 @@ internal fun endsInNumber(host: String): Boolean {
 /** Parses an address like `192.0.2.10` without DNS and names it [host], or returns null. */
 internal fun parseIpv4(address: String, host: String): Inet4Address? {
     val octets = address.split('.')
-    if (octets.size != 4 || !octets.all(::isOctet)) return null
-    val bytes = ByteArray(4) { octets[it].toInt().toByte() }
+    if (octets.size != IPV4_OCTETS || !octets.all(::isOctet)) return null
+    val bytes = ByteArray(IPV4_OCTETS) { octets[it].toInt().toByte() }
     return InetAddress.getByAddress(host, bytes) as Inet4Address
 }
 
-private fun isOctet(octet: String): Boolean = octet.length in 1..3 &&
+private fun isOctet(octet: String): Boolean = octet.length in 1..MAX_OCTET_DIGITS &&
     octet.all { it in '0'..'9' } &&
     (octet.length == 1 || octet[0] != '0') &&
-    octet.toInt() <= 255
+    octet.toInt() <= MAX_OCTET

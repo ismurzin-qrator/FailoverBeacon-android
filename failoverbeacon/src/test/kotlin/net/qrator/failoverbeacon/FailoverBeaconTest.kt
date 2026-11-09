@@ -187,10 +187,10 @@ class FailoverBeaconTest {
         FailoverBeacon.initialize(app, config)
 
         assertNull(stopped)
-        assertTrue(threads.storage.isShutdown)
-        assertTrue(threads.upload.isShutdown)
-        assertTrue(threads.failoverResolve.isShutdown)
-        assertTrue(threads.failoverProbe.isShutdown)
+        assertTrue(threads.serial.isShutdown)
+        assertTrue(threads.scheduler.isShutdown)
+        assertTrue(threads.dns.isShutdown)
+        assertTrue(threads.probes.isShutdown)
         assertEquals(emptySet(), callbacksAfterStop)
         assertEquals(false, foreground?.isForeground())
         assertNotNull(SdkRegistry.instance)
@@ -201,7 +201,7 @@ class FailoverBeaconTest {
     fun `stop finishes when a feature fails to close`() {
         FailoverBeacon.initialize(app, config)
         val instance = assertNotNull(SdkRegistry.instance)
-        val executor = threads().storage
+        val executor = threads().serial
         instance.addFeature(
             object : SdkFeature {
                 override fun close(): Unit = throw IllegalStateException("broken feature")
@@ -340,7 +340,7 @@ class FailoverBeaconTest {
 
         connect(callback, network, NetworkCapabilities.TRANSPORT_WIFI, blocked = true)
         val whileBlocked = dns.lookup(API)
-        val probesWhileBlocked = threads().failoverProbe.taskCount
+        val probesWhileBlocked = threads().probes.taskCount
         val resolutionsWhileBlocked = resolutions.size
         callback.onBlockedStatusChanged(network, false)
         awaitSdkThread()
@@ -349,7 +349,7 @@ class FailoverBeaconTest {
         assertNull(whileBlocked)
         assertEquals(0, probesWhileBlocked)
         assertEquals(0, resolutionsWhileBlocked)
-        assertEquals(2, threads().failoverProbe.taskCount)
+        assertEquals(2, threads().probes.taskCount)
         assertEquals(listOf(API), resolutions)
     }
 
@@ -444,7 +444,7 @@ class FailoverBeaconTest {
     fun `withdrawn consent right before stop still deletes stored events`() {
         FailoverBeacon.initialize(app, config)
         val event = storeEvent()
-        val executor = threads().storage
+        val executor = threads().serial
         val release = CountDownLatch(1)
         executor.execute { release.await() }
 
@@ -520,7 +520,7 @@ class FailoverBeaconTest {
         }
 
     private fun awaitSdkThread() {
-        threads().storage.submit {}.get(5, TimeUnit.SECONDS)
+        threads().serial.submit {}.get(5, TimeUnit.SECONDS)
     }
 
     private fun threads() = assertNotNull(SdkRegistry.instance).threads
@@ -555,7 +555,7 @@ class FailoverBeaconTest {
         ShadowNetworkCapabilities.newInstance().also { shadowOf(it).addTransportType(transport) }
 
     private fun awaitResolutions() {
-        val pool = threads().failoverResolve
+        val pool = threads().dns
         awaitUntil("resolutions did not finish") { pool.completedTaskCount == pool.taskCount }
     }
 

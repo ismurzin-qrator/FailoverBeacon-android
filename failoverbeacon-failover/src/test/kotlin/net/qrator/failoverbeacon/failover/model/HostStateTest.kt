@@ -13,7 +13,7 @@ import net.qrator.failoverbeacon.failover.fakes.tcpResults
 
 class HostStateTest {
     private var now = 0L
-    private val timer = RefreshTimer({ now }, INTERVAL)
+    private val maxAge = MaxAge({ now }, INTERVAL)
     private val state = HostState(hostConfig("api.example", additional = listOf(ip(7))))
     private val connected = LayerResult.Passed(nanos = 40)
 
@@ -86,12 +86,12 @@ class HostStateTest {
         val started = state.answered(ip(1)).withTcpProbeRound(atMillis = 10)
         val updated = started.answered(ip(1), ip(2)).withTcpProbe(ip(2), LayerResult.Failed)
         now = 9 + INTERVAL
-        val beforeInterval = updated.isTcpProbeStale(timer)
+        val beforeInterval = updated.isTcpProbeStale(maxAge)
         now = 10 + INTERVAL
 
-        assertTrue(state.isTcpProbeStale(timer))
+        assertTrue(state.isTcpProbeStale(maxAge))
         assertFalse(beforeInterval)
-        assertTrue(updated.isTcpProbeStale(timer))
+        assertTrue(updated.isTcpProbeStale(maxAge))
     }
 
     @Test
@@ -101,8 +101,8 @@ class HostStateTest {
         val probing = answered.withTcpProbe(ip(1), connected)
         val probed = probing.withTcpProbe(ip(7), LayerResult.Passed(nanos = 90))
 
-        assertNull(probing.addressToBodyProbe(timer))
-        assertEquals(ip(1), probed.addressToBodyProbe(timer))
+        assertNull(probing.addressToBodyProbe(maxAge))
+        assertEquals(ip(1), probed.addressToBodyProbe(maxAge))
     }
 
     @Test
@@ -113,8 +113,8 @@ class HostStateTest {
             .withTcpProbe(ip(1), LayerResult.Failed)
             .withTcpProbe(ip(7), LayerResult.Failed)
 
-        assertNull(single.addressToBodyProbe(timer))
-        assertNull(allFailed.addressToBodyProbe(timer))
+        assertNull(single.addressToBodyProbe(maxAge))
+        assertNull(allFailed.addressToBodyProbe(maxAge))
     }
 
     @Test
@@ -123,9 +123,9 @@ class HostStateTest {
             .withBodyProbeOutcome(ip(1), BodyProbeOutcome.PASSED, atMillis = 10)
 
         now = 9 + INTERVAL
-        assertNull(probed.addressToBodyProbe(timer))
+        assertNull(probed.addressToBodyProbe(maxAge))
         now = 10 + INTERVAL
-        assertEquals(ip(1), probed.addressToBodyProbe(timer))
+        assertEquals(ip(1), probed.addressToBodyProbe(maxAge))
     }
 
     @Test
@@ -135,10 +135,10 @@ class HostStateTest {
         val second = first.withBodyProbeOutcome(ip(2), BodyProbeOutcome.TLS_FAILED, atMillis = 0)
         val third = second.withBodyProbeOutcome(ip(3), BodyProbeOutcome.BODY_FAILED, atMillis = 0)
 
-        assertEquals(ip(2), first.addressToBodyProbe(timer))
-        assertEquals(ip(3), second.addressToBodyProbe(timer))
+        assertEquals(ip(2), first.addressToBodyProbe(maxAge))
+        assertEquals(ip(3), second.addressToBodyProbe(maxAge))
         assertEquals(ip(4), third.ips.first())
-        assertNull(third.addressToBodyProbe(timer))
+        assertNull(third.addressToBodyProbe(maxAge))
     }
 
     private fun probedState(vararg addresses: InetAddress): HostState {

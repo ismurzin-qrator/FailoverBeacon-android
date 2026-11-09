@@ -14,8 +14,8 @@ import kotlin.math.min
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.debug
 import net.qrator.failoverbeacon.core.time.MonotonicClock
+import net.qrator.failoverbeacon.failover.model.BodyProbeConfig
 import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
-import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 
 internal class BodyProbe(
     private val clock: MonotonicClock,
@@ -26,10 +26,12 @@ internal class BodyProbe(
 ) : Closeable {
     private val sockets = OpenSockets()
 
-    fun run(address: InetAddress, config: FailoverHostConfig): BodyProbeOutcome {
-        val host = config.host
-        val port = config.port
-        val settings = checkNotNull(config.bodyProbe)
+    fun run(
+        address: InetAddress,
+        host: String,
+        port: Int,
+        settings: BodyProbeConfig
+    ): BodyProbeOutcome {
         val maxBytes = settings.maxBytes
         val socket = sockets.open() ?: return BodyProbeOutcome.TCP_FAILED
         try {
@@ -40,7 +42,7 @@ internal class BodyProbe(
                 val isFullResponse = try {
                     tls.outputStream.write(request(host, port, settings.path, maxBytes))
                     tls.outputStream.flush()
-                    readResponse(tls.inputStream, maxBytes, start, "$host ${address.hostAddress}")
+                    readResponse(tls.inputStream, maxBytes, start, host, address)
                 } catch (_: IOException) {
                     false
                 }
@@ -96,7 +98,8 @@ internal class BodyProbe(
         input: InputStream,
         maxBytes: Int,
         startNanos: Long,
-        target: String
+        host: String,
+        address: InetAddress
     ): Boolean {
         val deadlineNanos = TimeUnit.MILLISECONDS.toNanos(deadlineMillis)
         val buffer = ByteArray(BUFFER_BYTES)
@@ -124,7 +127,7 @@ internal class BodyProbe(
             }
         }
         SdkRegistry.logger.debug {
-            "[Failover] $target: ${head.lineSequence().first().trim()}, $total bytes"
+            "[Failover] $host ${address.hostAddress}: ${head.lineSequence().first().trim()}, $total bytes"
         }
         // The end of the stream looks the same with and without close_notify.
         val expected = expectedBytes

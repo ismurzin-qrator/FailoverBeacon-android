@@ -1,4 +1,4 @@
-package net.qrator.failoverbeacon.failover.store
+package net.qrator.failoverbeacon.failover.storage
 
 import java.io.File
 import kotlin.io.path.createTempDirectory
@@ -15,7 +15,7 @@ import net.qrator.failoverbeacon.failover.fakes.ips
 import net.qrator.failoverbeacon.failover.model.ConnectOutcome
 import net.qrator.failoverbeacon.failover.model.DnsState
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.model.MaxAge
 import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -39,7 +39,7 @@ class KnownNetworksPersistenceTest {
         networks = networks,
         hostConfigs = hostConfigs,
         clock = { 10L },
-        bodyProbeTimer = RefreshTimer({ 10L }, intervalMillis = 50),
+        bodyProbeMaxAge = MaxAge({ 10L }, millis = 50),
         storage = storage,
         scheduler = scheduler
     )

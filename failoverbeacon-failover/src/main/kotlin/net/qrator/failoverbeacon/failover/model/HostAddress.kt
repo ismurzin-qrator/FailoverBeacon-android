@@ -12,8 +12,8 @@ internal data class HostAddress(
     val hasFailure: Boolean
         get() = tcp == LayerResult.Failed || tls == LayerResult.Failed || body == LayerResult.Failed
 
-    fun isBodyProbeStale(timer: RefreshTimer): Boolean =
-        bodyProbedAtMillis == null || timer.isExpired(bodyProbedAtMillis)
+    fun isBodyProbeStale(maxAge: MaxAge): Boolean =
+        bodyProbedAtMillis == null || maxAge.isOver(bodyProbedAtMillis)
 
     fun withConnectOutcome(outcome: ConnectOutcome): HostAddress = when (outcome) {
         ConnectOutcome.CONNECTED_PLAIN -> withTcpPassed()

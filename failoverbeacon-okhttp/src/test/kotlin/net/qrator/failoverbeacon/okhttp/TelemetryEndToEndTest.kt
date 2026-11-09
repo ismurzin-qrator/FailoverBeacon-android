@@ -96,7 +96,7 @@ class TelemetryEndToEndTest {
     fun `keeps at most memoryQueueSize events waiting for the SDK thread`() {
         restart(FailoverBeaconOptions.Builder().memoryQueueSize(1).build())
         val release = CountDownLatch(1)
-        threads().storage.execute { release.await() }
+        threads().serial.execute { release.await() }
 
         call("a.test")
         call("a.test")
@@ -276,14 +276,14 @@ class TelemetryEndToEndTest {
         File(app.cacheDir, "failoverbeacon").walk().filter { it.isFile }.toList()
 
     private fun awaitSdkThread() {
-        val executor = threads().storage
+        val executor = threads().serial
         executor.submit {}.get(5, TimeUnit.SECONDS)
     }
 
     private fun threads() = assertNotNull(SdkRegistry.instance).threads
 
     private fun awaitUploadThread() {
-        val executor = threads().upload
+        val executor = threads().scheduler
         executor.submit {}.get(5, TimeUnit.SECONDS)
     }
 

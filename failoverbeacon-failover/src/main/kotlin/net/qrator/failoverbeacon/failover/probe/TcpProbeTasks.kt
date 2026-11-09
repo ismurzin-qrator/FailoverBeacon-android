@@ -11,7 +11,7 @@ import net.qrator.failoverbeacon.failover.model.LayerResult
 import net.qrator.failoverbeacon.failover.network.NetworkSession
 
 internal class TcpProbeTasks(
-    private val connect: (InetAddress, Int) -> LayerResult,
+    private val connect: (InetAddress, Int) -> Long?,
     private val executor: Executor,
     private val bodyProber: BodyProber
 ) {
@@ -30,10 +30,12 @@ internal class TcpProbeTasks(
     private fun run(probe: Probe, roundAtMillis: Long?) {
         try {
             if (!probe.session.isActive) return
-            val result = connect(probe.address, probe.config.port)
+            val nanos = connect(probe.address, probe.config.port)
             SdkRegistry.logger.debug {
-                "[Failover] ${probe.config.host} ${probe.address.hostAddress}: ${describe(result)}"
+                val time = nanos?.let { "${TimeUnit.NANOSECONDS.toMillis(it)} ms" } ?: "failed"
+                "[Failover] ${probe.config.host} ${probe.address.hostAddress}: tcp probe $time"
             }
+            val result = nanos?.let { LayerResult.Passed(it) } ?: LayerResult.Failed
             probe.session.saveTcpProbe(probe.config.host, probe.address, result)
             bodyProber.probeIfStale(probe.config.host)
         } finally {
@@ -42,15 +44,6 @@ internal class TcpProbeTasks(
             }
             running -= probe
         }
-    }
-
-    private fun describe(result: LayerResult): String = when (result) {
-        is LayerResult.Passed ->
-            result.nanos?.let { "${TimeUnit.NANOSECONDS.toMillis(it)} ms" } ?: "passed"
-
-        LayerResult.Failed -> "failed"
-
-        LayerResult.Unknown -> "unknown"
     }
 
     private data class Probe(

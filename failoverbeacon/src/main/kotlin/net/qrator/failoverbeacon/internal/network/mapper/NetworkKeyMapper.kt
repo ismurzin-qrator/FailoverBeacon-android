@@ -4,6 +4,7 @@ import android.net.LinkProperties
 import android.net.NetworkCapabilities
 import java.net.Inet4Address
 import net.qrator.failoverbeacon.core.network.model.NetworkCarrier
+import net.qrator.failoverbeacon.core.util.toHex
 
 internal class NetworkKeyMapper {
     private val transportMapper = NetworkTransportMapper()
@@ -25,10 +26,15 @@ internal class NetworkKeyMapper {
             .filterNot { it.isLoopbackAddress || it.isLinkLocalAddress }
         val ipv4 = addresses.firstOrNull { it is Inet4Address }
         if (ipv4 != null) {
-            return ipv4.address.take(3).joinToString(".") { (it.toInt() and 0xFF).toString() }
+            return ipv4.address.take(IPV4_PREFIX_BYTES).joinToString(".") {
+                it.toUByte().toString()
+            }
         }
-        return addresses.firstOrNull()?.address?.take(8)
-            ?.joinToString("") { "%02x".format(it) }
-            .orEmpty()
+        return addresses.firstOrNull()?.address?.copyOf(IPV6_PREFIX_BYTES)?.toHex().orEmpty()
+    }
+
+    private companion object {
+        const val IPV4_PREFIX_BYTES = 3
+        const val IPV6_PREFIX_BYTES = 8
     }
 }

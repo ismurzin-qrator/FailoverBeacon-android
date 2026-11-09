@@ -8,35 +8,31 @@ internal class KnownNetworks(
     private val hostConfigs: List<FailoverHostConfig>,
     private val maxNetworks: Int
 ) {
-    private val statesByKey = LinkedHashMap<String, NetworkState>()
+    private val hostsByKey = LinkedHashMap<String, NetworkHosts>()
 
     // A subnet or a mobile operator must not reach the disk in plain text.
-    @Synchronized
-    fun of(networkKey: String): NetworkState {
+    fun of(networkKey: String): NetworkHosts {
         val key = sha256Hex(networkKey)
-        val state = statesByKey.remove(key) ?: newState(emptyList())
-        statesByKey[key] = state
-        if (statesByKey.size > maxNetworks) {
-            statesByKey.remove(statesByKey.keys.first())
+        val hosts = hostsByKey.remove(key) ?: newHosts(emptyList())
+        hostsByKey[key] = hosts
+        if (hostsByKey.size > maxNetworks) {
+            hostsByKey.remove(hostsByKey.keys.first())
         }
-        return state
+        return hosts
     }
 
-    @Synchronized
-    fun all(): Map<String, List<HostState>> = statesByKey.mapValues { it.value.hosts }
+    fun all(): Map<String, List<HostState>> = hostsByKey.mapValues { it.value.all }
 
-    @Synchronized
     fun putAll(networks: Map<String, List<HostState>>) {
-        networks.forEach { (key, hosts) -> statesByKey[key] = newState(hosts) }
+        networks.forEach { (key, hosts) -> hostsByKey[key] = newHosts(hosts) }
     }
 
-    @Synchronized
     fun clear() {
-        statesByKey.clear()
+        hostsByKey.clear()
     }
 
-    private fun newState(known: List<HostState>): NetworkState {
+    private fun newHosts(known: List<HostState>): NetworkHosts {
         val knownByHost = known.associateBy { it.config.host }
-        return NetworkState(hostConfigs.map { knownByHost[it.host] ?: HostState(it) })
+        return NetworkHosts(hostConfigs.map { knownByHost[it.host] ?: HostState(it) })
     }
 }

@@ -15,8 +15,7 @@ internal class FailoverBeaconEventListenerFactory(private val appFactory: EventL
     override fun create(call: Call): EventListener {
         val appListener = appFactory.create(call)
         val sdk = SdkRegistry.instance ?: return appListener
-        if (!sdk.exchangeBus.hasSubscribers) return appListener
-        if (CallRecordingEventListener.incompatible) return appListener
+        if (CallRecordingEventListener.isIncompatible) return appListener
         val callRecorder = CallRecorder(
             clock = sdk.clock,
             epochClock = sdk.epochClock,
@@ -31,11 +30,11 @@ internal class FailoverBeaconEventListenerFactory(private val appFactory: EventL
 
     private fun combine(first: EventListener, second: EventListener): EventListener {
         if (second === EventListener.NONE) return first
-        if (plusAvailable) {
+        if (isPlusAvailable) {
             try {
                 return plus(first, second)
             } catch (_: NoSuchMethodError) {
-                plusAvailable = false
+                isPlusAvailable = false
             }
         }
         return CompositeEventListener(first, second)
@@ -46,6 +45,6 @@ internal class FailoverBeaconEventListenerFactory(private val appFactory: EventL
 
     private companion object {
         @Volatile
-        var plusAvailable = true
+        var isPlusAvailable = true
     }
 }

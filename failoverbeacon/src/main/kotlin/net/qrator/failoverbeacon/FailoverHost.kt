@@ -24,7 +24,7 @@ import net.qrator.failoverbeacon.internal.util.parseIpv4
  */
 public class FailoverHost @JvmOverloads public constructor(
     host: String,
-    port: Int = 443,
+    port: Int = HTTPS_PORT,
     additionalAddresses: List<String> = emptyList(),
     internal val tcpProbe: Boolean = true,
     internal val bodyProbe: FailoverBodyProbe? = null
@@ -42,12 +42,17 @@ public class FailoverHost @JvmOverloads public constructor(
     }
 
     internal val port: Int = port.also {
-        require(it in 1..65535) { "port must be in 1..65535, was $it" }
+        require(it in 1..MAX_PORT) { "port must be in 1..$MAX_PORT, was $it" }
     }
 
     internal val additionalAddresses: List<Inet4Address> = additionalAddresses.distinct().map {
         requireNotNull(parseIpv4(it, this.host)) {
             "additionalAddresses must contain IPv4 addresses like 192.0.2.10, was \"$it\""
         }
+    }
+
+    private companion object {
+        const val HTTPS_PORT = 443
+        const val MAX_PORT = 65535
     }
 }

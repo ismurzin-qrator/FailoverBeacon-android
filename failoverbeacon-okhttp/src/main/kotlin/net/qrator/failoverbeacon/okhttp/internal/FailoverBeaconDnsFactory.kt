@@ -14,6 +14,7 @@ internal object FailoverBeaconDnsFactory {
 
     @SuppressSignatureCheck(since = "5.5")
     private fun hasNewCallDnsApi(): Boolean = try {
+        // Loads the class: OkHttp before 5.5 throws NoClassDefFoundError here.
         Dns.Request::class.java.name.isNotEmpty()
     } catch (_: LinkageError) {
         false

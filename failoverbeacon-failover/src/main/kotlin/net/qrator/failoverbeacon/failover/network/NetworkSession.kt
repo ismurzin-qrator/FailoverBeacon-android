@@ -5,27 +5,27 @@ import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
 import net.qrator.failoverbeacon.failover.model.ConnectOutcome
 import net.qrator.failoverbeacon.failover.model.HostState
 import net.qrator.failoverbeacon.failover.model.LayerResult
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.model.MaxAge
 
 internal class NetworkSession(
-    private val state: NetworkState,
-    private val timer: RefreshTimer,
+    private val hosts: NetworkHosts,
+    private val maxAge: MaxAge,
     val networkHandle: Long
 ) {
     @Volatile
     var isActive: Boolean = true
         private set
 
-    val states: List<HostState> get() = state.hosts
+    val states: List<HostState> get() = hosts.all
 
-    operator fun get(host: String): HostState? = state[host]
+    operator fun get(host: String): HostState? = hosts[host]
 
     fun saveAnswer(host: String, addresses: List<InetAddress>) = updateIfActive(host) { state ->
-        state.withDns(state.dns.withAnswer(addresses, timer.now()))
+        state.withDns(state.dns.withAnswer(addresses, maxAge.now()))
     }
 
     fun saveResolveFailure(host: String) = updateIfActive(host) { state ->
-        state.withDns(state.dns.withFailure(timer.now()))
+        state.withDns(state.dns.withFailure(maxAge.now()))
     }
 
     fun saveTcpProbe(host: String, address: InetAddress, result: LayerResult) =
@@ -44,8 +44,8 @@ internal class NetworkSession(
     fun startTcpProbeRoundIfStale(host: String): Long? {
         var roundAtMillis: Long? = null
         updateIfActive(host) { state ->
-            if (state.isTcpProbeStale(timer)) {
-                val now = timer.now()
+            if (state.isTcpProbeStale(maxAge)) {
+                val now = maxAge.now()
                 roundAtMillis = now
                 state.withTcpProbeRound(now)
             } else {
@@ -56,13 +56,13 @@ internal class NetworkSession(
     }
 
     fun cancelTcpProbeRound(host: String, roundAtMillis: Long) =
-        state.update(host) { it.withoutTcpProbeRound(roundAtMillis) }
+        hosts.update(host) { it.withoutTcpProbeRound(roundAtMillis) }
 
     fun end() {
         isActive = false
     }
 
     private fun updateIfActive(host: String, change: (HostState) -> HostState) {
-        if (isActive) state.update(host, change)
+        if (isActive) hosts.update(host, change)
     }
 }

@@ -10,7 +10,7 @@ import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
 import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.network.model.DefaultNetwork
 import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.model.MaxAge
 import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 import net.qrator.failoverbeacon.failover.probe.BodyProbe
@@ -18,7 +18,7 @@ import net.qrator.failoverbeacon.failover.probe.BodyProber
 import net.qrator.failoverbeacon.failover.probe.TcpProbe
 import net.qrator.failoverbeacon.failover.probe.TcpProber
 import net.qrator.failoverbeacon.failover.resolve.AddressResolver
-import net.qrator.failoverbeacon.failover.store.KnownNetworksPersistence
+import net.qrator.failoverbeacon.failover.storage.KnownNetworksPersistence
 import net.qrator.failoverbeacon.failover.traffic.TrafficFeedback
 
 class Failover(
@@ -28,19 +28,19 @@ class Failover(
     settings: FailoverSettings
 ) : SdkFeature,
     ExchangeSubscriber {
-    private val timer = RefreshTimer(sdk.epochClock, settings.refreshIntervalMillis)
+    private val maxAge = MaxAge(sdk.epochClock, settings.refreshIntervalMillis)
     private val fallbackWithoutEch = settings.fallbackWithoutEch
-    private val bodyProbeTimer = RefreshTimer(sdk.epochClock, BODY_PROBE_INTERVAL_MILLIS)
+    private val bodyProbeMaxAge = MaxAge(sdk.epochClock, BODY_PROBE_INTERVAL_MILLIS)
     private val networks = KnownNetworks(hostConfigs, MAX_NETWORKS)
-    private val sessions = NetworkSessions(networks, timer)
+    private val sessions = NetworkSessions(networks, maxAge)
     private val persistence = KnownNetworksPersistence(
         cacheDir = sdk.appContext::getCacheDir,
         networks = networks,
         hostConfigs = hostConfigs,
         clock = sdk.epochClock,
-        bodyProbeTimer = bodyProbeTimer,
-        storage = sdk.threads.storage,
-        scheduler = sdk.threads.upload
+        bodyProbeMaxAge = bodyProbeMaxAge,
+        storage = sdk.threads.serial,
+        scheduler = sdk.threads.scheduler
     )
     private val feedback = TrafficFeedback(sessions)
     private val tcpProbe = TcpProbe(sdk.clock, PROBE_TIMEOUT_MILLIS)
@@ -56,26 +56,26 @@ class Failover(
     private val bodyProber = BodyProber(
         sessions = sessions,
         probe = bodyProbe::run,
-        timer = bodyProbeTimer,
-        executor = sdk.threads.failoverProbe
+        maxAge = bodyProbeMaxAge,
+        executor = sdk.threads.probes
     )
     private val tcpProber = TcpProber(
         sessions = sessions,
         connect = tcpProbe::run,
-        executor = sdk.threads.failoverProbe,
+        executor = sdk.threads.probes,
         bodyProber = bodyProber
     )
     private val resolver = AddressResolver(
         sessions = sessions,
         queryDns = queryDns,
-        executor = sdk.threads.failoverResolve,
+        executor = sdk.threads.dns,
         tcpProber = tcpProber,
-        timer = timer,
+        maxAge = maxAge,
         waitMillis = RESOLVE_WAIT_MILLIS
     )
 
     fun subscribe() {
-        sdk.dns = FailoverDns(sessions, tcpProber, resolver, timer, fallbackWithoutEch)
+        sdk.dns = FailoverDns(sessions, tcpProber, resolver, maxAge, fallbackWithoutEch)
         sdk.exchangeBus.subscribe(this)
         sdk.addFeature(this)
     }
@@ -83,7 +83,7 @@ class Failover(
     fun start() = persistence.restore()
 
     override fun onNetworkChanged(network: DefaultNetwork?) =
-        sdk.threads.storage.execute { startSession(network) }
+        sdk.threads.serial.execute { startSession(network) }
 
     override fun onExchange(exchange: Exchange) {
         feedback.save(exchange)
@@ -95,7 +95,7 @@ class Failover(
 
     override fun clearData() {
         persistence.clear()
-        sdk.threads.storage.execute { sessions.switchTo(sessions.network) }
+        sdk.threads.serial.execute { sessions.restart() }
     }
 
     override fun close() {

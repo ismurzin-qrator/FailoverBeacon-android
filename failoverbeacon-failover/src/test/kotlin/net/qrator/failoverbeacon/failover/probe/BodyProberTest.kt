@@ -11,9 +11,8 @@ import net.qrator.failoverbeacon.failover.fakes.ips
 import net.qrator.failoverbeacon.failover.fakes.network
 import net.qrator.failoverbeacon.failover.model.BodyProbeConfig
 import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
-import net.qrator.failoverbeacon.failover.model.FailoverHostConfig
 import net.qrator.failoverbeacon.failover.model.LayerResult
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.model.MaxAge
 import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import net.qrator.failoverbeacon.failover.network.NetworkSession
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
@@ -21,7 +20,7 @@ import net.qrator.failoverbeacon.failover.network.NetworkSessions
 class BodyProberTest {
     private val executor = ManualExecutor()
     private var now = 0L
-    private val timer = RefreshTimer({ now }, INTERVAL)
+    private val maxAge = MaxAge({ now }, INTERVAL)
     private val outcomes = mutableMapOf<InetAddress, BodyProbeOutcome>()
     private val runs = mutableListOf<Pair<InetAddress, String>>()
     private var onRun: () -> Unit = {}
@@ -33,9 +32,9 @@ class BodyProberTest {
             ),
             maxNetworks = 8
         ),
-        timer
+        maxAge
     ).apply { switchTo(network(1)) }
-    private val prober = BodyProber(sessions, ::run, timer, executor)
+    private val prober = BodyProber(sessions, ::run, maxAge, executor)
 
     private val session get() = assertNotNull(sessions.current)
 
@@ -105,8 +104,13 @@ class BodyProberTest {
         assertEquals(LayerResult.Unknown, first[API]?.addresses?.first()?.tls)
     }
 
-    private fun run(address: InetAddress, config: FailoverHostConfig): BodyProbeOutcome {
-        runs += address to config.host
+    private fun run(
+        address: InetAddress,
+        host: String,
+        port: Int,
+        settings: BodyProbeConfig
+    ): BodyProbeOutcome {
+        runs += address to host
         onRun()
         return outcomes[address] ?: BodyProbeOutcome.TCP_FAILED
     }

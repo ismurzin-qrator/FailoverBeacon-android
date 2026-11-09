@@ -1,7 +1,7 @@
 package net.qrator.failoverbeacon.failover.fakes
 
 import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.model.MaxAge
 import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 import net.qrator.failoverbeacon.failover.probe.BodyProber
@@ -9,14 +9,14 @@ import net.qrator.failoverbeacon.failover.probe.TcpProber
 
 private fun idleSessions() = NetworkSessions(
     KnownNetworks(emptyList(), maxNetworks = 1),
-    RefreshTimer({ 0L }, 1)
+    MaxAge({ 0L }, 1)
 )
 
 // No current session: these probers have nothing to probe, for tests of what comes before them.
 internal fun idleBodyProber() = BodyProber(
     idleSessions(),
-    { _, _ -> BodyProbeOutcome.PASSED },
-    RefreshTimer({ 0L }, 1),
+    { _, _, _, _ -> BodyProbeOutcome.PASSED },
+    MaxAge({ 0L }, 1),
     ManualExecutor()
 )
 

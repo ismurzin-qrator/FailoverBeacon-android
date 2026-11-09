@@ -3,7 +3,6 @@ package net.qrator.failoverbeacon.core.thread
 import android.util.Log
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -17,7 +16,7 @@ import net.qrator.failoverbeacon.core.logging.LogOutput
 class SdkExecutorTest {
     private val previousOutput = SdkRegistry.logger.output
     private val logged = CopyOnWriteArrayList<Pair<Int, Throwable?>>()
-    private val executor = SdkExecutor("test", 1, 1, 0, LinkedBlockingQueue())
+    private val executor = SdkExecutor("test", 1, 0)
 
     @BeforeTest
     fun setUp() {

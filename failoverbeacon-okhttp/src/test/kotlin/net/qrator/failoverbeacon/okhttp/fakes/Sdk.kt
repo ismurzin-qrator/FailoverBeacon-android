@@ -8,7 +8,7 @@ import net.qrator.failoverbeacon.core.call.ExchangeBus
 import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
 import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 
-/** Installs an SDK whose exchanges go to [subscribers]; without one, calls are not recorded. */
+/** Installs an SDK whose exchanges go to [subscribers]. */
 fun installSdk(
     vararg subscribers: ExchangeSubscriber,
     network: NetworkSnapshot = NetworkSnapshot.Unknown,

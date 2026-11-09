@@ -4,7 +4,6 @@ import java.net.InetAddress
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.Executor
-import java.util.concurrent.LinkedBlockingQueue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -20,7 +19,7 @@ import net.qrator.failoverbeacon.failover.fakes.idleBodyProber
 import net.qrator.failoverbeacon.failover.fakes.idleTcpProber
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.network
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.model.MaxAge
 import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 import net.qrator.failoverbeacon.failover.probe.TcpProber
@@ -50,7 +49,7 @@ class FailoverDnsTest {
 
     @Test
     fun `a stale answer waits for the new one`() {
-        val pool = SdkExecutor("test", 1, 1, 1_000, LinkedBlockingQueue())
+        val pool = SdkExecutor("test", 1, 1_000)
         val dns = dns(resolved = listOf(ip(1)), executor = pool, waitMillis = 5_000)
         resolver.answer(API) {
             Thread.sleep(50)
@@ -126,8 +125,8 @@ class FailoverDnsTest {
         waitMillis: Long = WAIT_MILLIS
     ): FailoverDns {
         val hosts = listOf(hostConfig(API, additional))
-        val timer = RefreshTimer({ now }, INTERVAL)
-        sessions = NetworkSessions(KnownNetworks(hosts, maxNetworks = 8), timer)
+        val maxAge = MaxAge({ now }, INTERVAL)
+        sessions = NetworkSessions(KnownNetworks(hosts, maxNetworks = 8), maxAge)
         sessions.switchTo(network(1))
         resolved?.let { session.saveAnswer(API, it) }
         val tcpProber = TcpProber(sessions, FakeTcpProbe()::run, probes, idleBodyProber())
@@ -136,14 +135,14 @@ class FailoverDnsTest {
             resolver::lookup,
             executor,
             idleTcpProber(),
-            timer,
+            maxAge,
             waitMillis
         )
         return FailoverDns(
             sessions,
             tcpProber,
             addressResolver,
-            timer,
+            maxAge,
             isFallbackWithoutEchAllowed = true
         )
     }

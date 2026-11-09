@@ -8,7 +8,7 @@ import okhttp3.Dns
 @SuppressSignatureCheck(since = "5.5")
 internal class FailoverBeaconDnsWithNewCall(delegate: Dns) : FailoverBeaconDns(delegate) {
     private val serviceMetadata = ServiceMetadataCache(delegate)
-    private val isEchSupported = Build.VERSION.SDK_INT >= 37
+    private val isEchSupported = Build.VERSION.SDK_INT >= ECH_MIN_API
     private val delegateHasOwnNewCall by lazy {
         delegate.newCall(PROBE).javaClass != LOOKUP_ONLY.newCall(PROBE).javaClass
     }
@@ -27,6 +27,8 @@ internal class FailoverBeaconDnsWithNewCall(delegate: Dns) : FailoverBeaconDns(d
 
     @SuppressSignatureCheck(since = "5.5")
     private companion object {
+        // OkHttp applies ECH on Android 17.
+        const val ECH_MIN_API = 37
         val PROBE = Dns.Request("localhost")
         val LOOKUP_ONLY = Dns { emptyList() }
     }

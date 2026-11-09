@@ -1,6 +1,5 @@
 package net.qrator.failoverbeacon.failover.probe
 
-import java.net.Inet4Address
 import java.net.InetAddress
 import java.util.concurrent.Executor
 import net.qrator.failoverbeacon.failover.model.LayerResult
@@ -8,7 +7,7 @@ import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
 internal class TcpProber(
     private val sessions: NetworkSessions,
-    connect: (InetAddress, Int) -> LayerResult,
+    connect: (InetAddress, Int) -> Long?,
     executor: Executor,
     bodyProber: BodyProber
 ) {
@@ -21,11 +20,9 @@ internal class TcpProber(
     fun probeIfStale(host: String) {
         val session = sessions.current ?: return
         val state = session[host] ?: return
-        if (!state.config.tcpProbe) return
-        val ipv4Addresses = state.addresses.filter { it.address is Inet4Address }
-        if (ipv4Addresses.size < 2) return
+        if (!state.config.tcpProbe || !state.isRankable) return
         val roundAtMillis = session.startTcpProbeRoundIfStale(host)
-        ipv4Addresses
+        state.ipv4Addresses
             .filter { roundAtMillis != null || it.tcp == LayerResult.Unknown }
             .forEach { tasks.start(session, state.config, it.address, roundAtMillis) }
     }

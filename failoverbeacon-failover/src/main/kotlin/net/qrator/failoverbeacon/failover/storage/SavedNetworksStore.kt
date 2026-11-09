@@ -1,4 +1,4 @@
-package net.qrator.failoverbeacon.failover.store
+package net.qrator.failoverbeacon.failover.storage
 
 import android.util.AtomicFile
 import java.io.File

@@ -1,6 +1,7 @@
 package net.qrator.failoverbeacon.failover.serialization
 
 import java.net.InetAddress
+import net.qrator.failoverbeacon.core.util.toHex
 import net.qrator.failoverbeacon.failover.model.SavedAddress
 import net.qrator.failoverbeacon.failover.model.SavedBodyProbe
 import net.qrator.failoverbeacon.failover.model.SavedHost
@@ -44,7 +45,7 @@ internal class SavedNetworksSerializer {
     }
 
     private fun addressToJson(saved: SavedAddress): JSONObject = JSONObject()
-        .put(IP, saved.address.address.joinToString("") { HEX_BYTE.format(it) })
+        .put(IP, saved.address.address.toHex())
         .put(IS_FROM_DNS, saved.isFromDns)
         .put(TCP_NANOS, saved.tcpNanos)
         .put(BODY_PASSED, saved.bodyProbe?.isPassed)
@@ -84,7 +85,6 @@ internal class SavedNetworksSerializer {
         const val BODY_PASSED = "bodyPassed"
         const val BODY_AT = "bodyProbedAtMillis"
         const val CURRENT_VERSION = 1
-        const val HEX_BYTE = "%02x"
         const val HEX_BYTE_LENGTH = 2
         const val HEX_RADIX = 16
     }

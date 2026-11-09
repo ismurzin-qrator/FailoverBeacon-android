@@ -12,14 +12,14 @@ import net.qrator.failoverbeacon.failover.model.ConnectOutcome
 import net.qrator.failoverbeacon.failover.model.HostAddress
 import net.qrator.failoverbeacon.failover.model.HostState
 import net.qrator.failoverbeacon.failover.model.LayerResult
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.model.MaxAge
 
 class NetworkSessionTest {
     private var now = 10L
-    private val timer = RefreshTimer({ now }, INTERVAL)
+    private val maxAge = MaxAge({ now }, INTERVAL)
     private val session = NetworkSession(
-        state = NetworkState(listOf(HostState(hostConfig(API, listOf(ip(7)))))),
-        timer = timer,
+        hosts = NetworkHosts(listOf(HostState(hostConfig(API, listOf(ip(7)))))),
+        maxAge = maxAge,
         networkHandle = 1L
     )
 
@@ -36,7 +36,7 @@ class NetworkSessionTest {
 
         assertFalse(session.isActive)
         assertEquals(listOf(HostAddress(ip(7))), session[API]?.addresses)
-        assertTrue(dns.isAnswerNeeded(timer))
+        assertTrue(dns.isAnswerNeeded(maxAge))
         assertNull(session.startTcpProbeRoundIfStale(API))
     }
 

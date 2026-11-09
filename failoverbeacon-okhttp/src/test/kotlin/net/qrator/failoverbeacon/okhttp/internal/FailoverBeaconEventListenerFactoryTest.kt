@@ -20,25 +20,21 @@ class FailoverBeaconEventListenerFactoryTest {
 
     @AfterTest
     fun tearDown() {
-        CallRecordingEventListener.incompatible = false
+        CallRecordingEventListener.isIncompatible = false
         SdkRegistry.clear()
     }
 
     @Test
-    fun `returns the app listener without the SDK, a subscriber or a compatible OkHttp`() {
+    fun `returns the app listener without the SDK or a compatible OkHttp`() {
         val appListener = RecordingEventListener()
         val factory = FailoverBeaconEventListenerFactory { appListener }
         val withoutSdk = factory.create(call)
-        installSdk()
-        val withoutSubscriber = factory.create(call)
-        SdkRegistry.clear()
         installSdk({})
-        CallRecordingEventListener.incompatible = true
+        CallRecordingEventListener.isIncompatible = true
 
         val incompatible = factory.create(call)
 
         assertSame(appListener, withoutSdk)
-        assertSame(appListener, withoutSubscriber)
         assertSame(appListener, incompatible)
     }
 

@@ -1,4 +1,4 @@
-package net.qrator.failoverbeacon.failover.store
+package net.qrator.failoverbeacon.failover.storage
 
 import java.io.File
 import java.net.InetAddress

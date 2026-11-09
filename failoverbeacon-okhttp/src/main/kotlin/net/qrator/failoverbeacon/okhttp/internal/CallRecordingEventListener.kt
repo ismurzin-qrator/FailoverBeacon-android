@@ -206,7 +206,7 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
     private fun stop(failure: Throwable) {
         failed = true
         if (failure is LinkageError) {
-            incompatible = true
+            isIncompatible = true
             SdkRegistry.logger.error(failure, onlyOnce = true) {
                 "[OkHttp] Version is incompatible with the SDK. New calls are not observed"
             }
@@ -222,7 +222,7 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
     companion object {
         /** Whether the SDK does not fit this OkHttp version. */
         @Volatile
-        var incompatible = false
+        var isIncompatible = false
 
         private const val CONTENT_LENGTH = "Content-Length"
     }

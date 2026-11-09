@@ -2,7 +2,6 @@ package net.qrator.failoverbeacon.failover.resolve
 
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
-import java.util.concurrent.LinkedBlockingQueue
 import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,7 +16,7 @@ import net.qrator.failoverbeacon.failover.fakes.idleTcpProber
 import net.qrator.failoverbeacon.failover.fakes.ip
 import net.qrator.failoverbeacon.failover.fakes.ips
 import net.qrator.failoverbeacon.failover.fakes.network
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.model.MaxAge
 import net.qrator.failoverbeacon.failover.network.KnownNetworks
 import net.qrator.failoverbeacon.failover.network.NetworkSessions
 
@@ -25,10 +24,10 @@ class AddressResolverTest {
     private var now = 0L
     private val dns = FakeDns()
     private val executor = ManualExecutor()
-    private val timer = RefreshTimer({ now }, INTERVAL)
+    private val maxAge = MaxAge({ now }, INTERVAL)
     private val sessions = NetworkSessions(
         KnownNetworks(listOf(hostConfig(API), hostConfig(OTHER)), maxNetworks = 8),
-        timer
+        maxAge
     ).apply {
         switchTo(network(1))
     }
@@ -99,7 +98,7 @@ class AddressResolverTest {
 
     @Test
     fun `waiting callers share the resolution and return after the answer is saved`() {
-        val pool = SdkExecutor("test", 1, 1, 1_000, LinkedBlockingQueue())
+        val pool = SdkExecutor("test", 1, 1_000)
         val release = CountDownLatch(1)
         dns.answer(API) {
             release.await()
@@ -163,11 +162,11 @@ class AddressResolverTest {
             dns::lookup,
             executor,
             idleTcpProber(),
-            timer,
+            maxAge,
             waitMillis
         )
 
-    private fun isAnswerNeeded() = assertNotNull(session[API]).dns.isAnswerNeeded(timer)
+    private fun isAnswerNeeded() = assertNotNull(session[API]).dns.isAnswerNeeded(maxAge)
 
     private fun await(condition: () -> Boolean): Boolean {
         repeat(500) {

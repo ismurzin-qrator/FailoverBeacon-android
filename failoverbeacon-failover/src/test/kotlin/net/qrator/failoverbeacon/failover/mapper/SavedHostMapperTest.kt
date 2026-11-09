@@ -15,17 +15,17 @@ import net.qrator.failoverbeacon.failover.model.ConnectOutcome
 import net.qrator.failoverbeacon.failover.model.DnsState
 import net.qrator.failoverbeacon.failover.model.HostState
 import net.qrator.failoverbeacon.failover.model.LayerResult
-import net.qrator.failoverbeacon.failover.model.RefreshTimer
+import net.qrator.failoverbeacon.failover.model.MaxAge
 import net.qrator.failoverbeacon.failover.model.SavedAddress
 import net.qrator.failoverbeacon.failover.model.SavedBodyProbe
 import net.qrator.failoverbeacon.failover.model.SavedHost
 
 class SavedHostMapperTest {
     private var now = START_MILLIS
-    private val timer = RefreshTimer({ now }, TimeUnit.MINUTES.toMillis(10))
-    private val bodyTimer = RefreshTimer({ now }, TimeUnit.HOURS.toMillis(1))
+    private val maxAge = MaxAge({ now }, TimeUnit.MINUTES.toMillis(10))
+    private val bodyProbeMaxAge = MaxAge({ now }, TimeUnit.HOURS.toMillis(1))
     private val config = hostConfig(HOST, listOf(ip(9)))
-    private val mapper = SavedHostMapper(listOf(config), { now }, bodyTimer)
+    private val mapper = SavedHostMapper(listOf(config), { now }, bodyProbeMaxAge)
 
     private fun state(vararg answer: Int): HostState =
         HostState(config).withDns(DnsState().withAnswer(answer.map(::ip), now))
@@ -116,21 +116,21 @@ class SavedHostMapperTest {
     fun `the probe round starts again after a restart`() {
         val saved = assertNotNull(mapper.toSaved(state(1).withTcpProbeRound(now)))
 
-        assertTrue(assertNotNull(mapper.toState(saved)).isTcpProbeStale(timer))
+        assertTrue(assertNotNull(mapper.toState(saved)).isTcpProbeStale(maxAge))
     }
 
     @Test
     fun `a restored answer is fresh within the interval, then served and resolved again`() {
         val saved = assertNotNull(mapper.toSaved(state(1)))
         now += TimeUnit.MINUTES.toMillis(9)
-        val isFreshWithinInterval = assertNotNull(mapper.toState(saved)).dns.isFresh(timer)
+        val isFreshWithinInterval = assertNotNull(mapper.toState(saved)).dns.isFresh(maxAge)
         now += TimeUnit.MINUTES.toMillis(2)
 
         val afterInterval = assertNotNull(mapper.toState(saved))
 
         assertTrue(isFreshWithinInterval)
         assertTrue(afterInterval.dns.hasAnswer)
-        assertTrue(afterInterval.dns.isAnswerNeeded(timer))
+        assertTrue(afterInterval.dns.isAnswerNeeded(maxAge))
     }
 
     @Test
@@ -219,7 +219,7 @@ class SavedHostMapperTest {
         val leader = restored.addresses.first()
 
         assertEquals(ip(1), leader.address)
-        assertFalse(leader.isBodyProbeStale(bodyTimer))
+        assertFalse(leader.isBodyProbeStale(bodyProbeMaxAge))
     }
 
     @Test

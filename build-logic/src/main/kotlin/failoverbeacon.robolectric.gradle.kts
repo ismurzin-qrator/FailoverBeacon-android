@@ -6,7 +6,7 @@ val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
 
 android {
     testOptions {
-        // Robolectric on API 36 reflects into JDK internals.
+        // Robolectric on API 37 reflects into JDK internals.
         // https://robolectric.org/getting-started/
         unitTests.all { it.jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED") }
     }
