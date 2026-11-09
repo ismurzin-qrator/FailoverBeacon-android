@@ -6,25 +6,35 @@ import net.qrator.failoverbeacon.FailoverBeacon
 import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconDns
 import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconDnsFactory
 import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconEventListenerFactory
+import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconRetryInterceptor
+import net.qrator.failoverbeacon.okhttp.internal.Idempotent
 import okhttp3.OkHttpClient
+import okhttp3.Request
 
 /**
- * Returns a copy of this client observed by the FailoverBeacon SDK. The copy shares the connection
- * pool and dispatcher with this client, and this client's [okhttp3.EventListener] still receives
- * every event. Hosts from `FailoverBeaconConfig.Builder.failoverHosts` get addresses from the
- * SDK, fastest first, other hosts use this client's DNS. SDK failures don't affect calls. Observes
- * nothing until [FailoverBeacon.initialize] is called.
+ * Returns a copy of this client configured with the FailoverBeacon SDK.
  *
+ * Shares the connection pool, dispatcher, and event listener with the original client.
+ * Failover hosts receive SDK-provided addresses, while non-failover hosts use the client's DNS.
  * Requires OkHttp 3.14 or newer.
  */
 public fun OkHttpClient.withFailoverBeacon(): OkHttpClient {
     val hasSdkListener = eventListenerFactory is FailoverBeaconEventListenerFactory
     val hasSdkDns = dns is FailoverBeaconDns
-    if (hasSdkListener && hasSdkDns) return this
+    val hasSdkInterceptor = interceptors.any { it is FailoverBeaconRetryInterceptor }
+    if (hasSdkListener && hasSdkDns && hasSdkInterceptor) return this
     return newBuilder().apply {
         if (!hasSdkListener) {
             eventListenerFactory(FailoverBeaconEventListenerFactory(eventListenerFactory))
         }
         if (!hasSdkDns) dns(FailoverBeaconDnsFactory.create(dns))
+        if (!hasSdkInterceptor) addInterceptor(FailoverBeaconRetryInterceptor())
     }.build()
 }
+
+/**
+ * Marks the request as idempotent, allowing OkHttp to safely retry it after connection failures.
+ *
+ * GET, HEAD, OPTIONS, TRACE, PUT, and DELETE methods are treated as idempotent by default.
+ */
+public fun Request.Builder.idempotent(): Request.Builder = tag(Idempotent::class.java, Idempotent)

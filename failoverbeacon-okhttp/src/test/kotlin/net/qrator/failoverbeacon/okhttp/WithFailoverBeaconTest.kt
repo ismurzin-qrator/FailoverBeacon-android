@@ -15,6 +15,7 @@ import net.qrator.failoverbeacon.okhttp.fakes.RecordingEventListener
 import net.qrator.failoverbeacon.okhttp.fakes.installSdk
 import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconDnsFactory
 import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconEventListenerFactory
+import net.qrator.failoverbeacon.okhttp.internal.FailoverBeaconRetryInterceptor
 import okhttp3.Dns
 import okhttp3.EventListener
 import okhttp3.OkHttpClient
@@ -89,6 +90,7 @@ class WithFailoverBeaconTest {
         assertSame(client.eventListenerFactory, withDns.eventListenerFactory)
         assertTrue(withListener.eventListenerFactory is FailoverBeaconEventListenerFactory)
         assertSame(client.dns, withListener.dns)
+        assertEquals(1, withDns.interceptors.count { it is FailoverBeaconRetryInterceptor })
     }
 
     @Test
