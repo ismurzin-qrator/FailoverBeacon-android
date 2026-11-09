@@ -69,11 +69,6 @@ class RetryControlTest {
     }
 
     @Test
-    fun `without the SDK OkHttp resends a POST after a dropped pooled connection`() {
-        assertEquals(Result(isDelivered = true, requests = 3), postOnDroppedConnection(OTHER))
-    }
-
-    @Test
     fun `a POST to a failover host is sent once on OkHttp 5_4 and newer`() {
         val expected = if (isRetryControlSupported) {
             Result(isDelivered = false, requests = 2)

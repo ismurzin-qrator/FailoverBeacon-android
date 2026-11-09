@@ -20,11 +20,13 @@ import net.qrator.failoverbeacon.Consent
 import net.qrator.failoverbeacon.FailoverBeacon
 import net.qrator.failoverbeacon.FailoverBeaconConfig
 import net.qrator.failoverbeacon.FailoverBeaconOptions
+import net.qrator.failoverbeacon.FailoverHost
 import net.qrator.failoverbeacon.core.SdkRegistry
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
 import org.junit.runner.RunWith
@@ -64,6 +66,7 @@ class TelemetryEndToEndTest {
     fun tearDown() {
         server.shutdown()
         SdkRegistry.clear()
+        SdkRegistry.isFailoverEnabled = true
         FailoverBeacon.setLogLevel(Log.WARN)
         SdkRegistry.logger.output = previousOutput
     }
@@ -165,23 +168,57 @@ class TelemetryEndToEndTest {
     }
 
     @Test
-    fun `uploads events of the previous launch right after initialize`() =
-        withBeacon { beacon, url ->
-            val defaults = FailoverBeaconOptions.Builder().build()
-            restart(defaults, beacon = url)
+    fun `an event the beacon refused is uploaded once the beacon recovers`() =
+        withBeacon(listOf(503, 202)) { beacon, url ->
+            restart(everySecond, beacon = url)
+
             execute("a.test")
+            ShadowSystemClock.advanceBy(Duration.ofSeconds(2))
+            assertNotNull(beacon.takeRequest(5, TimeUnit.SECONDS))
+            val retried = assertNotNull(beacon.takeRequest(5, TimeUnit.SECONDS))
+            awaitUploadThread()
+
+            assertEquals(listOf(storedEvent()), uploadedEvents(retried))
+            assertEquals(emptyList(), storedFiles())
+        }
+
+    @Test
+    fun `an event the beacon refused is uploaded right after the next initialize`() =
+        withBeacon(listOf(503, 202)) { beacon, url ->
+            restart(everySecond, beacon = url)
+            execute("a.test")
+            ShadowSystemClock.advanceBy(Duration.ofSeconds(2))
+            assertNotNull(beacon.takeRequest(5, TimeUnit.SECONDS))
+            awaitUploadThread()
             FailoverBeacon.stop()
             val batch = storedFiles().single()
             batch.renameTo(File(batch.parentFile, "${System.currentTimeMillis() - 120_000}"))
 
-            restart(defaults, beacon = url)
-            val request = assertNotNull(beacon.takeRequest(5, TimeUnit.SECONDS))
+            restart(everySecond, beacon = url)
+            val retried = assertNotNull(beacon.takeRequest(5, TimeUnit.SECONDS))
             awaitUploadThread()
 
-            val lines = GZIPInputStream(request.body.inputStream()).reader().readLines()
-            assertEquals(listOf(events.single().removePrefix("$EVENT_PREFIX ")), lines.drop(1))
+            assertEquals(listOf(storedEvent()), uploadedEvents(retried))
             assertEquals(emptyList(), storedFiles())
         }
+
+    @Test
+    fun `calls to a failover host are reported while failover is off`() {
+        FailoverBeacon.stop()
+        val config = FailoverBeaconConfig.Builder()
+            .beacons(listOf("https://beacon.example"))
+            .failoverHosts(
+                listOf(FailoverHost("a.test", additionalAddresses = listOf("127.0.0.1")))
+            )
+            .successSampleRate(1.0)
+            .build()
+        FailoverBeacon.initialize(app, config)
+        FailoverBeacon.setFailoverEnabled(false)
+
+        execute("a.test")
+
+        assertEquals(1, events.size)
+    }
 
     @Test
     fun `uploads events stored while consent was pending once it is granted`() =
@@ -255,10 +292,18 @@ class TelemetryEndToEndTest {
         FailoverBeacon.initialize(app, config, consent)
     }
 
-    private fun withBeacon(block: (beacon: MockWebServer, url: String) -> Unit) {
+    private fun storedEvent() = events.single().removePrefix("$EVENT_PREFIX ")
+
+    private fun uploadedEvents(request: RecordedRequest) =
+        GZIPInputStream(request.body.inputStream()).reader().readLines().drop(1)
+
+    private fun withBeacon(
+        codes: List<Int> = listOf(202),
+        block: (beacon: MockWebServer, url: String) -> Unit
+    ) {
         val beacon = MockWebServer()
         beacon.useHttps(beaconCertificates.sslSocketFactory(), false)
-        beacon.enqueue(MockResponse().setResponseCode(202))
+        codes.forEach { beacon.enqueue(MockResponse().setResponseCode(it)) }
         beacon.start(LOOPBACK, 0)
         val defaultSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory()
         HttpsURLConnection.setDefaultSSLSocketFactory(clientCertificates.sslSocketFactory())

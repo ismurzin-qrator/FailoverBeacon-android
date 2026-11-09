@@ -2,6 +2,7 @@ package net.qrator.failoverbeacon.okhttp
 
 import android.net.ConnectivityManager
 import android.net.LinkProperties
+import java.net.ConnectException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Proxy
@@ -10,6 +11,7 @@ import java.net.UnknownHostException
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLPeerUnverifiedException
 import kotlin.concurrent.thread
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -24,6 +26,7 @@ import net.qrator.failoverbeacon.FailoverHost
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.okhttp.fakes.PortsByAddress
 import okhttp3.Call
+import okhttp3.CertificatePinner
 import okhttp3.EventListener
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -64,6 +67,11 @@ class FailoverEndToEndTest {
                     FailoverHost(
                         UNPROBED,
                         additionalAddresses = listOf(FIRST_ADDRESS, SECOND_ADDRESS),
+                        tcpProbe = false
+                    ),
+                    FailoverHost(
+                        SINGLE,
+                        additionalAddresses = listOf(FIRST_ADDRESS),
                         tcpProbe = false
                     )
                 )
@@ -128,7 +136,7 @@ class FailoverEndToEndTest {
     }
 
     @Test
-    fun `after a failed connect the next new connection starts with the other address`() {
+    fun `a refused first address is passed over in the call and ranked last for the next`() {
         val closedPort = ServerSocket(0, 1, LOOPBACK).use { it.localPort }
         val connects = CopyOnWriteArrayList<InetAddress>()
         val client = OkHttpClient.Builder()
@@ -147,8 +155,71 @@ class FailoverEndToEndTest {
         client.connectionPool.evictAll()
         assertEquals("ok", execute(UNPROBED, client))
 
-        assertEquals(FIRST, first.first())
+        assertEquals(listOf(FIRST, SECOND), first)
         assertEquals(SECOND, connects.first())
+    }
+
+    @Test
+    fun `a single refused address fails the call after one connect`() {
+        val closedPort = ServerSocket(0, 1, LOOPBACK).use { it.localPort }
+        val connects = CopyOnWriteArrayList<InetAddress>()
+        val client = OkHttpClient.Builder()
+            .socketFactory(PortsByAddress(mapOf(FIRST to closedPort)))
+            .eventListener(ConnectStarts(connects))
+            .build()
+            .withFailoverBeacon()
+
+        assertFailsWith<ConnectException> { execute(SINGLE, client) }
+
+        assertEquals(listOf(FIRST), connects)
+    }
+
+    @Test
+    fun `a 429 or 5xx answer is sent once and keeps the address first`() {
+        val client = OkHttpClient.Builder()
+            .socketFactory(PortsByAddress(mapOf(FIRST to server.port, SECOND to server.port)))
+            .build()
+            .withFailoverBeacon()
+
+        val codes = listOf(429, 500, 503).map { code ->
+            server.enqueue(MockResponse().setResponseCode(code))
+            val request = Request.Builder().url(url(UNPROBED, server)).build()
+            client.newCall(request).execute().use { it.code }
+        }
+
+        assertEquals(listOf(429, 500, 503), codes)
+        assertEquals(3, server.requestCount)
+        assertEquals(FIRST, SdkRegistry.instance?.dns?.lookup(UNPROBED)?.first())
+    }
+
+    @Test
+    fun `TLS to an SDK address checks the certificate name and the pins of the host`() {
+        val otherName = HeldCertificate.Builder().addSubjectAlternativeName(OTHER).build()
+        val pinned = CertificatePinner.Builder().add(UNPROBED, UNKNOWN_PIN).build()
+        val cases = listOf(otherName to CertificatePinner.DEFAULT, certificate to pinned)
+
+        for ((served, pinner) in cases) {
+            val secure = MockWebServer().apply {
+                val certificates = HandshakeCertificates.Builder().heldCertificate(served).build()
+                useHttps(certificates.sslSocketFactory(), false)
+                start(LOOPBACK, 0)
+            }
+            val trusted = HandshakeCertificates.Builder()
+                .addTrustedCertificate(served.certificate)
+                .build()
+            val client = OkHttpClient.Builder()
+                .socketFactory(PortsByAddress(mapOf(FIRST to secure.port, SECOND to secure.port)))
+                .sslSocketFactory(trusted.sslSocketFactory(), trusted.trustManager)
+                .certificatePinner(pinner)
+                .build()
+                .withFailoverBeacon()
+            try {
+                assertFailsWith<SSLPeerUnverifiedException> { execute(UNPROBED, client, secure) }
+                assertEquals(0, secure.requestCount)
+            } finally {
+                secure.shutdown()
+            }
+        }
     }
 
     @Test
@@ -244,10 +315,11 @@ class FailoverEndToEndTest {
         host: String,
         client: OkHttpClient = this.client,
         server: MockWebServer = this.server
-    ): String {
-        val url = server.url("/").newBuilder().host(host).build()
-        return client.newCall(Request.Builder().url(url).build()).execute().use { it.body.string() }
-    }
+    ): String = client.newCall(Request.Builder().url(url(host, server)).build()).execute()
+        .use { it.body.string() }
+
+    private fun url(host: String, server: MockWebServer) =
+        server.url("/").newBuilder().host(host).build()
 
     private class ConnectStarts(private val connects: MutableList<InetAddress>) : EventListener() {
         override fun connectStart(call: Call, inetSocketAddress: InetSocketAddress, proxy: Proxy) {
@@ -262,6 +334,8 @@ class FailoverEndToEndTest {
         const val RESOLVED = "resolved.test"
         const val UNUSED = "unused.test"
         const val UNPROBED = "unprobed.test"
+        const val SINGLE = "single.test"
+        const val UNKNOWN_PIN = "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
         const val UNREACHABLE = "192.0.2.1"
         const val FIRST_ADDRESS = "192.0.2.2"
         const val SECOND_ADDRESS = "192.0.2.3"

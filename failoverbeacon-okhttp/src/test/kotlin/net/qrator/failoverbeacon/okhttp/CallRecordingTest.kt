@@ -28,6 +28,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
@@ -574,6 +575,30 @@ class CallRecordingTest {
     }
 
     @Test
+    fun `a reset HTTP 2 stream is resent on a new connection in the same call`() {
+        server.protocols = listOf(Protocol.H2_PRIOR_KNOWLEDGE)
+        server.enqueue(MockResponse().setBody("a"))
+        server.enqueue(
+            MockResponse()
+                .setSocketPolicy(SocketPolicy.RESET_STREAM_AT_START)
+                .setHttp2ErrorCode(INTERNAL_ERROR)
+        )
+        server.enqueue(MockResponse().setBody("b"))
+        val client = client().protocols(listOf(Protocol.H2_PRIOR_KNOWLEDGE)).build()
+
+        execute(client)
+        assertEquals("b", execute(client))
+
+        val (_, reset, resent) = exchanges
+        assertTrue(reset.reusedConnection)
+        assertIs<ExchangeOutcome.Failed>(reset.outcome)
+        assertEquals(reset.callId, resent.callId)
+        assertEquals(1, resent.resendCount)
+        assertFalse(resent.reusedConnection)
+        assertEquals(ExchangeOutcome.Ok, resent.outcome)
+    }
+
+    @Test
     fun `an app interceptor moving on to another server records both requests`() {
         server.enqueue(MockResponse().setBody("ok"))
         val closed = ServerSocket(0, 1, LOOPBACK).use { it.localPort }
@@ -709,6 +734,8 @@ class CallRecordingTest {
         val NETWORK = NetworkSnapshot.None
         const val START_TIME_MILLIS = 1_761_040_980_000
         const val MAX_FOLLOW_UPS = 20
+
+        const val INTERNAL_ERROR = 2
         const val LARGE_HEADER = 64 * 1024
         val LOOPBACK: InetAddress = InetAddress.getByName(LOOPBACK_IP)
         val SILENT: InetAddress = InetAddress.getByAddress(byteArrayOf(10, 0, 0, 1))

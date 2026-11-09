@@ -39,6 +39,7 @@ class TimeoutRetryTest {
     private val app = RuntimeEnvironment.getApplication()
     private val server = MockWebServer()
     private lateinit var relay: Relay
+    private lateinit var client: OkHttpClient
 
     @BeforeTest
     fun setUp() {
@@ -117,10 +118,13 @@ class TimeoutRetryTest {
     }
 
     @Test
-    fun `a GET on a dead HTTP1 connection is not sent again`() {
+    fun `a dead HTTP1 connection is not retried and the next call uses the other address`() {
         val result = callOnDeadConnection(Protocol.HTTP_1_1)
+        val next = execute(client, Request.Builder().url(url()))
 
         assertEquals(Result(isDelivered = false, requests = 0), result)
+        assertEquals("ok", next)
+        assertEquals(1, relay.connectionCount, "the next call did not use the first address")
     }
 
     @Test
@@ -172,13 +176,14 @@ class TimeoutRetryTest {
         server.protocols = listOf(protocol)
         server.start(LOOPBACK, 0)
         relay = Relay(server.port)
-        return OkHttpClient.Builder()
+        client = OkHttpClient.Builder()
             .protocols(listOf(protocol))
             .socketFactory(PortsByAddress(mapOf(FIRST to relay.port, SECOND to server.port)))
             .readTimeout(500, TimeUnit.MILLISECONDS)
             .apply(configureClient)
             .build()
             .withFailoverBeacon()
+        return client
     }
 
     private fun warmUp(client: OkHttpClient) {
