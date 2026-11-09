@@ -5,7 +5,7 @@ val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
 
 val okhttpLatest = libs.findVersion("okhttp-latest").get().requiredVersion
 val okhttpTestVersions =
-    listOf("okhttp-minimum", "okhttp-4", "okhttp-5-2", "okhttp-5-3", "okhttp-5-5")
+    listOf("okhttp-minimum", "okhttp-4", "okhttp-5-2", "okhttp-5-3", "okhttp-5-4", "okhttp-5-5")
         .map { libs.findVersion(it).get().requiredVersion }
         .filter { it != okhttpLatest }
         .distinct()
