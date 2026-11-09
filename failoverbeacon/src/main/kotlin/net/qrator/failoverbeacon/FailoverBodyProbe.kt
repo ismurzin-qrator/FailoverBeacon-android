@@ -1,7 +1,8 @@
 package net.qrator.failoverbeacon
 
 /**
- * Background HTTPS GET probe that verifies host addresses deliver a response.
+ * Background HTTPS GET probe that verifies host addresses deliver a response. The probe sends
+ * the host name in clear text, so it does not suit hosts whose name is hidden with ECH.
  *
  * [path] request path with optional query, `/` by default.
  * [maxBytes] maximum response bytes to read, 16 KiB by default.
