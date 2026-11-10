@@ -60,6 +60,6 @@ internal class KnownNetworksPersistence(
     }
 
     private companion object {
-        const val SAVE_DELAY_MILLIS = 20_000L
+        const val SAVE_DELAY_MILLIS = 10_000L
     }
 }
