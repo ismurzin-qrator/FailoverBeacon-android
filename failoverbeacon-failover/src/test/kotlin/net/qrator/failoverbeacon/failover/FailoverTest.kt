@@ -279,7 +279,8 @@ class FailoverTest {
      * goes on to a TLS server that records its request.
      */
     private class ProbeServer(certificate: HeldCertificate) : Closeable {
-        private val plainServer = ServerSocket(0, BACKLOG, LOOPBACK)
+        // On all interfaces, so ANY_LOCAL reaches it too.
+        private val plainServer = ServerSocket(0, BACKLOG)
         private val tlsServer = HandshakeCertificates.Builder()
             .heldCertificate(certificate)
             .build()
@@ -357,7 +358,7 @@ class FailoverTest {
         const val SERVER_TIMEOUT_MILLIS = 3_000
         val LOOPBACK: InetAddress = InetAddress.getByAddress(HOST, byteArrayOf(127, 0, 0, 1))
 
-        // Connects to the local host, so the server gets a second address of the host.
+        // Java connects it to InetAddress.getLocalHost(), a second address of the host.
         val ANY_LOCAL: InetAddress = InetAddress.getByAddress(HOST, byteArrayOf(0, 0, 0, 0))
 
         // A TCP connect to a multicast address fails at once.
