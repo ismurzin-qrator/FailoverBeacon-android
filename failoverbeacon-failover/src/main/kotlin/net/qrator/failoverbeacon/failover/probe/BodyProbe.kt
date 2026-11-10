@@ -36,7 +36,8 @@ internal class BodyProbe(
         val socket = sockets.open() ?: return BodyProbeOutcome.TCP_FAILED
         try {
             val start = clock.nanoTime()
-            if (!connect(socket, address, port)) return BodyProbeOutcome.TCP_FAILED
+            val target = InetSocketAddress(address, port)
+            if (!connect(socket, target, maxBytes / 2)) return BodyProbeOutcome.TCP_FAILED
             val tls = handshake(socket, host, port) ?: return BodyProbeOutcome.TLS_FAILED
             return tls.use {
                 val isFullResponse = try {
@@ -57,9 +58,9 @@ internal class BodyProbe(
 
     override fun close() = sockets.close()
 
-    private fun connect(socket: Socket, address: InetAddress, port: Int): Boolean = try {
-        socket.receiveBufferSize = RECEIVE_BUFFER_BYTES
-        socket.connect(InetSocketAddress(address, port), timeoutMillis)
+    private fun connect(socket: Socket, target: InetSocketAddress, window: Int): Boolean = try {
+        socket.receiveBufferSize = window
+        socket.connect(target, timeoutMillis)
         socket.soTimeout = timeoutMillis
         true
     } catch (_: IOException) {
@@ -141,7 +142,6 @@ internal class BodyProbe(
     private companion object {
         const val HTTPS_PORT = 443
         const val BUFFER_BYTES = 8192
-        const val RECEIVE_BUFFER_BYTES = 8192
         const val HEAD_END = "\r\n\r\n"
         val CONTENT_LENGTH = Regex(
             """^content-length:\s*(\d+)\s*$""",

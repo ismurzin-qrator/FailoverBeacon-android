@@ -62,24 +62,16 @@ class BodyProbeTest {
 
     @Test
     fun `a server ignoring the range can send little past what the probe reads`() {
-        // macOS does not shrink the TCP window to a small receive buffer; Android and CI run Linux.
-        assumeTrue("Linux" == System.getProperty("os.name"))
-        val sentBytes = AtomicInteger()
-        var stalledAtBytes = 0
-        onVerify = { stalledAtBytes = sentBytes.waitUntilStill() }
-        serveWithoutRequest { socket ->
-            socket.sendBufferSize = SERVER_SEND_BUFFER_BYTES
-            socket.send("HTTP/1.1 200 OK\r\n\r\n".toByteArray())
-            val chunk = ByteArray(1_024)
-            while (true) {
-                socket.getOutputStream().write(chunk)
-                sentBytes.addAndGet(chunk.size)
-            }
-        }
+        assumeLinux()
 
-        assertEquals(BodyProbeOutcome.PASSED, runProbe())
+        assertTrue(bytesBeforeTheRead(MAX_BYTES) < 3 * MAX_BYTES)
+    }
 
-        assertTrue(stalledAtBytes < 3 * MAX_BYTES, "$stalledAtBytes bytes before the probe read")
+    @Test
+    fun `a larger limit opens a larger window`() {
+        assumeLinux()
+
+        assertTrue(bytesBeforeTheRead(LARGE_MAX_BYTES) > 3 * MAX_BYTES)
     }
 
     @Test
@@ -223,6 +215,28 @@ class BodyProbeTest {
         }
     }
 
+    // macOS does not shrink the TCP window to a small receive buffer; Android and CI run Linux.
+    private fun assumeLinux() = assumeTrue("Linux" == System.getProperty("os.name"))
+
+    // What the server sends while the probe holds the connection before its request.
+    private fun bytesBeforeTheRead(maxBytes: Int): Int {
+        val sentBytes = AtomicInteger()
+        var stalledAtBytes = 0
+        onVerify = { stalledAtBytes = sentBytes.waitUntilStill() }
+        serveWithoutRequest { socket ->
+            socket.sendBufferSize = SERVER_SEND_BUFFER_BYTES
+            socket.send("HTTP/1.1 200 OK\r\n\r\n".toByteArray())
+            val chunk = ByteArray(1_024)
+            while (true) {
+                socket.getOutputStream().write(chunk)
+                sentBytes.addAndGet(chunk.size)
+            }
+        }
+
+        assertEquals(BodyProbeOutcome.PASSED, runProbe(maxBytes = maxBytes))
+        return stalledAtBytes
+    }
+
     private fun serveWithoutRequest(respond: (Socket) -> Unit) {
         thread(isDaemon = true) {
             runCatching { server.accept().use(respond) }
@@ -264,6 +278,7 @@ class BodyProbeTest {
         const val TIMEOUT_MILLIS = 300
         const val DEADLINE_MILLIS = 5_000L
         const val SERVER_SEND_BUFFER_BYTES = 8_192
+        const val LARGE_MAX_BYTES = 1_048_576
         val LOOPBACK: InetAddress = InetAddress.getLoopbackAddress()
     }
 }
