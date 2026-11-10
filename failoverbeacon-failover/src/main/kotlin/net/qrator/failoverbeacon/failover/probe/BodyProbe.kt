@@ -58,6 +58,7 @@ internal class BodyProbe(
     override fun close() = sockets.close()
 
     private fun connect(socket: Socket, address: InetAddress, port: Int): Boolean = try {
+        socket.receiveBufferSize = RECEIVE_BUFFER_BYTES
         socket.connect(InetSocketAddress(address, port), timeoutMillis)
         socket.soTimeout = timeoutMillis
         true
@@ -140,6 +141,7 @@ internal class BodyProbe(
     private companion object {
         const val HTTPS_PORT = 443
         const val BUFFER_BYTES = 8192
+        const val RECEIVE_BUFFER_BYTES = 8192
         const val HEAD_END = "\r\n\r\n"
         val CONTENT_LENGTH = Regex(
             """^content-length:\s*(\d+)\s*$""",

@@ -7,6 +7,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import javax.net.ssl.SSLSocketFactory
 import kotlin.concurrent.thread
 import kotlin.test.AfterTest
@@ -18,6 +19,7 @@ import net.qrator.failoverbeacon.failover.model.BodyProbeConfig
 import net.qrator.failoverbeacon.failover.model.BodyProbeOutcome
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
+import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
@@ -34,6 +36,7 @@ class BodyProbeTest {
     private val release = CountDownLatch(1)
     private val requests = ByteArrayOutputStream()
     private var isNameValid = true
+    private var onVerify: () -> Unit = {}
     private var now = 0L
     private var clockStepNanos = 0L
     private val probe = bodyProbe(clientCertificates.sslSocketFactory())
@@ -55,6 +58,28 @@ class BodyProbeTest {
         assertTrue(request.startsWith("GET /probe.bin HTTP/1.1\r\n"), request)
         assertTrue("\r\nHost: $HOST:${server.localPort}\r\n" in request, request)
         assertTrue("\r\nRange: bytes=0-1023\r\n" in request, request)
+    }
+
+    @Test
+    fun `a server ignoring the range can send little past what the probe reads`() {
+        // macOS does not shrink the TCP window to a small receive buffer; Android and CI run Linux.
+        assumeTrue("Linux" == System.getProperty("os.name"))
+        val sentBytes = AtomicInteger()
+        var stalledAtBytes = 0
+        onVerify = { stalledAtBytes = sentBytes.waitUntilStill() }
+        serveWithoutRequest { socket ->
+            socket.sendBufferSize = SERVER_SEND_BUFFER_BYTES
+            socket.send("HTTP/1.1 200 OK\r\n\r\n".toByteArray())
+            val chunk = ByteArray(1_024)
+            while (true) {
+                socket.getOutputStream().write(chunk)
+                sentBytes.addAndGet(chunk.size)
+            }
+        }
+
+        assertEquals(BodyProbeOutcome.PASSED, runProbe())
+
+        assertTrue(stalledAtBytes < 3 * MAX_BYTES, "$stalledAtBytes bytes before the probe read")
     }
 
     @Test
@@ -166,7 +191,7 @@ class BodyProbeTest {
         BodyProbe(
             clock = { now.also { now += clockStepNanos } },
             socketFactory = { socketFactory },
-            hostnameVerifier = { _, _ -> isNameValid },
+            hostnameVerifier = { _, _ -> onVerify().let { isNameValid } },
             timeoutMillis = timeoutMillis,
             deadlineMillis = DEADLINE_MILLIS
         )
@@ -198,6 +223,23 @@ class BodyProbeTest {
         }
     }
 
+    private fun serveWithoutRequest(respond: (Socket) -> Unit) {
+        thread(isDaemon = true) {
+            runCatching { server.accept().use(respond) }
+        }
+    }
+
+    // The count once it stops growing: the server is blocked by the TCP windows.
+    private fun AtomicInteger.waitUntilStill(): Int {
+        var last = -1
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (get() != last && System.nanoTime() < deadline) {
+            last = get()
+            Thread.sleep(300)
+        }
+        return last
+    }
+
     private fun Socket.readRequest() {
         val head = ByteArrayOutputStream()
         while (!head.toString(Charsets.US_ASCII.name()).endsWith("\r\n\r\n")) {
@@ -221,6 +263,7 @@ class BodyProbeTest {
         const val MAX_BYTES = 16_384
         const val TIMEOUT_MILLIS = 300
         const val DEADLINE_MILLIS = 5_000L
+        const val SERVER_SEND_BUFFER_BYTES = 8_192
         val LOOPBACK: InetAddress = InetAddress.getLoopbackAddress()
     }
 }
