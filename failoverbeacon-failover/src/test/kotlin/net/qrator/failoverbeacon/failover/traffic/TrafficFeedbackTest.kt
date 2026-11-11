@@ -136,7 +136,7 @@ class TrafficFeedbackTest {
     }
 
     @Test
-    fun `a request without a response moves the address last, any response clears it`() {
+    fun `a request without a response moves the address last, any response brings it ahead`() {
         feedback.save(exchange(connection = direct(ip(1)), outcome = silent(FailureType.TIMED_OUT)))
         val afterTimeout = addressOf(ip(1))
         val orderAfterTimeout = session[API]?.ips
@@ -149,7 +149,7 @@ class TrafficFeedbackTest {
         )
         assertEquals(listOf(ip(2), ip(1)), orderAfterTimeout)
         assertEquals(HostAddress(ip(1), body = passed, bodyProbedAtMillis = 0), addressOf(ip(1)))
-        assertEquals(listOf(ip(2), ip(1)), session[API]?.ips)
+        assertEquals(listOf(ip(1), ip(2)), session[API]?.ips)
     }
 
     @Test

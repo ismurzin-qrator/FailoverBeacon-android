@@ -141,6 +141,22 @@ class HostStateTest {
         assertNull(third.addressToBodyProbe(maxAge))
     }
 
+    @Test
+    fun `a faster TCP round keeps the lead on the checked address`() {
+        val probed = HostState(hostConfig("api.example"))
+            .answered(ip(1), ip(2))
+            .withTcpProbe(ip(1), LayerResult.Passed(nanos = 20))
+            .withTcpProbe(ip(2), LayerResult.Passed(nanos = 30))
+        val byBodyProbe = probed.withBodyProbeOutcome(ip(1), BodyProbeOutcome.PASSED, atMillis = 0)
+        val byTraffic = probed.withResponse("192.0.2.1", isAnswered = true, atMillis = 0)
+
+        val faster = LayerResult.Passed(nanos = 10)
+
+        assertEquals(ip(2), probed.withTcpProbe(ip(2), faster).ips.first())
+        assertEquals(ip(1), byBodyProbe.withTcpProbe(ip(2), faster).ips.first())
+        assertEquals(ip(1), byTraffic.withTcpProbe(ip(2), faster).ips.first())
+    }
+
     private fun probedState(vararg addresses: InetAddress): HostState {
         var probed = HostState(hostConfig("api.example")).answered(*addresses)
         addresses.forEachIndexed { index, address ->

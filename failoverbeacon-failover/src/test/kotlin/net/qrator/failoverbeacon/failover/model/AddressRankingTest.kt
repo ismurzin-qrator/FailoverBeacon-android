@@ -82,6 +82,17 @@ class AddressRankingTest {
         assertEquals(listOf(ip(2), ip(1), IPV6, OTHER_IPV6), ranked(addresses))
     }
 
+    @Test
+    fun `an answered address leads a faster one that was not checked`() {
+        val addresses = listOf(
+            HostAddress(ip(1), fast),
+            HostAddress(ip(2), slow, body = LayerResult.Passed(nanos = null)),
+            HostAddress(ip(3), fast, body = LayerResult.Failed)
+        )
+
+        assertEquals(listOf(ip(2), ip(1), ip(3)), ranked(addresses))
+    }
+
     private fun ranked(addresses: List<HostAddress>): List<InetAddress> =
         AddressRanking.rank(addresses).map { it.address }
 
