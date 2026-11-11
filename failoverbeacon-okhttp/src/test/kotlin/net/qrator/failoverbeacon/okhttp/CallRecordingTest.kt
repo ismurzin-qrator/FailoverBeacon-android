@@ -17,6 +17,7 @@ import java.security.cert.X509Certificate
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import javax.net.ServerSocketFactory
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLHandshakeException
@@ -544,13 +545,24 @@ class CallRecordingTest {
 
     @Test
     fun `a failed upload fails at REQUEST with no wait`() {
-        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_DURING_REQUEST_BODY))
-        server.enqueue(MockResponse().setBody("ok"))
+        // The unread half of the body does not fit into small buffers, so its write fails.
+        val uploadServer = MockWebServer()
+        uploadServer.serverSocketFactory = smallReceiveBuffers()
+        uploadServer.start(LOOPBACK, 0)
+        uploadServer.enqueue(
+            MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_DURING_REQUEST_BODY)
+        )
+        uploadServer.enqueue(MockResponse().setBody("ok"))
         val body = body(bytes = 4 * 1024 * 1024)
-        val request = Request.Builder().url(server.url("/")).post(body).build()
+        val request = Request.Builder().url(uploadServer.url("/")).post(body).build()
+        val client = client().socketFactory(smallSendBuffers()).build()
 
         // OkHttp 5 resends the request, 3.14 and 4.x fail the call.
-        runCatching { client().build().withFailoverBeacon().newCall(request).execute().close() }
+        try {
+            runCatching { client.withFailoverBeacon().newCall(request).execute().close() }
+        } finally {
+            uploadServer.shutdown()
+        }
 
         val exchange = exchanges.first()
         assertEquals(ExchangeStep.REQUEST, assertIs<ExchangeOutcome.Failed>(exchange.outcome).step)
@@ -692,6 +704,45 @@ class CallRecordingTest {
         private fun unsupported(): Nothing = throw UnsupportedOperationException()
     }
 
+    private fun smallSendBuffers() = object : SocketFactory() {
+        override fun createSocket(): Socket = Socket().apply { sendBufferSize = SMALL_BUFFER }
+
+        override fun createSocket(host: String, port: Int): Socket = unsupported()
+
+        override fun createSocket(
+            host: String,
+            port: Int,
+            local: InetAddress,
+            localPort: Int
+        ): Socket = unsupported()
+
+        override fun createSocket(host: InetAddress, port: Int): Socket = unsupported()
+
+        override fun createSocket(
+            host: InetAddress,
+            port: Int,
+            local: InetAddress,
+            localPort: Int
+        ): Socket = unsupported()
+    }
+
+    private fun smallReceiveBuffers() = object : ServerSocketFactory() {
+        override fun createServerSocket(): ServerSocket =
+            ServerSocket().apply { receiveBufferSize = SMALL_BUFFER }
+
+        override fun createServerSocket(port: Int): ServerSocket = unsupported()
+
+        override fun createServerSocket(port: Int, backlog: Int): ServerSocket = unsupported()
+
+        override fun createServerSocket(
+            port: Int,
+            backlog: Int,
+            ifAddress: InetAddress
+        ): ServerSocket = unsupported()
+    }
+
+    private fun unsupported(): Nothing = throw UnsupportedOperationException()
+
     private fun httpsClient() = client()
         .sslSocketFactory(clientCertificates.sslSocketFactory(), clientCertificates.trustManager)
 
@@ -737,6 +788,7 @@ class CallRecordingTest {
 
         const val INTERNAL_ERROR = 2
         const val LARGE_HEADER = 64 * 1024
+        const val SMALL_BUFFER = 64 * 1024
         val LOOPBACK: InetAddress = InetAddress.getByName(LOOPBACK_IP)
         val SILENT: InetAddress = InetAddress.getByAddress(byteArrayOf(10, 0, 0, 1))
 
