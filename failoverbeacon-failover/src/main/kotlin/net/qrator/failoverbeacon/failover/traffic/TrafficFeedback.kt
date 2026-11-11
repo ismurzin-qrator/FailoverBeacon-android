@@ -33,7 +33,7 @@ internal class TrafficFeedback(private val sessions: NetworkSessions) {
         ExchangeOutcome.Ok -> true
 
         is ExchangeOutcome.Failed -> false.takeIf {
-            exchange.response == null && outcome.step in SENT_STEPS && outcome.type in SILENT_TYPES
+            outcome.step in SENT_STEPS && outcome.type in SILENT_TYPES
         }
 
         is ExchangeOutcome.Canceled -> null

@@ -168,7 +168,25 @@ class TrafficFeedbackTest {
     }
 
     @Test
-    fun `a cancel, a cut response, a server reset and a proxy leave the address as it was`() {
+    fun `a body cut after the headers counts as silence`() {
+        val results = listOf(
+            silent(FailureType.CLOSED),
+            silent(FailureType.TIMED_OUT),
+            silent(FailureType.RESET)
+        ).map { outcome ->
+            feedback.save(exchange(connection = direct(ip(1)), response = response(200)))
+            feedback.save(
+                exchange(connection = direct(ip(1)), response = response(200), outcome = outcome)
+            )
+            addressOf(ip(1)).body
+        }
+
+        assertEquals(List(3) { LayerResult.Failed }, results)
+        assertEquals(listOf(ip(2), ip(1)), session[API]?.ips)
+    }
+
+    @Test
+    fun `a cancel, a server reset, a protocol error and a proxy leave the address as it was`() {
         feedback.save(
             exchange(
                 connection = direct(ip(1)),
@@ -179,11 +197,15 @@ class TrafficFeedbackTest {
             exchange(
                 connection = direct(ip(1)),
                 response = response(200),
-                outcome = silent(FailureType.CLOSED)
+                outcome = silent(FailureType.STREAM_RESET)
             )
         )
         feedback.save(
-            exchange(connection = direct(ip(1)), outcome = silent(FailureType.STREAM_RESET))
+            exchange(
+                connection = direct(ip(1)),
+                response = response(200),
+                outcome = silent(FailureType.PROTOCOL_ERROR)
+            )
         )
         feedback.save(
             exchange(
