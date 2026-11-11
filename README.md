@@ -1,6 +1,15 @@
 # FailoverBeacon for Android
 
-FailoverBeacon keeps OkHttp requests to your critical hosts working when DNS or some server addresses fail. It resolves and probes the addresses of these hosts in the background and gives OkHttp the working ones first. It also reports how your app's requests end, network errors included, to your beacon server.
+Your checkout shouldn't fail because DNS went down or one server stopped answering.
+
+FailoverBeacon keeps OkHttp calls to your critical hosts working through network failures. List the hosts that matter, wrap your client, and the SDK handles the rest in the background.
+
+- **Calls go through when DNS is down.** The SDK remembers your hosts' addresses and uses the ones you ship with the app.
+- **No waiting on a dead server.** The SDK keeps checking your servers and gives OkHttp the working one first, so your users don't sit through a 10-second timeout.
+- **Smart about networks.** An address blocked on one carrier can still work on Wi-Fi. The SDK remembers each network.
+- **No double charges.** On OkHttp 5.4+, the SDK never quietly resends a POST. You choose which requests are safe to repeat.
+- **Nothing to rewrite.** Same OkHttp, Retrofit, interceptors and certificate pinning.
+- **See what your users see.** Failed requests land on your beacon with where they broke, the network and the carrier.
 
 **Requirements:** `minSdk` 24, OkHttp 3.14.9 or newer (tested with 3.14.9, 4.12.0, 5.2.3, 5.3.2, 5.4.0, 5.5.0), Kotlin or Java.
 
@@ -30,7 +39,14 @@ class App : Application() {
         super.onCreate()
         val config = FailoverBeaconConfig.Builder()
             .beacons(listOf("https://beacon.example.com/reports"))
-            .failoverHosts(listOf(FailoverHost("pay.example.com")))
+            .failoverHosts(
+                listOf(
+                    FailoverHost(
+                        "pay.example.com",
+                        additionalAddresses = listOf("192.0.2.10", "192.0.2.11")
+                    )
+                )
+            )
             .build()
         FailoverBeacon.initialize(this, config)
     }
@@ -52,7 +68,10 @@ public final class App extends Application {
                 .beacons(Collections.singletonList(
                         "https://beacon.example.com/reports"))
                 .failoverHosts(Collections.singletonList(
-                        new FailoverHost("pay.example.com")))
+                        new FailoverHost(
+                                "pay.example.com",
+                                443,
+                                Arrays.asList("192.0.2.10", "192.0.2.11"))))
                 .build();
         FailoverBeacon.initialize(this, config);
     }
@@ -66,12 +85,12 @@ OkHttpClient client = FailoverBeaconOkHttp.withFailoverBeacon(
         new OkHttpClient.Builder().build());
 ```
 
-Use the wrapped client everywhere, Retrofit included. Calls to `withFailoverBeacon()` and `initialize` work in any order.
+Use the wrapped client everywhere, Retrofit included. Add your interceptors and `dns()` before `withFailoverBeacon()`. Calls to `withFailoverBeacon()` and `initialize` work in any order.
 
 ## Decide before release
 
 1. **Consent.** `initialize` uses `Consent.GRANTED` by default. If your app asks the user, pass `Consent.PENDING` and call `FailoverBeacon.setConsent` when the user decides. `PENDING` stores events without uploading them. `NOT_GRANTED` deletes them. The SDK does not store consent, so pass it on every launch.
-2. **Which hosts.** List in `failoverHosts` the hosts whose calls must survive failures, by the exact name in your URLs. Add `additionalAddresses` with known IPv4 addresses for the case when DNS fails. Probes and ranking need at least two IPv4 addresses per host.
+2. **Which hosts.** List in `failoverHosts` the hosts whose calls must survive failures, by the exact name in your URLs. Add their IPv4 addresses as `additionalAddresses`: on the first launch they are the only way through a DNS outage, and ranking needs at least two IPv4 addresses per host.
 3. **Safe POSTs.** On OkHttp 5.4 and newer the SDK stops OkHttp from sending a non-idempotent request to a failover host twice. Mark a request with `idempotent()` only if a repeat is harmless:
 
    ```kotlin
@@ -96,11 +115,12 @@ Use the wrapped client everywhere, Retrofit included. Calls to `withFailoverBeac
    Request request = FailoverBeaconOkHttp.idempotent(builder).build();
    ```
 
-   An unmarked POST then fails with an `IOException` when the server closed a pooled connection.
+   An unmarked POST then fails with an `IOException` when the server closed a pooled connection. With Retrofit, mark requests in an interceptor added before `withFailoverBeacon()`, for example by an annotation read from the request's `retrofit2.Invocation` tag.
 
 ## Limits
 
 - Failover covers only the hosts in `failoverHosts` and only clients wrapped with `withFailoverBeacon()`.
+- Calls through an HTTP or SOCKS proxy, a Wi-Fi proxy included, get no failover.
 - A silent IP on a live pooled HTTP/2 connection keeps failing until you call `connectionPool.evictAll()`.
 - Any HTTP status counts as a working address, including 429, 5xx and block pages.
 - IPv6 addresses get no probes. A host with one IPv4 address gets no ranking.
