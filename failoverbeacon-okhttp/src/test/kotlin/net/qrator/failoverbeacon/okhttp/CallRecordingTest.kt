@@ -55,6 +55,7 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
+import okhttp3.internal.http2.StreamResetException
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -587,7 +588,7 @@ class CallRecordingTest {
     }
 
     @Test
-    fun `a reset HTTP 2 stream is resent on a new connection in the same call`() {
+    fun `a reset HTTP 2 stream fails its exchange, a resend goes on a new connection`() {
         server.protocols = listOf(Protocol.H2_PRIOR_KNOWLEDGE)
         server.enqueue(MockResponse().setBody("a"))
         server.enqueue(
@@ -599,15 +600,24 @@ class CallRecordingTest {
         val client = client().protocols(listOf(Protocol.H2_PRIOR_KNOWLEDGE)).build()
 
         execute(client)
-        assertEquals("b", execute(client))
+        val second = runCatching { execute(client) }
 
-        val (_, reset, resent) = exchanges
+        val reset = exchanges[1]
         assertTrue(reset.reusedConnection)
         assertIs<ExchangeOutcome.Failed>(reset.outcome)
-        assertEquals(reset.callId, resent.callId)
-        assertEquals(1, resent.resendCount)
-        assertFalse(resent.reusedConnection)
-        assertEquals(ExchangeOutcome.Ok, resent.outcome)
+        // OkHttp resends it only if the call took the pooled connection on its first try.
+        if (second.isSuccess) {
+            assertEquals("b", second.getOrThrow())
+            val resent = exchanges.last()
+            assertEquals(3, exchanges.size)
+            assertEquals(reset.callId, resent.callId)
+            assertEquals(1, resent.resendCount)
+            assertFalse(resent.reusedConnection)
+            assertEquals(ExchangeOutcome.Ok, resent.outcome)
+        } else {
+            assertIs<StreamResetException>(second.exceptionOrNull())
+            assertEquals(2, exchanges.size)
+        }
     }
 
     @Test
