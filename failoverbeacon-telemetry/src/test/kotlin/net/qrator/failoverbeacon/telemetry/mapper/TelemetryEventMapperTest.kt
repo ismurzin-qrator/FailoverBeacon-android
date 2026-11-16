@@ -70,7 +70,8 @@ class TelemetryEventMapperTest {
             timings = ExchangeTimings(MS + 999_999, 20 * MS, 12 * MS, 2 * MS, 30 * MS, 4 * MS),
             startTimeMillis = 1_761_040_980_000,
             network = CONNECTED,
-            foreground = true
+            foreground = true,
+            failover = null
         )
 
         val expected = TelemetryEvent(
@@ -135,7 +136,8 @@ class TelemetryEventMapperTest {
                 carrier = TelemetryCarrier("Carrier B", "001", "02", 2, 13),
                 blocked = false
             ),
-            foreground = true
+            foreground = true,
+            failover = null
         )
         assertEquals(expected, mapper.toEvent(exchange))
     }

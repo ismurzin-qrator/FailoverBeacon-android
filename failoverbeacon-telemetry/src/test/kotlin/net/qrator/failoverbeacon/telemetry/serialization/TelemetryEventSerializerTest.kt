@@ -78,7 +78,8 @@ class TelemetryEventSerializerTest {
                 carrier = TelemetryCarrier("Carrier B", "001", "02", 2, 13),
                 blocked = false
             ),
-            foreground = true
+            foreground = true,
+            failover = null
         )
 
         assertEquals(
@@ -210,7 +211,8 @@ class TelemetryEventSerializerTest {
             responseBodyBytes = null,
             attempts = emptyList(),
             network = TelemetryNetwork.Unknown,
-            foreground = null
+            foreground = null,
+            failover = null
         )
     }
 }

@@ -7,6 +7,7 @@ import net.qrator.failoverbeacon.core.call.model.ConnectResult
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
+import net.qrator.failoverbeacon.core.call.model.FailoverMark
 import net.qrator.failoverbeacon.core.call.model.FailureType
 import net.qrator.failoverbeacon.telemetry.attempt
 import net.qrator.failoverbeacon.telemetry.event
@@ -35,6 +36,18 @@ class SamplerTest {
                 event(exchange(callId = 0, outcome = ExchangeOutcome.Canceled(step = null)))
             )
         )
+    }
+
+    @Test
+    fun `a success failover saved is kept at the failure rate`() {
+        val rates = Sampler(failureSampleRate = 0.9, successSampleRate = 0.1)
+
+        assertEquals(0.1, rates.sample(event(exchange(callId = 0, failover = FailoverMark.ON))))
+        assertEquals(
+            0.9,
+            rates.sample(event(exchange(callId = 0, failover = FailoverMark.DNS_FAILED)))
+        )
+        assertEquals(0.9, rates.sample(event(exchange(callId = 0, failover = FailoverMark.RETRY))))
     }
 
     @Test

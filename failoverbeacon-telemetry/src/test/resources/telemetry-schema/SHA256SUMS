@@ -13,6 +13,7 @@ d663f6874eaeede13496436d71dff2733e6100dd40479cedb0552b55e11255f6  samples/v1/eve
 bb699fc64728c8a3c5c38147d823f16b469cdc426bb17bc5322431d78fa36580  samples/v1/event/invalid/port-zero.json
 99ec526867a87710407c0e9c4ea9acd79cda951753a620d1607ed08a1b0a1a4a  samples/v1/event/invalid/sampling-fraction-zero.json
 384e12e9e4d1be3ae986a094103c6d80d02c082593a024697e1f101d13558eef  samples/v1/event/invalid/unknown-carrier-field.json
+446933aa3c9e196b6bab61d92b2b420af650ec6a079ad7ff1c18bc0bbf8ea9c0  samples/v1/event/invalid/unknown-failover.json
 d3b73ca4ae97e7c9ee9cceedcb777513f4a73461efc9de138ceeb448c1ebec8f  samples/v1/event/invalid/unknown-field.json
 d823519d56b50404f792d68927185cfc9380781dee3be96edcfb5a331c73c668  samples/v1/event/invalid/unknown-type.json
 78220b18b4b9a236a3487a9105328d7d9a05a1d635fe37e0ac12f2ab5640e471  samples/v1/event/valid/abandoned.json
@@ -29,6 +30,9 @@ e8c548bdf039c12aff2d2b9c0ee1b644a4f2210592fd6ae557fcfef9ba2a5b0c  samples/v1/eve
 44a7aee74823d1b435f98412796b09555813e23c6da3bfe04b125dfbf2b8dff6  samples/v1/event/valid/http-response-redirect-loop.json
 9046f6666ab1d228a88e26a166ef07cf9889895262ad7f570b5566774b6fe0b6  samples/v1/event/valid/ok-after-resend.json
 29e5ceb55191a5283635e5bdc79eb8edb4bace931296457d457234ea681094c4  samples/v1/event/valid/ok-cellular-carrier.json
+3a3de41689012607739324f6d09b6174b5c268f7ab67c391326ec9bbbc496f06  samples/v1/event/valid/ok-failover-dns-failed.json
+5224d729e4e63de8fc7ec9037c065f4d02275d78e812eecc2d441f8d6354d51c  samples/v1/event/valid/ok-failover-on.json
+60a98adcf993729c8f6b1a87eccfdbc21f744a18dfbb136ed5d1888a971e5d04  samples/v1/event/valid/ok-failover-retry.json
 a7c7b6c8e95e5db98f5a9d16050ca3f3098f026a8407a76f919707a48fc9646a  samples/v1/event/valid/ok-network-unknown-background.json
 3d689969c26060f75dca10e6e8f5fdb41f1342cd2dc5dfd201492d253fa2dfc1  samples/v1/event/valid/ok-wifi-h2.json
 b9d75de8352ccb9fd432b638bbbb22cabad9aa751deab7344ab10e4c93d43616  samples/v1/event/valid/tcp-aborted-roaming.json
@@ -57,5 +61,5 @@ fbc0056052a17a43206443f37e3f5fa9cb66c7c1ec32d4034609f326813664a9  samples/v1/upl
 ec6fff62b6de378a9a6a4ed4afa61569c892f3d92efa6436c05b60fc46219cd8  samples/v1/upload-metadata/invalid/zero-drop-count.json
 65086a8e34164f3c89b743820d3924d3a2176a95e5096c838245b2e3ce323a3b  samples/v1/upload-metadata/valid/full.json
 7feb3a26e18cf49f7b92b1e3e18689ee32eb1ba88be580056ed8e604c8719258  samples/v1/upload-metadata/valid/minimal.json
-5154516f3e283834ad39275fc47533e23fb844d3ae56810fbf5296d3201d078e  schemas/v1/event.schema.json
+b80ca81c7195fc54422791e745f5fc41d3adb7d96058b9c2122f5614262221cf  schemas/v1/event.schema.json
 fb3b7ec25cfa487bc228842b113c0bbd2a49fcee04c83bfa954424be9885bb3a  schemas/v1/upload-metadata.schema.json

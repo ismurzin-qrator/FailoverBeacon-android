@@ -3,6 +3,7 @@ package net.qrator.failoverbeacon.telemetry.filter
 import net.qrator.failoverbeacon.telemetry.model.TelemetryAttemptResult
 import net.qrator.failoverbeacon.telemetry.model.TelemetryErrorType
 import net.qrator.failoverbeacon.telemetry.model.TelemetryEvent
+import net.qrator.failoverbeacon.telemetry.model.TelemetryFailover
 
 internal class Sampler(
     private val failureSampleRate: Double,
@@ -14,7 +15,8 @@ internal class Sampler(
     }
 
     private fun isSuccess(event: TelemetryEvent): Boolean = event.type == TelemetryErrorType.OK &&
-        event.attempts.none { it.result == TelemetryAttemptResult.FAILED }
+        event.attempts.none { it.result == TelemetryAttemptResult.FAILED } &&
+        (event.failover == null || event.failover == TelemetryFailover.ON)
 
     // Uniform in [0, 1): the top 53 bits of the random call id.
     private fun roll(callId: Long): Double = (callId ushr DOUBLE_SHIFT) * DOUBLE_UNIT

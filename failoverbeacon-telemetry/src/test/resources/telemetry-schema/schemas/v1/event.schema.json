@@ -272,6 +272,10 @@
     "foreground": {
       "description": "Whether an activity of the app was started.",
       "type": "boolean"
+    },
+    "failover": {
+      "description": "What failover did for the request, absent when failover does not handle its host. on: the host is handled. dns_failed: a lookup returned failover's addresses while the host's last resolve had failed. retry: the request is failover's resend after an HTTP/2 timeout.",
+      "enum": ["on", "dns_failed", "retry"]
     }
   },
   "allOf": [

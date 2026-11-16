@@ -22,6 +22,7 @@ class CallRecorder(
     private val epochClock: EpochClock,
     private val networkSource: NetworkSource,
     private val foregroundSource: ForegroundSource,
+    private val isHandledByFailover: (String) -> Boolean,
     failureMapper: FailureMapper,
     private val publisher: ExchangePublisher
 ) {
@@ -45,7 +46,7 @@ class CallRecorder(
         val target = Target(scheme, serverAddress, serverPort)
         val exchange = current
         if (exchange != null && !exchange.ended) {
-            if (exchange.target == null) exchange.target = target
+            if (exchange.target == null) exchange.aim(target)
             if (!exchange.isOtherServer(target)) return
             closeCurrent(clock.nanoTime())
         }
@@ -62,10 +63,11 @@ class CallRecorder(
     }
 
     @Synchronized
-    fun dnsEnd(addresses: List<String>) {
+    fun dnsEnd(addresses: List<String>, answeredWithoutDns: Boolean) {
         current?.apply {
             dnsInterval.endNanos = clock.nanoTime()
             dnsAddresses = addresses
+            if (answeredWithoutDns) this.answeredWithoutDns = true
         }
     }
 
@@ -142,7 +144,7 @@ class CallRecorder(
             closeCurrent(now)
         }
         currentOrNextExchange(now)?.apply {
-            if (this.target == null) this.target = target
+            if (this.target == null) aim(target)
             this.connection = connection
             // Connecting is over: a failure before the request is not a network step's.
             lastStep = null
@@ -163,11 +165,18 @@ class CallRecorder(
     }
 
     @Synchronized
-    fun requestHeadersEnd(scheme: String, serverAddress: String, serverPort: Int, method: String) {
+    fun requestHeadersEnd(
+        scheme: String,
+        serverAddress: String,
+        serverPort: Int,
+        method: String,
+        isFailoverRetry: Boolean
+    ) {
         current?.apply {
             val now = clock.nanoTime()
-            target = Target(scheme, serverAddress, serverPort)
+            aim(Target(scheme, serverAddress, serverPort))
             this.method = method
+            if (isFailoverRetry) this.isFailoverRetry = true
             sendInterval.endNanos = now
             waitInterval.startNanos = now
         }
@@ -253,10 +262,16 @@ class CallRecorder(
             network = networkSource.currentNetwork(),
             foreground = foregroundSource.isForeground()
         )
+        next.target?.let { next.aim(it) }
         nextTarget = null
         exchangeCount++
         current = next
         return next
+    }
+
+    private fun ExchangeState.aim(target: Target) {
+        this.target = target
+        if (isFailoverHost == null) isFailoverHost = isHandledByFailover(target.address)
     }
 
     private fun finish(failure: Throwable?, stop: CallStopReason?) {

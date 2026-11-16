@@ -21,6 +21,7 @@ internal class FailoverBeaconEventListenerFactory(private val appFactory: EventL
             epochClock = sdk.epochClock,
             networkSource = sdk.networkSource,
             foregroundSource = sdk.foregroundSource,
+            isHandledByFailover = { host -> sdk.dns?.manages(host) == true },
             failureMapper = failureMapper,
             publisher = sdk.exchangeBus
         )

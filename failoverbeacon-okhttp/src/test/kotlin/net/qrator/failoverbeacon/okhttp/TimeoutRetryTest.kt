@@ -17,6 +17,9 @@ import net.qrator.failoverbeacon.FailoverBeacon
 import net.qrator.failoverbeacon.FailoverBeaconConfig
 import net.qrator.failoverbeacon.FailoverHost
 import net.qrator.failoverbeacon.core.SdkRegistry
+import net.qrator.failoverbeacon.core.call.ExchangeSubscriber
+import net.qrator.failoverbeacon.core.call.model.Exchange
+import net.qrator.failoverbeacon.core.call.model.FailoverMark
 import net.qrator.failoverbeacon.okhttp.fakes.PortsByAddress
 import net.qrator.failoverbeacon.okhttp.fakes.Relay
 import net.qrator.failoverbeacon.okhttp.fakes.isRetryControlSupported
@@ -79,6 +82,19 @@ class TimeoutRetryTest {
 
         val expected = if (isRetryControlSupported) Result(true, 1) else Result(false, 0)
         assertEquals(expected, result)
+    }
+
+    @Test
+    fun `the record marks addresses given while DNS fails and the SDK's resend`() {
+        val exchanges = mutableListOf<Exchange>()
+        val sdk = assertNotNull(SdkRegistry.instance)
+        sdk.exchangeBus.subscribe(ExchangeSubscriber(exchanges::add))
+
+        callOnDeadConnection(Protocol.H2_PRIOR_KNOWLEDGE)
+
+        val expected = listOf(FailoverMark.DNS_FAILED, FailoverMark.ON) +
+            if (isRetryControlSupported) listOf(FailoverMark.RETRY) else emptyList()
+        assertEquals(expected, exchanges.map { it.failover })
     }
 
     @Test

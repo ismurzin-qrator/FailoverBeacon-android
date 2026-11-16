@@ -9,6 +9,7 @@ import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
  * [connection] is null if none was obtained.
  * [dnsAddresses] are those of the last lookup.
  * [attempts] are the connects made for it, none if it used a pooled connection.
+ * [failover] is null if failover does not handle its server.
  */
 data class Exchange(
     val callId: Long,
@@ -24,5 +25,6 @@ data class Exchange(
     val durationNanos: Long,
     val outcome: ExchangeOutcome,
     val network: NetworkSnapshot,
-    val foreground: Boolean?
+    val foreground: Boolean?,
+    val failover: FailoverMark?
 )

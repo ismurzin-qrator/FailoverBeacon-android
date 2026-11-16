@@ -12,6 +12,7 @@ import net.qrator.failoverbeacon.telemetry.model.TelemetryEvent
 
 internal class TelemetryEventMapper {
     private val errorTypeMapper = TelemetryErrorTypeMapper()
+    private val failoverMapper = TelemetryFailoverMapper()
     private val networkMapper = TelemetryNetworkMapper()
     private val proxyTypeMapper = TelemetryProxyTypeMapper()
     private val stepMapper = TelemetryStepMapper()
@@ -53,7 +54,8 @@ internal class TelemetryEventMapper {
             responseBodyBytes = exchange.response?.bodyBytes,
             attempts = exchange.attempts.map(::toAttempt),
             network = networkMapper.toNetwork(exchange.network),
-            foreground = exchange.foreground
+            foreground = exchange.foreground,
+            failover = exchange.failover?.let(failoverMapper::toFailover)
         )
     }
 

@@ -8,4 +8,6 @@ interface SdkDns {
     fun manages(host: String): Boolean
 
     fun lookup(host: String): List<InetAddress>?
+
+    fun answersWithoutDns(host: String): Boolean
 }

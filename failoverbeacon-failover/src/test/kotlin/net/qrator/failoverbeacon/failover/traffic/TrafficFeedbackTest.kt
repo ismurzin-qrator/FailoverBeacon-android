@@ -255,7 +255,8 @@ class TrafficFeedbackTest {
         durationNanos = 0,
         outcome = outcome,
         network = network,
-        foreground = null
+        foreground = null,
+        failover = null
     )
 
     private companion object {

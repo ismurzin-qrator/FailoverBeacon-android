@@ -4,6 +4,7 @@ import net.qrator.failoverbeacon.core.call.model.ConnectAttempt
 import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
+import net.qrator.failoverbeacon.core.call.model.FailoverMark
 import net.qrator.failoverbeacon.core.call.state.ExchangeState
 
 internal class ExchangeMapper(failureMapper: FailureMapper) {
@@ -46,7 +47,13 @@ internal class ExchangeMapper(failureMapper: FailureMapper) {
             durationNanos = timingsMapper.toDurationNanos(state),
             outcome = outcomeMapper.toOutcome(state, results),
             network = network,
-            foreground = foreground
+            foreground = foreground,
+            failover = when {
+                isFailoverRetry -> FailoverMark.RETRY
+                answeredWithoutDns -> FailoverMark.DNS_FAILED
+                isFailoverHost == true -> FailoverMark.ON
+                else -> null
+            }
         )
     }
 }

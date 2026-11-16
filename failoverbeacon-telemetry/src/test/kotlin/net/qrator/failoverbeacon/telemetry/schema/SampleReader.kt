@@ -6,6 +6,7 @@ import net.qrator.failoverbeacon.telemetry.model.TelemetryAttemptResult
 import net.qrator.failoverbeacon.telemetry.model.TelemetryCarrier
 import net.qrator.failoverbeacon.telemetry.model.TelemetryErrorType
 import net.qrator.failoverbeacon.telemetry.model.TelemetryEvent
+import net.qrator.failoverbeacon.telemetry.model.TelemetryFailover
 import net.qrator.failoverbeacon.telemetry.model.TelemetryNetwork
 import net.qrator.failoverbeacon.telemetry.model.TelemetryNetworkTransport
 import net.qrator.failoverbeacon.telemetry.model.TelemetryPhase
@@ -49,7 +50,10 @@ internal object SampleReader {
             ?.let { a -> List(a.length()) { attempt(a.getJSONObject(it)) } }
             .orEmpty(),
         network = network(json.getJSONObject("network")),
-        foreground = json.bool("foreground")
+        foreground = json.bool("foreground"),
+        failover = json.string("failover")?.let { code ->
+            TelemetryFailover.entries.single { it.code == code }
+        }
     )
 
     fun metadata(json: JSONObject) = UploadMetadata(

@@ -379,7 +379,8 @@ class FailoverTest {
             durationNanos = 0,
             outcome = ExchangeOutcome.Ok,
             network = NetworkSnapshot.Unknown,
-            foreground = null
+            foreground = null,
+            failover = null
         )
 
         fun certificateFor(host: String): HeldCertificate =

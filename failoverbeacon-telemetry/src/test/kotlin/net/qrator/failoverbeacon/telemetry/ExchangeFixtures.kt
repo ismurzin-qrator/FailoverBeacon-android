@@ -8,6 +8,7 @@ import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeRequest
 import net.qrator.failoverbeacon.core.call.model.ExchangeResponse
 import net.qrator.failoverbeacon.core.call.model.ExchangeTimings
+import net.qrator.failoverbeacon.core.call.model.FailoverMark
 import net.qrator.failoverbeacon.core.call.model.ProxyType
 import net.qrator.failoverbeacon.core.network.model.NetworkSnapshot
 import net.qrator.failoverbeacon.telemetry.mapper.TelemetryEventMapper
@@ -30,7 +31,8 @@ fun exchange(
     durationNanos: Long = 60 * MS,
     outcome: ExchangeOutcome = ExchangeOutcome.Ok,
     network: NetworkSnapshot = NetworkSnapshot.Unknown,
-    foreground: Boolean? = null
+    foreground: Boolean? = null,
+    failover: FailoverMark? = null
 ) = Exchange(
     callId = callId,
     request = request,
@@ -45,7 +47,8 @@ fun exchange(
     durationNanos = durationNanos,
     outcome = outcome,
     network = network,
-    foreground = foreground
+    foreground = foreground,
+    failover = failover
 )
 
 fun attempt(

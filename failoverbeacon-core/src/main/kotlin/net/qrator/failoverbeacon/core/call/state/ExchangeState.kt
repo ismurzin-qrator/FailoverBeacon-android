@@ -36,6 +36,9 @@ internal class ExchangeState(
     var callFailure: Throwable? = null
     var callStopReason: CallStopReason? = null
     var closedNanos: Long? = null
+    var isFailoverHost: Boolean? = null
+    var answeredWithoutDns = false
+    var isFailoverRetry = false
 
     val responded: Boolean get() = statusCode != null
     val ended: Boolean get() = responded || failure != null

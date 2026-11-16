@@ -8,6 +8,7 @@ internal data class DnsState(
     private val failedAtMillis: Long? = null
 ) {
     val hasAnswer: Boolean get() = addresses.isNotEmpty()
+    val hasFailed: Boolean get() = failedAtMillis != null
 
     fun isFresh(maxAge: MaxAge): Boolean =
         failedAtMillis == null && answeredAtMillis != null && !maxAge.isOver(answeredAtMillis)

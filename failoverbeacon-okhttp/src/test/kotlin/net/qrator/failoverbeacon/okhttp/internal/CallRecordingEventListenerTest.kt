@@ -151,6 +151,7 @@ class CallRecordingEventListenerTest {
             epochClock = { 0 },
             networkSource = { NetworkSnapshot.Unknown },
             foregroundSource = { null },
+            isHandledByFailover = { false },
             failureMapper = OkHttpFailureMapper(),
             publisher = published::add
         )

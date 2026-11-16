@@ -31,5 +31,6 @@ internal data class TelemetryEvent(
     val responseBodyBytes: Long?,
     val attempts: List<TelemetryAttempt>,
     val network: TelemetryNetwork,
-    val foreground: Boolean?
+    val foreground: Boolean?,
+    val failover: TelemetryFailover?
 )

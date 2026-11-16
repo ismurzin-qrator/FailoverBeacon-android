@@ -29,4 +29,10 @@ internal class FailoverDns(
         }
         return sessions.current?.get(host)?.addresses?.map { it.address }?.ifEmpty { null }
     }
+
+    override fun answersWithoutDns(host: String): Boolean {
+        if (!isEnabled()) return false
+        val state = sessions.current?.get(host) ?: return false
+        return state.dns.hasFailed && state.addresses.isNotEmpty()
+    }
 }

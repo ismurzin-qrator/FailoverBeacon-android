@@ -79,6 +79,29 @@ class FailoverDnsTest {
     }
 
     @Test
+    fun `addresses are given without DNS only while its last resolve failed`() {
+        var isEnabled = true
+        val dns = dns(resolved = listOf(ip(1)), isEnabled = { isEnabled })
+        val whileAnswered = dns.answersWithoutDns(API)
+        session.saveResolveFailure(API)
+        val whileFailed = dns.answersWithoutDns(API)
+        isEnabled = false
+
+        assertFalse(whileAnswered)
+        assertTrue(whileFailed)
+        assertFalse(dns.answersWithoutDns(API))
+        assertFalse(dns.answersWithoutDns(OTHER))
+    }
+
+    @Test
+    fun `without any address a failed resolve leaves the answer to the client's DNS`() {
+        val dns = dns()
+        session.saveResolveFailure(API)
+
+        assertFalse(dns.answersWithoutDns(API))
+    }
+
+    @Test
     fun `a resolver that does not answer ends the wait with the last addresses`() {
         val dns = dns(resolved = listOf(ip(1)))
         now = INTERVAL

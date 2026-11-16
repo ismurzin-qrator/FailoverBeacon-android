@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import net.qrator.failoverbeacon.telemetry.DropReason
 import net.qrator.failoverbeacon.telemetry.model.TelemetryAttemptResult
 import net.qrator.failoverbeacon.telemetry.model.TelemetryErrorType
+import net.qrator.failoverbeacon.telemetry.model.TelemetryFailover
 import net.qrator.failoverbeacon.telemetry.model.TelemetryNetworkTransport
 import net.qrator.failoverbeacon.telemetry.model.TelemetryPhase
 import net.qrator.failoverbeacon.telemetry.model.TelemetryProxyType
@@ -24,6 +25,7 @@ class SchemaEnumTest {
         assertCodes("/\$defs/step", TelemetryStep.entries.map { it.code })
         assertCodes("/\$defs/proxy", TelemetryProxyType.entries.map { it.code })
         assertCodes("/properties/phase", TelemetryPhase.entries.map { it.code })
+        assertCodes("/properties/failover", TelemetryFailover.entries.map { it.code })
         assertCodes(
             "/properties/attempts/items/properties/result",
             TelemetryAttemptResult.entries.map { it.code }

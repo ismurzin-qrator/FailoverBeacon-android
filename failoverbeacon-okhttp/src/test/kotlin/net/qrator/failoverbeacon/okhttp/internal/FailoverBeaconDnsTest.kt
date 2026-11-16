@@ -58,6 +58,8 @@ class FailoverBeaconDnsTest {
 
         override fun manages(host: String): Boolean = host == API
 
+        override fun answersWithoutDns(host: String) = false
+
         override fun lookup(host: String): List<InetAddress>? {
             failure?.let { throw it }
             return addresses

@@ -45,6 +45,7 @@ internal class TelemetryEventSerializer {
         if (event.attempts.isNotEmpty()) writeAttempts(event.attempts)
         writeNetwork(event.network)
         optional("foreground", event.foreground)
+        optional("failover", event.failover?.code)
         endObject()
     }
 

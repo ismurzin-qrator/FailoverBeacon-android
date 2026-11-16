@@ -33,7 +33,8 @@ class ExchangeBusTest {
         durationNanos = 0,
         outcome = ExchangeOutcome.Canceled(step = null),
         network = NetworkSnapshot.Unknown,
-        foreground = null
+        foreground = null,
+        failover = null
     )
 
     @BeforeTest

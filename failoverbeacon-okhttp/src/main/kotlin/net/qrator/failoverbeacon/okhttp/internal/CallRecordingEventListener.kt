@@ -60,7 +60,12 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
         call: Call,
         domainName: String,
         inetAddressList: List<@JvmSuppressWildcards InetAddress>
-    ) = safely { recorder.dnsEnd(inetAddressList.mapNotNull { it.hostAddress }) }
+    ) = safely {
+        recorder.dnsEnd(
+            inetAddressList.mapNotNull { it.hostAddress },
+            answeredWithoutDns = SdkRegistry.instance?.dns?.answersWithoutDns(domainName) == true
+        )
+    }
 
     override fun connectStart(call: Call, inetSocketAddress: InetSocketAddress, proxy: Proxy) =
         safely {
@@ -131,7 +136,8 @@ internal class CallRecordingEventListener(private val recorder: CallRecorder) : 
             request.url.scheme,
             request.url.host,
             request.url.port,
-            request.method
+            request.method,
+            isFailoverRetry = request.tag(NetworkAttempt::class.java)?.avoidedAddress != null
         )
     }
 

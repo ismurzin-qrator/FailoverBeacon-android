@@ -71,6 +71,8 @@ class FailoverBeaconDnsWithNewCallTest {
 
         override fun manages(host: String) = host == API
 
+        override fun answersWithoutDns(host: String) = false
+
         override fun lookup(host: String): List<InetAddress>? = null
     }
 

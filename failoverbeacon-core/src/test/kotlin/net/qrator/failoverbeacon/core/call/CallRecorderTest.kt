@@ -18,6 +18,7 @@ import net.qrator.failoverbeacon.core.call.model.Exchange
 import net.qrator.failoverbeacon.core.call.model.ExchangeOutcome
 import net.qrator.failoverbeacon.core.call.model.ExchangeStep
 import net.qrator.failoverbeacon.core.call.model.ExchangeTls
+import net.qrator.failoverbeacon.core.call.model.FailoverMark
 import net.qrator.failoverbeacon.core.call.model.FailureType
 import net.qrator.failoverbeacon.core.call.model.ProxyType
 import net.qrator.failoverbeacon.core.call.state.CallStopReason
@@ -29,6 +30,7 @@ class CallRecorderTest {
     private var epochTime = 0L
     private var network: NetworkSnapshot = NetworkSnapshot.Unknown
     private var foreground: Boolean? = null
+    private var failoverHosts = setOf<String>()
     private val published = mutableListOf<Exchange>()
     private var recorder = newRecorder()
 
@@ -54,6 +56,55 @@ class CallRecorderTest {
         )
         assertEquals(listOf(true, false), published.map { it.foreground })
         assertEquals(listOf(1_000L, 2_000L), published.map { it.startTimeMillis })
+    }
+
+    @Test
+    fun `an exchange is marked when failover handles its server`() {
+        failoverHosts = setOf("a.com")
+        start()
+        acquire()
+        respond(302)
+        acquire(host = "b.com")
+        respond(200)
+        recorder.callEnd()
+
+        assertEquals(listOf(FailoverMark.ON, null), published.map { it.failover })
+    }
+
+    @Test
+    fun `failover's handling is taken when the server is first known`() {
+        failoverHosts = setOf("a.com")
+        start()
+        acquire()
+        failoverHosts = emptySet()
+        respond(200)
+        recorder.callEnd()
+
+        assertEquals(FailoverMark.ON, published.single().failover)
+    }
+
+    @Test
+    fun `addresses given without DNS and failover's resend raise the mark`() {
+        failoverHosts = setOf("a.com")
+        val timeout = SocketTimeoutException("timeout")
+        start()
+        recorder.dnsStart()
+        recorder.dnsEnd(listOf("1.1.1.1"), answeredWithoutDns = true)
+        connect("1.1.1.1")
+        acquire("1.1.1.1")
+        recorder.requestHeadersStart()
+        recorder.requestHeadersEnd("https", "a.com", 443, "GET", isFailoverRetry = false)
+        recorder.responseFailed(timeout)
+        acquire("2.2.2.2")
+        recorder.requestHeadersStart()
+        recorder.requestHeadersEnd("https", "a.com", 443, "GET", isFailoverRetry = true)
+        recorder.responseHeadersEnd(200, null)
+        recorder.callEnd()
+
+        assertEquals(
+            listOf(FailoverMark.DNS_FAILED, FailoverMark.RETRY),
+            published.map { it.failover }
+        )
     }
 
     @Test
@@ -262,7 +313,7 @@ class CallRecorderTest {
         start(method = "POST")
         acquire()
         recorder.requestHeadersStart()
-        recorder.requestHeadersEnd("https", "a.com", 443, "POST")
+        recorder.requestHeadersEnd("https", "a.com", 443, "POST", isFailoverRetry = false)
         recorder.callFailed(IOException("file is gone"), CallStopReason.FAILED)
 
         assertEquals(
@@ -290,7 +341,7 @@ class CallRecorderTest {
         start(method = "POST")
         acquire()
         at(0) { requestHeadersStart() }
-        at(1) { requestHeadersEnd("https", "a.com", 443, "POST") }
+        at(1) { requestHeadersEnd("https", "a.com", 443, "POST", isFailoverRetry = false) }
         at(5) { responseHeadersEnd(200, null) }
         at(9) { requestBodyEnd(10) }
         recorder.callEnd()
@@ -304,7 +355,7 @@ class CallRecorderTest {
         start()
         acquire()
         at(0) { requestHeadersStart() }
-        at(1) { requestHeadersEnd("https", "a.com", 443, "GET") }
+        at(1) { requestHeadersEnd("https", "a.com", 443, "GET", isFailoverRetry = false) }
         at(51) { responseHeadersEnd(200, 200_000) }
         at(451) { responseFailed(timeout) }
         recorder.callFailed(timeout, CallStopReason.FAILED)
@@ -422,6 +473,7 @@ class CallRecorderTest {
         { epochTime },
         { network },
         { foreground },
+        { it in failoverHosts },
         TestFailureMapper,
         published::add
     )
