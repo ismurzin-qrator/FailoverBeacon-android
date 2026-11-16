@@ -6,6 +6,7 @@ import net.qrator.failoverbeacon.core.SdkInstance
 import net.qrator.failoverbeacon.core.TrackingConsent
 import net.qrator.failoverbeacon.telemetry.storage.EventStorage
 import net.qrator.failoverbeacon.telemetry.upload.TelemetryUploader
+import net.qrator.failoverbeacon.telemetry.upload.appVersionName
 
 class Telemetry(
     private val sdk: SdkInstance,
@@ -43,7 +44,9 @@ class Telemetry(
         consentSource = sdk,
         networkSource = sdk.networkSource,
         clock = sdk.epochClock,
-        dropped = dropped
+        dropped = dropped,
+        appPackage = sdk.appContext.packageName,
+        appVersion = sdk.appContext::appVersionName
     )
 
     fun subscribe() {

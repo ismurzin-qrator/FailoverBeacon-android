@@ -1,6 +1,7 @@
 package net.qrator.failoverbeacon.telemetry.upload
 
 import android.net.TrafficStats
+import android.os.Build
 import android.util.Log
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
@@ -79,11 +80,31 @@ class TelemetryUploaderTest {
         uploader.upload()
 
         val metadata = """{"sent_at":$now,"sdk_version":"${BuildConfig.SDK_VERSION}",""" +
-            """"dropped":{"expired":40}}"""
+            """"schema_version":"1.0.0","app_package":"com.example.app","app_version":"2.1",""" +
+            """"os_api_level":${Build.VERSION.SDK_INT},"dropped":{"expired":40}}"""
         assertEquals(listOf(listOf(metadata, "one", "two")), requests().map { it.lines })
         assertEquals(emptyList(), storedFiles())
         assertEquals(emptyMap(), dropped.snapshot(beacon))
         assertEquals(emptyList(), debug)
+    }
+
+    @Test
+    fun `reads the app version once`() {
+        var reads = 0
+        val uploader = uploader(listOf(beacon), storage, appVersion = {
+            reads++
+            null
+        })
+        writeInNewBatches("one")
+        respond(202)
+        uploader.upload()
+        writeInNewBatches("two")
+        respond(202)
+
+        uploader.upload()
+
+        assertEquals(1, reads)
+        assertEquals(List(2) { false }, requests().map { "app_version" in it.lines.first() })
     }
 
     @Test
@@ -132,9 +153,9 @@ class TelemetryUploaderTest {
     @Test
     fun `a network lost between requests stops the pass`() {
         val networks = ArrayDeque(listOf(NetworkSnapshot.Unknown))
-        val uploader = uploader(listOf(beacon), storage) {
+        val uploader = uploader(listOf(beacon), storage, networkSource = {
             networks.removeFirstOrNull() ?: NetworkSnapshot.None
-        }
+        })
         writeInNewBatches(*Array(3) { "1".repeat(400 * 1024) })
         respond(202)
 
@@ -458,7 +479,8 @@ class TelemetryUploaderTest {
     private fun uploader(
         beacons: List<String>,
         storage: EventStorage,
-        networkSource: NetworkSource = NetworkSource { network }
+        networkSource: NetworkSource = NetworkSource { network },
+        appVersion: () -> String? = { "2.1" }
     ) = TelemetryUploader(
         beacons,
         storage,
@@ -466,7 +488,9 @@ class TelemetryUploaderTest {
         consent,
         networkSource,
         { now },
-        dropped
+        dropped,
+        "com.example.app",
+        appVersion
     )
 
     private fun connected(blocked: Boolean?) = NetworkSnapshot.Connected(

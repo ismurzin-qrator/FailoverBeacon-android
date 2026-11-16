@@ -1,6 +1,7 @@
 package net.qrator.failoverbeacon.telemetry.upload
 
 import android.net.TrafficStats
+import android.os.Build
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URI
@@ -16,6 +17,9 @@ import net.qrator.failoverbeacon.core.time.EpochClock
 import net.qrator.failoverbeacon.telemetry.BuildConfig
 import net.qrator.failoverbeacon.telemetry.DropReason
 import net.qrator.failoverbeacon.telemetry.DroppedEvents
+import net.qrator.failoverbeacon.telemetry.model.UploadMetadata
+import net.qrator.failoverbeacon.telemetry.serialization.SCHEMA_VERSION
+import net.qrator.failoverbeacon.telemetry.serialization.UploadMetadataSerializer
 import net.qrator.failoverbeacon.telemetry.storage.EventStorage
 
 internal class TelemetryUploader(
@@ -25,8 +29,12 @@ internal class TelemetryUploader(
     private val consentSource: ConsentSource,
     private val networkSource: NetworkSource,
     private val clock: EpochClock,
-    private val dropped: DroppedEvents
+    private val dropped: DroppedEvents,
+    private val appPackage: String,
+    appVersion: () -> String?
 ) {
+    private val appVersion by lazy(appVersion)
+    private val metadataSerializer = UploadMetadataSerializer()
     private val client = BeaconClient()
     private val backoff = beacons.associateWith { BeaconBackoff() }
     private val hosts = beacons.associateWith { URI(it).host }
@@ -142,20 +150,17 @@ internal class TelemetryUploader(
         return body.toByteArray()
     }
 
-    private fun metadata(reported: Map<DropReason, Long>): String {
-        val droppedField = if (reported.isEmpty()) {
-            ""
-        } else {
-            reported.entries.joinToString(
-                ",",
-                prefix = ",\"dropped\":{",
-                postfix = "}"
-            ) { (reason, count) ->
-                "\"${reason.code}\":$count"
-            }
-        }
-        return """{"sent_at":${clock.nowMillis()},"sdk_version":"$SDK_VERSION"$droppedField}"""
-    }
+    private fun metadata(reported: Map<DropReason, Long>): String = metadataSerializer.toJson(
+        UploadMetadata(
+            sentAtMillis = clock.nowMillis(),
+            sdkVersion = SDK_VERSION,
+            schemaVersion = SCHEMA_VERSION,
+            appPackage = appPackage,
+            appVersion = appVersion,
+            osApiLevel = Build.VERSION.SDK_INT,
+            dropped = reported
+        )
+    )
 
     private companion object {
         const val SDK_VERSION = BuildConfig.SDK_VERSION
