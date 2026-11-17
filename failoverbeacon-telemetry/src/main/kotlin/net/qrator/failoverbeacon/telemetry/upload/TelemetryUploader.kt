@@ -39,6 +39,9 @@ internal class TelemetryUploader(
     private val hosts = beacons.associateWith { URI(it).host }
     private var pass = 0L
 
+    @Volatile
+    private var isStopped = false
+
     fun upload() {
         TrafficStats.setThreadStatsTag(TRAFFIC_STATS_TAG)
         pass++
@@ -98,6 +101,10 @@ internal class TelemetryUploader(
         }
     }
 
+    fun stop() {
+        isStopped = true
+    }
+
     private fun isRetryable(code: Int): Boolean =
         code == HTTP_CLIENT_TIMEOUT || code == HTTP_TOO_MANY_REQUESTS || code in HTTP_SERVER_ERROR
 
@@ -119,6 +126,7 @@ internal class TelemetryUploader(
 
     private fun canSend(): Boolean {
         val reason = when {
+            isStopped -> "stopped"
             consentSource.consent != TrackingConsent.GRANTED -> "consent"
             !hasNetwork() -> "network_unavailable"
             Thread.currentThread().isInterrupted -> "interrupted"

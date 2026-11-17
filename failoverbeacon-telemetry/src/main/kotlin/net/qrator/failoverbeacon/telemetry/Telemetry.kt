@@ -67,6 +67,8 @@ class Telemetry(
 
     override fun clearData() = collector.clearData()
 
+    override fun close() = uploader.stop()
+
     private companion object {
         const val MAX_BATCH_WINDOW_MILLIS = 10_000L
     }

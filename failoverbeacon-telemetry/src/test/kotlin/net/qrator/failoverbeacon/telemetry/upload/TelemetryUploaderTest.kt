@@ -25,8 +25,10 @@ import net.qrator.failoverbeacon.telemetry.DropReason
 import net.qrator.failoverbeacon.telemetry.DroppedEvents
 import net.qrator.failoverbeacon.telemetry.TestConsentSource
 import net.qrator.failoverbeacon.telemetry.storage.EventStorage
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import okhttp3.mockwebserver.SocketPolicy
 import org.json.JSONObject
 import org.junit.Rule
@@ -309,6 +311,33 @@ class TelemetryUploaderTest {
             assertEquals(2, server.requestCount)
             assertEquals(listOf("one", "two", "three"), requests(other).flatMap { it.events })
             assertEquals(3, storedFiles().size)
+        } finally {
+            other.shutdown()
+        }
+    }
+
+    @Test
+    fun `a stop during a request ends the pass for every beacon`() {
+        SdkRegistry.logger.minLevel = Log.DEBUG
+        val other = MockWebServer()
+        val beacons = listOf(beacon, other.url("/events").toString())
+        val storage = storage(beacons)
+        val uploader = uploader(beacons, storage)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                uploader.stop()
+                return MockResponse().setResponseCode(202)
+            }
+        }
+        other.enqueue(MockResponse().setResponseCode(202))
+        try {
+            writeInNewBatches("one", storage = storage)
+
+            uploader.upload()
+
+            assertEquals(1, server.requestCount)
+            assertEquals(0, other.requestCount)
+            assertTrue(debug.contains("[Upload] Paused: reason=stopped"))
         } finally {
             other.shutdown()
         }
