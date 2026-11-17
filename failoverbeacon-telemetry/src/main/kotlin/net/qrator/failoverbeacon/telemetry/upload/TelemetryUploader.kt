@@ -18,7 +18,6 @@ import net.qrator.failoverbeacon.telemetry.BuildConfig
 import net.qrator.failoverbeacon.telemetry.DropReason
 import net.qrator.failoverbeacon.telemetry.DroppedEvents
 import net.qrator.failoverbeacon.telemetry.model.UploadMetadata
-import net.qrator.failoverbeacon.telemetry.serialization.SCHEMA_VERSION
 import net.qrator.failoverbeacon.telemetry.serialization.UploadMetadataSerializer
 import net.qrator.failoverbeacon.telemetry.storage.EventStorage
 
@@ -154,7 +153,7 @@ internal class TelemetryUploader(
         UploadMetadata(
             sentAtMillis = clock.nowMillis(),
             sdkVersion = SDK_VERSION,
-            schemaVersion = SCHEMA_VERSION,
+            schemaVersion = BuildConfig.SCHEMA_VERSION,
             appPackage = appPackage,
             appVersion = appVersion,
             osApiLevel = Build.VERSION.SDK_INT,

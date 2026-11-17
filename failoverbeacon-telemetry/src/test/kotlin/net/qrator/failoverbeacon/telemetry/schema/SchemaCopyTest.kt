@@ -3,7 +3,7 @@ package net.qrator.failoverbeacon.telemetry.schema
 import java.security.MessageDigest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import net.qrator.failoverbeacon.telemetry.serialization.SCHEMA_VERSION
+import net.qrator.failoverbeacon.telemetry.BuildConfig
 
 class SchemaCopyTest {
     @Test
@@ -22,8 +22,8 @@ class SchemaCopyTest {
     }
 
     @Test
-    fun `the serializers write the version of the copy`() {
-        assertEquals(SchemaCopy.text("VERSION").trim(), SCHEMA_VERSION)
+    fun `the copy is the version the uploads report`() {
+        assertEquals(SchemaCopy.text("VERSION").trim(), BuildConfig.SCHEMA_VERSION)
     }
 
     private fun sha256(path: String): String = MessageDigest.getInstance("SHA-256")
