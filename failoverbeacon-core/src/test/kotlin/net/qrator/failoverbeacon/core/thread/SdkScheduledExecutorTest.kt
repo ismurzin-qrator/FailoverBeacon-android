@@ -3,11 +3,14 @@ package net.qrator.failoverbeacon.core.thread
 import android.util.Log
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import net.qrator.failoverbeacon.core.SdkRegistry
 import net.qrator.failoverbeacon.core.logging.LogOutput
@@ -40,6 +43,29 @@ class SdkScheduledExecutorTest {
 
         assertTrue(runs.await(5, TimeUnit.SECONDS))
         assertEquals(listOf(Log.ERROR), logged.toList())
+    }
+
+    @Test
+    fun `an error reaches the uncaught exception handler and ends the schedule`() {
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        val caught = CopyOnWriteArrayList<Throwable>()
+        Thread.setDefaultUncaughtExceptionHandler { _, e -> caught += e }
+        try {
+            val error = AssertionError("test")
+            val runs = AtomicInteger()
+
+            val future = executor.scheduleWithFixedDelay({
+                runs.incrementAndGet()
+                throw error
+            }, 0, 1, TimeUnit.MILLISECONDS)
+
+            assertFailsWith<ExecutionException> { future.get(5, TimeUnit.SECONDS) }
+            assertEquals(1, runs.get())
+            assertEquals(listOf<Throwable>(error), caught.toList())
+            assertEquals(emptyList(), logged.toList())
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(previousHandler)
+        }
     }
 
     @Test

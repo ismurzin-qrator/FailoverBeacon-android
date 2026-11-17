@@ -19,11 +19,21 @@ class SdkScheduledExecutor(name: String) :
         delay: Long,
         unit: TimeUnit
     ): ScheduledFuture<*> = super.scheduleWithFixedDelay(
-        { catchSdkFailure(::logFailure) { command.run() } },
+        { runPassingErrors { catchSdkFailure(::logFailure) { command.run() } } },
         initialDelay,
         delay,
         unit
     )
+
+    private inline fun runPassingErrors(block: () -> Unit) {
+        try {
+            block()
+        } catch (error: Error) {
+            val thread = Thread.currentThread()
+            thread.uncaughtExceptionHandler?.uncaughtException(thread, error)
+            throw error
+        }
+    }
 
     private fun logFailure(failure: Throwable) {
         SdkRegistry.logger.error(failure, onlyOnce = true) {
