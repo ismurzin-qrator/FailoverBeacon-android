@@ -27,8 +27,8 @@ public class FailoverBodyProbe @JvmOverloads public constructor(
     }
 
     private companion object {
-        const val DEFAULT_MAX_BYTES = 16 * 1024
-        const val MIN_MAX_BYTES = 1024
-        const val MAX_MAX_BYTES = 1024 * 1024
+        private const val DEFAULT_MAX_BYTES = 16 * 1024
+        private const val MIN_MAX_BYTES = 1024
+        private const val MAX_MAX_BYTES = 1024 * 1024
     }
 }

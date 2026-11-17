@@ -1,0 +1,76 @@
+public final class net/qrator/failoverbeacon/Consent : java/lang/Enum {
+	public static final field GRANTED Lnet/qrator/failoverbeacon/Consent;
+	public static final field NOT_GRANTED Lnet/qrator/failoverbeacon/Consent;
+	public static final field PENDING Lnet/qrator/failoverbeacon/Consent;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lnet/qrator/failoverbeacon/Consent;
+	public static fun values ()[Lnet/qrator/failoverbeacon/Consent;
+}
+
+public final class net/qrator/failoverbeacon/FailoverBeacon {
+	public static final field INSTANCE Lnet/qrator/failoverbeacon/FailoverBeacon;
+	public static final fun clearAllData ()V
+	public static final fun initialize (Landroid/content/Context;Lnet/qrator/failoverbeacon/FailoverBeaconConfig;)V
+	public static final fun initialize (Landroid/content/Context;Lnet/qrator/failoverbeacon/FailoverBeaconConfig;Lnet/qrator/failoverbeacon/Consent;)V
+	public static synthetic fun initialize$default (Landroid/content/Context;Lnet/qrator/failoverbeacon/FailoverBeaconConfig;Lnet/qrator/failoverbeacon/Consent;ILjava/lang/Object;)V
+	public static final fun setConsent (Lnet/qrator/failoverbeacon/Consent;)V
+	public static final fun setFailoverEnabled (Z)V
+	public static final fun setLogLevel (I)V
+	public static final fun setLogger (Lnet/qrator/failoverbeacon/FailoverBeaconLogger;)V
+	public static final fun stop ()V
+}
+
+public final class net/qrator/failoverbeacon/FailoverBeaconConfig {
+	public synthetic fun <init> (Ljava/util/List;Ljava/util/Set;DDLjava/util/List;Lnet/qrator/failoverbeacon/HostResolver;Lnet/qrator/failoverbeacon/FailoverBeaconOptions;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class net/qrator/failoverbeacon/FailoverBeaconConfig$Builder {
+	public fun <init> ()V
+	public final fun beacons (Ljava/util/List;)Lnet/qrator/failoverbeacon/FailoverBeaconConfig$Builder;
+	public final fun blockedHosts (Ljava/util/List;)Lnet/qrator/failoverbeacon/FailoverBeaconConfig$Builder;
+	public final fun build ()Lnet/qrator/failoverbeacon/FailoverBeaconConfig;
+	public final fun dnsResolver (Lnet/qrator/failoverbeacon/HostResolver;)Lnet/qrator/failoverbeacon/FailoverBeaconConfig$Builder;
+	public final fun failoverHosts (Ljava/util/List;)Lnet/qrator/failoverbeacon/FailoverBeaconConfig$Builder;
+	public final fun failureSampleRate (D)Lnet/qrator/failoverbeacon/FailoverBeaconConfig$Builder;
+	public final fun options (Lnet/qrator/failoverbeacon/FailoverBeaconOptions;)Lnet/qrator/failoverbeacon/FailoverBeaconConfig$Builder;
+	public final fun successSampleRate (D)Lnet/qrator/failoverbeacon/FailoverBeaconConfig$Builder;
+}
+
+public abstract interface class net/qrator/failoverbeacon/FailoverBeaconLogger {
+	public abstract fun log (ILjava/lang/String;Ljava/lang/Throwable;)V
+}
+
+public final class net/qrator/failoverbeacon/FailoverBeaconOptions {
+	public synthetic fun <init> (JJIJZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class net/qrator/failoverbeacon/FailoverBeaconOptions$Builder {
+	public fun <init> ()V
+	public final fun build ()Lnet/qrator/failoverbeacon/FailoverBeaconOptions;
+	public final fun diskQueueBytes (J)Lnet/qrator/failoverbeacon/FailoverBeaconOptions$Builder;
+	public final fun fallbackWithoutEch (Z)Lnet/qrator/failoverbeacon/FailoverBeaconOptions$Builder;
+	public final fun memoryQueueSize (I)Lnet/qrator/failoverbeacon/FailoverBeaconOptions$Builder;
+	public final fun refreshInterval (JLjava/util/concurrent/TimeUnit;)Lnet/qrator/failoverbeacon/FailoverBeaconOptions$Builder;
+	public final fun uploadPeriod (JLjava/util/concurrent/TimeUnit;)Lnet/qrator/failoverbeacon/FailoverBeaconOptions$Builder;
+}
+
+public final class net/qrator/failoverbeacon/FailoverBodyProbe {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;I)V
+	public synthetic fun <init> (Ljava/lang/String;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class net/qrator/failoverbeacon/FailoverHost {
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;I)V
+	public fun <init> (Ljava/lang/String;ILjava/util/List;)V
+	public fun <init> (Ljava/lang/String;ILjava/util/List;Z)V
+	public fun <init> (Ljava/lang/String;ILjava/util/List;ZLnet/qrator/failoverbeacon/FailoverBodyProbe;)V
+	public synthetic fun <init> (Ljava/lang/String;ILjava/util/List;ZLnet/qrator/failoverbeacon/FailoverBodyProbe;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public abstract interface class net/qrator/failoverbeacon/HostResolver {
+	public abstract fun resolve (Ljava/lang/String;)Ljava/util/List;
+}
+

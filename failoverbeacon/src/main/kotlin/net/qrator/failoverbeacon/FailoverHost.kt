@@ -52,7 +52,7 @@ public class FailoverHost @JvmOverloads public constructor(
     }
 
     private companion object {
-        const val HTTPS_PORT = 443
-        const val MAX_PORT = 65535
+        private const val HTTPS_PORT = 443
+        private const val MAX_PORT = 65535
     }
 }

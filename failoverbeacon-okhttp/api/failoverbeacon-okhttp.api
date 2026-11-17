@@ -1,0 +1,5 @@
+public final class net/qrator/failoverbeacon/okhttp/FailoverBeaconOkHttp {
+	public static final fun idempotent (Lokhttp3/Request$Builder;)Lokhttp3/Request$Builder;
+	public static final fun withFailoverBeacon (Lokhttp3/OkHttpClient;)Lokhttp3/OkHttpClient;
+}
+

@@ -1,6 +1,7 @@
 [versions]
 agp = "9.0.1"
 animalsniffer = "2.0.1"
+binary-compatibility-validator = "0.18.2"
 junit = "4.13.2"
 kotlin = "2.3.21"
 kotlin-stdlib = "2.1.21"
@@ -26,5 +27,6 @@ kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+binary-compatibility-validator-gradle-plugin = { module = "org.jetbrains.kotlinx:binary-compatibility-validator", version.ref = "binary-compatibility-validator" }
 animalsniffer-gradle-plugin = { module = "ru.vyarus:gradle-animalsniffer-plugin", version.ref = "animalsniffer" }
 spotless-gradle-plugin = { module = "com.diffplug.spotless:spotless-plugin-gradle", version.ref = "spotless" }
