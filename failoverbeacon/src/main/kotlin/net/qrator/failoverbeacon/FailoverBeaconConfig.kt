@@ -69,8 +69,8 @@ public class FailoverBeaconConfig private constructor(
          * with this probability: 1.0 reports all of them, 0.25 about one in four, 0.0 none. A
          * request fails when it gets no response, is canceled, gets a 4xx or 5xx status, or one of
          * its connection attempts failed. So does a request that failover served while DNS failed
-         * or retried. Requests of one call, such as redirects and retries,
-         * share one random draw. The default value is 1.0.
+         * or retried. Requests of one call, such as redirects and retries, share one random draw.
+         * The default value is 1.0.
          *
          * @throws IllegalArgumentException if [rate] is outside [0.0, 1.0] or is NaN.
          */
@@ -80,9 +80,9 @@ public class FailoverBeaconConfig private constructor(
 
         /**
          * Sets the fraction of successful requests that are reported: requests with a status
-         * below 400, no failed connection attempt and no failover rescue. Each successful request is reported with this
-         * probability: 1.0 reports all of them, 0.1 about one in ten, 0.0 none. Successes let the
-         * beacon compute the failure rate. The default value is 0.1.
+         * below 400, no failed connection attempt and no failover rescue. Each successful request
+         * is reported with this probability: 1.0 reports all of them, 0.1 about one in ten, 0.0
+         * none. Successes let the beacon compute the failure rate. The default value is 0.1.
          *
          * @throws IllegalArgumentException if [rate] is outside [0.0, 1.0] or is NaN.
          */
