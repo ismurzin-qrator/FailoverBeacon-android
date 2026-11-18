@@ -1,5 +1,8 @@
 {
   "beacons": ["https://beacon.example/v1/beacon/key"],
+  "blockedHosts": ["analytics.example"],
+  "failureSampleRate": 1,
+  "successSampleRate": 0.05,
   "failoverHosts": [
     {
       "host": "pay.example",
@@ -7,5 +10,12 @@
       "bodyProbe": { "path": "/health?q=\"1\"" }
     },
     { "host": "пример.рф", "port": 8443, "tcpProbe": false }
-  ]
+  ],
+  "options": {
+    "uploadPeriodSeconds": 60,
+    "diskQueueBytes": 5242880,
+    "memoryQueueSize": 1000,
+    "refreshIntervalSeconds": 600,
+    "fallbackWithoutEch": false
+  }
 }

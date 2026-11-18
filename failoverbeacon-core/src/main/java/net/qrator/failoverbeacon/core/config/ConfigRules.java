@@ -49,6 +49,25 @@ public final class ConfigRules {
         }
     }
 
+    public static void checkBeaconUrl(String url) {
+        URI uri;
+        try {
+            uri = new URI(url);
+        } catch (URISyntaxException e) {
+            throw new IllegalArgumentException("Invalid beacon URL: " + url, e);
+        }
+        if (uri.getRawUserInfo() != null) {
+            throw new IllegalArgumentException("Beacon URL must not contain user info");
+        }
+        if (!"https".equalsIgnoreCase(uri.getScheme())) {
+            throw new IllegalArgumentException("Beacon URL must use https: " + url);
+        }
+        String host = uri.getHost();
+        if (host == null || host.isEmpty()) {
+            throw new IllegalArgumentException("Beacon URL must have a host: " + url);
+        }
+    }
+
     public static String checkBlockedHost(String host) {
         String name = canonicalHost(host);
         if (name == null) {
@@ -172,25 +191,6 @@ public final class ConfigRules {
                             + unit);
         }
         return millis;
-    }
-
-    private static void checkBeaconUrl(String url) {
-        URI uri;
-        try {
-            uri = new URI(url);
-        } catch (URISyntaxException e) {
-            throw new IllegalArgumentException("Invalid beacon URL: " + url, e);
-        }
-        if (uri.getRawUserInfo() != null) {
-            throw new IllegalArgumentException("Beacon URL must not contain user info");
-        }
-        if (!"https".equalsIgnoreCase(uri.getScheme())) {
-            throw new IllegalArgumentException("Beacon URL must use https: " + url);
-        }
-        String host = uri.getHost();
-        if (host == null || host.isEmpty()) {
-            throw new IllegalArgumentException("Beacon URL must have a host: " + url);
-        }
     }
 
     private static String canonicalHost(String host) {

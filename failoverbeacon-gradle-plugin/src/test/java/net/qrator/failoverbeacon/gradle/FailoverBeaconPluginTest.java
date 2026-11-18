@@ -72,14 +72,15 @@ public final class FailoverBeaconPluginTest {
     }
 
     @Test
-    public void valueOfWrongTypeFailsTheBuildWithItsPath() throws IOException {
+    public void invalidValueFailsTheBuildWithItsPathAndRule() throws IOException {
         write(
                 CONFIG_FILE,
-                "{ \"failoverHosts\": [ { \"host\": \"pay.example\", \"port\": \"443\" } ] }");
+                "{ \"beacons\": [\"https://beacon.example\"],"
+                        + " \"failoverHosts\": [ { \"host\": \"pay.example\", \"port\": 0 } ] }");
 
         BuildResult result = runner("generateDebugFailoverBeaconConfig").buildAndFail();
 
-        String expected = CONFIG_FILE + ": failoverHosts[0].port must be an integer";
+        String expected = CONFIG_FILE + ": failoverHosts[0].port: port must be in 1..65535, was 0";
         assertTrue(result.getOutput(), result.getOutput().contains(expected));
     }
 

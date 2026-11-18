@@ -3,7 +3,9 @@ package com.example.app;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 import net.qrator.failoverbeacon.FailoverBeaconConfig;
+import net.qrator.failoverbeacon.FailoverBeaconOptions;
 import net.qrator.failoverbeacon.FailoverBodyProbe;
 import net.qrator.failoverbeacon.FailoverHost;
 
@@ -13,8 +15,18 @@ public final class FailoverBeaconFileConfig {
     public static FailoverBeaconConfig.Builder builder() {
         return new FailoverBeaconConfig.Builder()
                 .beacons(Arrays.<String>asList("https://beacon.example/v1/beacon/key"))
+                .blockedHosts(Arrays.<String>asList("analytics.example"))
+                .failureSampleRate(1.0)
+                .successSampleRate(0.05)
                 .failoverHosts(Arrays.<FailoverHost>asList(
                         new FailoverHost("pay.example", 443, Arrays.<String>asList("192.0.2.10"), true, new FailoverBodyProbe("/health?q=\"1\"", 16384)),
-                        new FailoverHost("\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444", 8443, Collections.<String>emptyList(), false, null)));
+                        new FailoverHost("\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444", 8443, Collections.<String>emptyList(), false, null)))
+                .options(new FailoverBeaconOptions.Builder()
+                        .uploadPeriod(60L, TimeUnit.SECONDS)
+                        .diskQueueBytes(5242880L)
+                        .memoryQueueSize(1000)
+                        .refreshInterval(600L, TimeUnit.SECONDS)
+                        .fallbackWithoutEch(false)
+                        .build());
     }
 }

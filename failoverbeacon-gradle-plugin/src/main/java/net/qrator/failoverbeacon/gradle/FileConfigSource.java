@@ -3,25 +3,44 @@ package net.qrator.failoverbeacon.gradle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 import net.qrator.failoverbeacon.core.config.ConfigRules;
 
 final class FileConfigSource {
     static final String CLASS_NAME = "FailoverBeaconFileConfig";
 
     private static final String CALL_INDENT = "\n                ";
-    private static final String HOST_INDENT = "\n                        ";
+    private static final String NESTED_INDENT = "\n                        ";
 
     private FileConfigSource() {}
 
     static String render(String file, String namespace, JsonValue config) {
-        StringBuilder calls = new StringBuilder();
-        JsonValue beacons = config.get("beacons");
-        if (beacons.isPresent()) {
-            calls.append(CALL_INDENT).append(".beacons(").append(strings(beacons)).append(")");
+        config.allowKeys(
+                "beacons",
+                "blockedHosts",
+                "failureSampleRate",
+                "successSampleRate",
+                "failoverHosts",
+                "options");
+        List<String> calls = new ArrayList<>();
+        calls.add(call("beacons", beacons(config.get("beacons"))));
+        JsonValue blockedHosts = config.get("blockedHosts");
+        if (blockedHosts.isPresent()) {
+            calls.add(call("blockedHosts", blockedHosts(blockedHosts)));
+        }
+        for (String name : new String[] {"failureSampleRate", "successSampleRate"}) {
+            JsonValue rate = config.get(name);
+            if (rate.isPresent()) {
+                calls.add(call(name, sampleRate(name, rate)));
+            }
         }
         JsonValue hosts = config.get("failoverHosts");
         if (hosts.isPresent()) {
-            calls.append(CALL_INDENT).append(".failoverHosts(").append(hosts(hosts)).append(")");
+            calls.add(call("failoverHosts", hosts(hosts)));
+        }
+        JsonValue options = config.get("options");
+        if (options.isPresent()) {
+            calls.add(call("options", options(options)));
         }
         return String.join(
                 "\n",
@@ -30,7 +49,9 @@ final class FileConfigSource {
                 "",
                 "import java.util.Arrays;",
                 "import java.util.Collections;",
+                "import java.util.concurrent.TimeUnit;",
                 "import net.qrator.failoverbeacon.FailoverBeaconConfig;",
+                "import net.qrator.failoverbeacon.FailoverBeaconOptions;",
                 "import net.qrator.failoverbeacon.FailoverBodyProbe;",
                 "import net.qrator.failoverbeacon.FailoverHost;",
                 "",
@@ -38,43 +59,153 @@ final class FileConfigSource {
                 "    private " + CLASS_NAME + "() {}",
                 "",
                 "    public static FailoverBeaconConfig.Builder builder() {",
-                "        return new FailoverBeaconConfig.Builder()" + calls + ";",
+                "        return new FailoverBeaconConfig.Builder()"
+                        + CALL_INDENT
+                        + String.join(CALL_INDENT, calls)
+                        + ";",
                 "    }",
                 "}",
                 "");
     }
 
+    private static String beacons(JsonValue beacons) {
+        List<String> urls = new ArrayList<>();
+        for (JsonValue item : beacons.items()) {
+            String url = item.string();
+            item.check(() -> ConfigRules.checkBeaconUrl(url));
+            urls.add(url);
+        }
+        if (beacons.isPresent()) {
+            beacons.check(() -> ConfigRules.checkBeacons(urls));
+        } else {
+            beacons.check(() -> ConfigRules.checkBeaconsRequired(urls));
+        }
+        return strings(urls);
+    }
+
+    private static String blockedHosts(JsonValue blockedHosts) {
+        List<String> hosts = new ArrayList<>();
+        for (JsonValue item : blockedHosts.items()) {
+            String host = item.string();
+            item.check(() -> ConfigRules.checkBlockedHost(host));
+            hosts.add(host);
+        }
+        return strings(hosts);
+    }
+
+    private static String sampleRate(String name, JsonValue rate) {
+        double value = rate.number();
+        rate.check(() -> ConfigRules.checkSampleRate(name, value));
+        return Double.toString(value);
+    }
+
     private static String hosts(JsonValue hosts) {
+        List<String> names = new ArrayList<>();
         List<String> items = new ArrayList<>();
         for (JsonValue host : hosts.items()) {
-            items.add(HOST_INDENT + host(host));
+            items.add(NESTED_INDENT + host(host, names));
         }
+        hosts.check(() -> ConfigRules.checkDistinctFailoverHosts(names));
         return list("FailoverHost", items, ",");
     }
 
-    private static String host(JsonValue host) {
+    private static String host(JsonValue host, List<String> names) {
+        host.allowKeys("host", "port", "additionalAddresses", "tcpProbe", "bodyProbe");
+        JsonValue name = host.get("host");
+        String rawName = name.string();
+        names.add(name.check(() -> ConfigRules.checkFailoverHost(rawName)));
+
+        JsonValue port = host.get("port");
+        int portValue = port.integer(ConfigRules.DEFAULT_PORT);
+        port.check(() -> ConfigRules.checkPort(portValue));
+
+        List<String> addresses = new ArrayList<>();
+        for (JsonValue item : host.get("additionalAddresses").items()) {
+            String address = item.string();
+            item.check(() -> ConfigRules.checkAdditionalAddress(address, rawName));
+            addresses.add(address);
+        }
+
+        boolean tcpProbe = host.get("tcpProbe").bool(ConfigRules.DEFAULT_TCP_PROBE);
         JsonValue bodyProbe = host.get("bodyProbe");
+        host.check(() -> ConfigRules.checkBodyProbeNeedsTcpProbe(tcpProbe, bodyProbe.isPresent()));
+
         return String.format(
                 Locale.ROOT,
                 "new FailoverHost(%s, %d, %s, %b, %s)",
-                literal(host.get("host").string()),
-                host.get("port").integer(ConfigRules.DEFAULT_PORT),
-                strings(host.get("additionalAddresses")),
-                host.get("tcpProbe").bool(ConfigRules.DEFAULT_TCP_PROBE),
+                literal(rawName),
+                portValue,
+                strings(addresses),
+                tcpProbe,
                 bodyProbe.isPresent() ? bodyProbe(bodyProbe) : "null");
     }
 
     private static String bodyProbe(JsonValue probe) {
+        probe.allowKeys("path", "maxBytes");
+        JsonValue path = probe.get("path");
+        String pathValue = path.string(ConfigRules.DEFAULT_BODY_PROBE_PATH);
+        path.check(() -> ConfigRules.checkBodyProbePath(pathValue));
+
+        JsonValue maxBytes = probe.get("maxBytes");
+        int maxBytesValue = maxBytes.integer(ConfigRules.DEFAULT_BODY_PROBE_MAX_BYTES);
+        maxBytes.check(() -> ConfigRules.checkBodyProbeMaxBytes(maxBytesValue));
+
         return String.format(
-                Locale.ROOT,
-                "new FailoverBodyProbe(%s, %d)",
-                literal(probe.get("path").string(ConfigRules.DEFAULT_BODY_PROBE_PATH)),
-                probe.get("maxBytes").integer(ConfigRules.DEFAULT_BODY_PROBE_MAX_BYTES));
+                Locale.ROOT, "new FailoverBodyProbe(%s, %d)", literal(pathValue), maxBytesValue);
     }
 
-    private static String strings(JsonValue strings) {
+    private static String options(JsonValue options) {
+        options.allowKeys(
+                "uploadPeriodSeconds",
+                "diskQueueBytes",
+                "memoryQueueSize",
+                "refreshIntervalSeconds",
+                "fallbackWithoutEch");
+        List<String> calls = new ArrayList<>();
+
+        JsonValue uploadPeriod = options.get("uploadPeriodSeconds");
+        if (uploadPeriod.isPresent()) {
+            long seconds = uploadPeriod.longInteger();
+            uploadPeriod.check(() -> ConfigRules.checkUploadPeriod(seconds, TimeUnit.SECONDS));
+            calls.add(call("uploadPeriod", seconds + "L, TimeUnit.SECONDS"));
+        }
+        JsonValue diskQueueBytes = options.get("diskQueueBytes");
+        if (diskQueueBytes.isPresent()) {
+            long bytes = diskQueueBytes.longInteger();
+            diskQueueBytes.check(() -> ConfigRules.checkDiskQueueBytes(bytes));
+            calls.add(call("diskQueueBytes", bytes + "L"));
+        }
+        JsonValue memoryQueueSize = options.get("memoryQueueSize");
+        if (memoryQueueSize.isPresent()) {
+            int size = memoryQueueSize.integer();
+            memoryQueueSize.check(() -> ConfigRules.checkMemoryQueueSize(size));
+            calls.add(call("memoryQueueSize", Integer.toString(size)));
+        }
+        JsonValue refreshInterval = options.get("refreshIntervalSeconds");
+        if (refreshInterval.isPresent()) {
+            long seconds = refreshInterval.longInteger();
+            refreshInterval.check(
+                    () -> ConfigRules.checkRefreshInterval(seconds, TimeUnit.SECONDS));
+            calls.add(call("refreshInterval", seconds + "L, TimeUnit.SECONDS"));
+        }
+        JsonValue fallbackWithoutEch = options.get("fallbackWithoutEch");
+        if (fallbackWithoutEch.isPresent()) {
+            calls.add(call("fallbackWithoutEch", Boolean.toString(fallbackWithoutEch.bool())));
+        }
+
+        calls.add(".build()");
+        return "new FailoverBeaconOptions.Builder()"
+                + NESTED_INDENT
+                + String.join(NESTED_INDENT, calls);
+    }
+
+    private static String call(String method, String arguments) {
+        return "." + method + "(" + arguments + ")";
+    }
+
+    private static String strings(List<String> values) {
         List<String> items = new ArrayList<>();
-        for (String value : strings.strings()) {
+        for (String value : values) {
             items.add(literal(value));
         }
         return list("String", items, ", ");
