@@ -1,0 +1,99 @@
+package net.qrator.failoverbeacon.gradle.fakes;
+
+import static org.junit.Assert.assertEquals;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import org.gradle.testkit.runner.GradleRunner;
+
+public final class AndroidAppProject {
+    public static final String CONFIG_FILE = "failoverbeacon.json";
+
+    private final Path root;
+
+    private AndroidAppProject(Path root) {
+        this.root = root;
+    }
+
+    public static AndroidAppProject create(Path root, String... androidBlock) throws IOException {
+        AndroidAppProject project = new AndroidAppProject(root);
+        String sdkAar = System.getProperty("failoverbeacon.sdkAar").replace('\\', '/');
+        String androidSdk = System.getProperty("failoverbeacon.androidSdk").replace('\\', '/');
+
+        List<String> build = new ArrayList<>();
+        build.add("plugins {");
+        build.add("    id 'com.android.application'");
+        build.add("    id 'net.qrator.failoverbeacon'");
+        build.add("}");
+        build.add("repositories { google(); mavenCentral() }");
+        build.add("android {");
+        build.add("    namespace = 'com.example.app'");
+        build.add("    compileSdk = 36");
+        build.add("    defaultConfig { minSdk = 24 }");
+        build.addAll(Arrays.asList(androidBlock));
+        build.add("}");
+        build.add("dependencies { implementation files('" + sdkAar + "') }");
+
+        project.write("settings.gradle", "rootProject.name = 'fixture'");
+        project.write("local.properties", "sdk.dir=" + androidSdk);
+        project.write("build.gradle", build.toArray(new String[0]));
+        project.write("src/main/AndroidManifest.xml", "<manifest />");
+        project.write(
+                "src/main/java/com/example/app/App.java",
+                "package com.example.app;",
+                "",
+                "final class App {",
+                "    static Object config() {",
+                "        return FailoverBeaconFileConfig.builder().build();",
+                "    }",
+                "}");
+        return project;
+    }
+
+    public void write(String name, String... lines) throws IOException {
+        Path file = root.resolve(name);
+        Files.createDirectories(file.getParent());
+        String text = String.join("\n", lines);
+        Files.write(
+                file, (text.endsWith("\n") ? text : text + "\n").getBytes(StandardCharsets.UTF_8));
+    }
+
+    public void writeConfig(String sourceSet, String json) throws IOException {
+        write("src/" + sourceSet + "/" + CONFIG_FILE, json);
+    }
+
+    public GradleRunner runner(String... tasks) {
+        List<String> arguments = new ArrayList<>(Arrays.asList(tasks));
+        arguments.add("--configuration-cache");
+        arguments.add("--stacktrace");
+        return GradleRunner.create()
+                .withProjectDir(root.toFile())
+                .withPluginClasspath()
+                .withArguments(arguments);
+    }
+
+    public String generatedSource(String task) throws IOException {
+        try (Stream<Path> files = Files.walk(root.resolve("build/generated"))) {
+            List<Path> found =
+                    files.filter(path -> path.toString().contains(task))
+                            .filter(path -> path.endsWith("FailoverBeaconFileConfig.java"))
+                            .collect(Collectors.toList());
+            assertEquals(found.toString(), 1, found.size());
+            return new String(Files.readAllBytes(found.get(0)), StandardCharsets.UTF_8);
+        }
+    }
+
+    public static String resource(String name) throws IOException {
+        try (InputStream in = AndroidAppProject.class.getResourceAsStream("/" + name)) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+}

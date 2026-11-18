@@ -2,20 +2,34 @@ package net.qrator.failoverbeacon.gradle;
 
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension;
 import com.android.build.api.variant.ApplicationVariant;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import kotlin.Pair;
 import org.gradle.api.Action;
+import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
-import org.gradle.api.file.RegularFile;
 import org.gradle.api.tasks.TaskProvider;
 
 public final class FailoverBeaconPlugin implements Plugin<Project> {
     private static final String ANDROID_APPLICATION_PLUGIN = "com.android.application";
-    private static final String CONFIG_FILE = "src/main/failoverbeacon.json";
+    private static final String CONFIG_FILE = "failoverbeacon.json";
 
     @Override
     public void apply(Project project) {
         project.getPluginManager()
                 .withPlugin(ANDROID_APPLICATION_PLUGIN, applied -> registerVariants(project));
+        project.afterEvaluate(FailoverBeaconPlugin::requireAndroidApplication);
+    }
+
+    private static void requireAndroidApplication(Project project) {
+        if (!project.getPluginManager().hasPlugin(ANDROID_APPLICATION_PLUGIN)) {
+            throw new GradleException(
+                    "The FailoverBeacon plugin needs "
+                            + ANDROID_APPLICATION_PLUGIN
+                            + " in "
+                            + project.getPath());
+        }
     }
 
     private static void registerVariants(Project project) {
@@ -26,11 +40,13 @@ public final class FailoverBeaconPlugin implements Plugin<Project> {
     }
 
     private static void register(Project project, ApplicationVariant variant) {
-        RegularFile configFile = project.getLayout().getProjectDirectory().file(CONFIG_FILE);
         Action<GenerateFailoverBeaconConfig> configure =
                 generate -> {
-                    generate.getConfigFile().set(configFile);
+                    for (String directory : sourceDirectories(variant)) {
+                        generate.getConfigFiles().from("src/" + directory + "/" + CONFIG_FILE);
+                    }
                     generate.getNamespace().set(variant.getNamespace());
+                    generate.getVariantName().set(variant.getName());
                 };
         TaskProvider<GenerateFailoverBeaconConfig> task =
                 project.getTasks()
@@ -39,6 +55,24 @@ public final class FailoverBeaconPlugin implements Plugin<Project> {
                 .getJava()
                 .addGeneratedSourceDirectory(
                         task, GenerateFailoverBeaconConfig::getOutputDirectory);
+    }
+
+    private static Set<String> sourceDirectories(ApplicationVariant variant) {
+        Set<String> directories = new LinkedHashSet<>();
+        directories.add(variant.getName());
+        addIfSet(directories, variant.getFlavorName());
+        for (Pair<String, String> flavor : variant.getProductFlavors()) {
+            directories.add(flavor.getSecond());
+        }
+        addIfSet(directories, variant.getBuildType());
+        directories.add("main");
+        return directories;
+    }
+
+    private static void addIfSet(Set<String> directories, String directory) {
+        if (directory != null && !directory.isEmpty()) {
+            directories.add(directory);
+        }
     }
 
     private static String taskName(ApplicationVariant variant) {
