@@ -1,9 +1,7 @@
 name: publish
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,8 +16,8 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
-      - name: Check that the tag matches the version
-        run: test "$GITHUB_REF_NAME" = "v$(sed -n 's/^version=//p' gradle.properties)"
+      - name: Check that the run is on main
+        run: test "$GITHUB_REF" = refs/heads/main
       - name: Check that the publishing secrets are set
         run: test -n "$CENTRAL_USERNAME" && test -n "$CENTRAL_PASSWORD" && test -n "$SIGNING_KEY"
         env:
