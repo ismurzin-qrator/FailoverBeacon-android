@@ -2,6 +2,7 @@
 agp = "9.0.1"
 animalsniffer = "2.0.1"
 binary-compatibility-validator = "0.18.2"
+google-java-format = "2.0.0"
 junit = "4.13.2"
 kotlin = "2.3.21"
 kotlin-stdlib = "2.1.21"

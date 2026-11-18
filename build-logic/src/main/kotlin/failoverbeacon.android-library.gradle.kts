@@ -69,6 +69,10 @@ spotless {
         target("*.gradle.kts")
         ktlint(ktlintVersion).editorConfigOverride(ktlintStyle)
     }
+    java {
+        target("src/**/*.java")
+        googleJavaFormat(libs.findVersion("google-java-format").get().requiredVersion).aosp()
+    }
 }
 
 dependencies {
