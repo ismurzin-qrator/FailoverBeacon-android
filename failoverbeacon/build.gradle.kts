@@ -1,6 +1,7 @@
 plugins {
     id("failoverbeacon.public-api")
     id("failoverbeacon.robolectric")
+    id("failoverbeacon.publish")
 }
 
 android {

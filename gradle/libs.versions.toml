@@ -6,6 +6,7 @@ junit = "4.13.2"
 kotlin = "2.3.21"
 kotlin-stdlib = "2.1.21"
 ktlint = "1.8.0"
+maven-publish = "0.37.0"
 okhttp-latest = "5.5.0"
 okhttp-minimum = "3.14.9"
 okhttp-4 = "4.12.0"
@@ -29,4 +30,5 @@ android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 binary-compatibility-validator-gradle-plugin = { module = "org.jetbrains.kotlinx:binary-compatibility-validator", version.ref = "binary-compatibility-validator" }
 animalsniffer-gradle-plugin = { module = "ru.vyarus:gradle-animalsniffer-plugin", version.ref = "animalsniffer" }
+maven-publish-gradle-plugin = { module = "com.vanniktech:gradle-maven-publish-plugin", version.ref = "maven-publish" }
 spotless-gradle-plugin = { module = "com.diffplug.spotless:spotless-plugin-gradle", version.ref = "spotless" }

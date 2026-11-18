@@ -13,5 +13,6 @@ dependencies {
     implementation(libs.kotlin.gradle.plugin)
     implementation(libs.animalsniffer.gradle.plugin)
     implementation(libs.binary.compatibility.validator.gradle.plugin)
+    implementation(libs.maven.publish.gradle.plugin)
     implementation(libs.spotless.gradle.plugin)
 }

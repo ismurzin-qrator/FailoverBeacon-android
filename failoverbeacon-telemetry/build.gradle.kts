@@ -4,6 +4,7 @@ import javax.inject.Inject
 plugins {
     id("failoverbeacon.android-library")
     id("failoverbeacon.robolectric")
+    id("failoverbeacon.publish")
 }
 
 val telemetrySchemaVersion = providers.gradleProperty("telemetrySchemaVersion").get()

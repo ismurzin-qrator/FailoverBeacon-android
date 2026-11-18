@@ -1,6 +1,7 @@
 plugins {
     id("failoverbeacon.android-library")
     id("failoverbeacon.robolectric")
+    id("failoverbeacon.publish")
 }
 
 android {

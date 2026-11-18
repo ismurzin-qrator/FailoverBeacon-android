@@ -2,6 +2,7 @@ plugins {
     id("failoverbeacon.public-api")
     id("failoverbeacon.okhttp-compatibility")
     id("failoverbeacon.robolectric")
+    id("failoverbeacon.publish")
 }
 
 android {
