@@ -14,9 +14,10 @@ import org.robolectric.RuntimeEnvironment;
 @RunWith(RobolectricTestRunner.class)
 public final class FailoverBeaconJavaTest {
     private final Application app = RuntimeEnvironment.getApplication();
-    private final FailoverBeaconConfig config = new FailoverBeaconConfig.Builder()
-            .beacons(Collections.singletonList("https://beacon.example"))
-            .build();
+    private final FailoverBeaconConfig config =
+            new FailoverBeaconConfig.Builder()
+                    .beacons(Collections.singletonList("https://beacon.example"))
+                    .build();
 
     @After
     public void tearDown() {
@@ -28,7 +29,7 @@ public final class FailoverBeaconJavaTest {
     @Test
     public void everyMethodIsCallableFromJava() {
         FailoverBeacon.setLogLevel(Log.DEBUG);
-        FailoverBeacon.setLogger((level, message, throwable) -> { });
+        FailoverBeacon.setLogger((level, message, throwable) -> {});
         FailoverBeacon.setLogger(null);
         FailoverBeacon.initialize(app, config);
         FailoverBeacon.initialize(app, config, Consent.PENDING);

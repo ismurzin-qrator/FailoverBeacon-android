@@ -1,6 +1,7 @@
 package net.qrator.failoverbeacon
 
 import java.util.concurrent.TimeUnit
+import net.qrator.failoverbeacon.core.config.ConfigRules
 
 /**
  * Fine-tuning options for [FailoverBeaconConfig]. The defaults suit most apps.
@@ -31,11 +32,7 @@ public class FailoverBeaconOptions private constructor(
          *     8 hours.
          */
         public fun uploadPeriod(period: Long, unit: TimeUnit): Builder = apply {
-            val millis = unit.toMillis(period)
-            require(millis in MIN_UPLOAD_PERIOD_MILLIS..MAX_UPLOAD_PERIOD_MILLIS) {
-                "uploadPeriod must be from 1 second to 8 hours, was $period $unit"
-            }
-            uploadPeriodMillis = millis
+            uploadPeriodMillis = ConfigRules.checkUploadPeriod(period, unit)
         }
 
         /**
@@ -46,8 +43,7 @@ public class FailoverBeaconOptions private constructor(
          * @throws IllegalArgumentException if [bytes] is not positive.
          */
         public fun diskQueueBytes(bytes: Long): Builder = apply {
-            require(bytes > 0) { "diskQueueBytes must be > 0, was $bytes" }
-            diskQueueBytes = bytes
+            diskQueueBytes = ConfigRules.checkDiskQueueBytes(bytes)
         }
 
         /**
@@ -57,8 +53,7 @@ public class FailoverBeaconOptions private constructor(
          * @throws IllegalArgumentException if [size] is not positive.
          */
         public fun memoryQueueSize(size: Int): Builder = apply {
-            require(size > 0) { "memoryQueueSize must be > 0, was $size" }
-            memoryQueueSize = size
+            memoryQueueSize = ConfigRules.checkMemoryQueueSize(size)
         }
 
         /**
@@ -70,11 +65,7 @@ public class FailoverBeaconOptions private constructor(
          *     1 hour.
          */
         public fun refreshInterval(interval: Long, unit: TimeUnit): Builder = apply {
-            val millis = unit.toMillis(interval)
-            require(millis in MIN_REFRESH_INTERVAL_MILLIS..MAX_REFRESH_INTERVAL_MILLIS) {
-                "refreshInterval must be from 1 minute to 1 hour, was $interval $unit"
-            }
-            refreshIntervalMillis = millis
+            refreshIntervalMillis = ConfigRules.checkRefreshInterval(interval, unit)
         }
 
         /**
@@ -98,13 +89,9 @@ public class FailoverBeaconOptions private constructor(
 
         private companion object {
             private val DEFAULT_UPLOAD_PERIOD_MILLIS = TimeUnit.SECONDS.toMillis(60)
-            private val MIN_UPLOAD_PERIOD_MILLIS = TimeUnit.SECONDS.toMillis(1)
-            private val MAX_UPLOAD_PERIOD_MILLIS = TimeUnit.HOURS.toMillis(8)
             private const val DEFAULT_DISK_QUEUE_BYTES = 5L * 1024 * 1024
             private const val DEFAULT_MEMORY_QUEUE_SIZE = 1000
             private val DEFAULT_REFRESH_INTERVAL_MILLIS = TimeUnit.MINUTES.toMillis(10)
-            private val MIN_REFRESH_INTERVAL_MILLIS = TimeUnit.MINUTES.toMillis(1)
-            private val MAX_REFRESH_INTERVAL_MILLIS = TimeUnit.HOURS.toMillis(1)
         }
     }
 }

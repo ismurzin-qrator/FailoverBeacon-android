@@ -1,9 +1,7 @@
 package net.qrator.failoverbeacon
 
 import java.net.Inet4Address
-import net.qrator.failoverbeacon.internal.util.canonicalHost
-import net.qrator.failoverbeacon.internal.util.endsInNumber
-import net.qrator.failoverbeacon.internal.util.parseIpv4
+import net.qrator.failoverbeacon.core.config.ConfigRules
 
 /**
  * A host whose connections the SDK speeds up. Pass it to
@@ -30,29 +28,18 @@ public class FailoverHost @JvmOverloads public constructor(
     internal val bodyProbe: FailoverBodyProbe? = null
 ) {
     init {
-        require(tcpProbe || bodyProbe == null) { "bodyProbe needs tcpProbe" }
+        ConfigRules.checkBodyProbeNeedsTcpProbe(tcpProbe, bodyProbe != null)
     }
 
-    internal val host: String = requireNotNull(canonicalHost(host)) {
-        "host must be a host name without scheme, port or path, was \"$host\""
-    }.also { name ->
-        require(!endsInNumber(name)) {
-            "host must be a name, not an IP address, was \"$host\""
-        }
-    }
+    internal val host: String = ConfigRules.checkFailoverHost(host)
 
-    internal val port: Int = port.also {
-        require(it in 1..MAX_PORT) { "port must be in 1..$MAX_PORT, was $it" }
-    }
+    internal val port: Int = ConfigRules.checkPort(port)
 
     internal val additionalAddresses: List<Inet4Address> = additionalAddresses.distinct().map {
-        requireNotNull(parseIpv4(it, this.host)) {
-            "additionalAddresses must contain IPv4 addresses like 192.0.2.10, was \"$it\""
-        }
+        ConfigRules.checkAdditionalAddress(it, this.host)
     }
 
     private companion object {
         private const val HTTPS_PORT = 443
-        private const val MAX_PORT = 65535
     }
 }

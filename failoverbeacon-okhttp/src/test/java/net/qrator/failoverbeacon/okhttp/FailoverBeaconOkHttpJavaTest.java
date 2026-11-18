@@ -16,8 +16,9 @@ public final class FailoverBeaconOkHttpJavaTest {
 
     @Test
     public void idempotentIsCallableFromJava() {
-        Request request = FailoverBeaconOkHttp.idempotent(new Request.Builder().url("https://api.test/"))
-                .build();
+        Request request =
+                FailoverBeaconOkHttp.idempotent(new Request.Builder().url("https://api.test/"))
+                        .build();
 
         assertNotNull(request);
     }
