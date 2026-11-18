@@ -12,14 +12,10 @@ import net.qrator.failoverbeacon.core.config.ConfigRules
  * @throws IllegalArgumentException if [path] is invalid or [maxBytes] is outside 1 KiB..1 MiB.
  */
 public class FailoverBodyProbe @JvmOverloads public constructor(
-    path: String = "/",
-    maxBytes: Int = DEFAULT_MAX_BYTES
+    path: String = ConfigRules.DEFAULT_BODY_PROBE_PATH,
+    maxBytes: Int = ConfigRules.DEFAULT_BODY_PROBE_MAX_BYTES
 ) {
     internal val path: String = ConfigRules.checkBodyProbePath(path)
 
     internal val maxBytes: Int = ConfigRules.checkBodyProbeMaxBytes(maxBytes)
-
-    private companion object {
-        private const val DEFAULT_MAX_BYTES = 16 * 1024
-    }
 }

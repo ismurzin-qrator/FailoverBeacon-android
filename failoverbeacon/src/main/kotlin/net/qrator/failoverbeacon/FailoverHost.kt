@@ -22,9 +22,9 @@ import net.qrator.failoverbeacon.core.config.ConfigRules
  */
 public class FailoverHost @JvmOverloads public constructor(
     host: String,
-    port: Int = HTTPS_PORT,
+    port: Int = ConfigRules.DEFAULT_PORT,
     additionalAddresses: List<String> = emptyList(),
-    internal val tcpProbe: Boolean = true,
+    internal val tcpProbe: Boolean = ConfigRules.DEFAULT_TCP_PROBE,
     internal val bodyProbe: FailoverBodyProbe? = null
 ) {
     init {
@@ -37,9 +37,5 @@ public class FailoverHost @JvmOverloads public constructor(
 
     internal val additionalAddresses: List<Inet4Address> = additionalAddresses.distinct().map {
         ConfigRules.checkAdditionalAddress(it, this.host)
-    }
-
-    private companion object {
-        private const val HTTPS_PORT = 443
     }
 }

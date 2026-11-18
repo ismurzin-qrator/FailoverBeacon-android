@@ -1,0 +1,11 @@
+{
+  "beacons": ["https://beacon.example/v1/beacon/key"],
+  "failoverHosts": [
+    {
+      "host": "pay.example",
+      "additionalAddresses": ["192.0.2.10"],
+      "bodyProbe": { "path": "/health?q=\"1\"" }
+    },
+    { "host": "пример.рф", "port": 8443, "tcpProbe": false }
+  ]
+}

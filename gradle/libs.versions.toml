@@ -1,5 +1,6 @@
 [versions]
 agp = "9.0.1"
+agp-api-minimum = "7.3.1"
 animalsniffer = "2.0.1"
 binary-compatibility-validator = "0.18.2"
 google-java-format = "2.0.0"
@@ -28,6 +29,7 @@ junit = { module = "junit:junit", version.ref = "junit" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin-stdlib" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
+android-gradle-api-minimum = { module = "com.android.tools.build:gradle-api", version.ref = "agp-api-minimum" }
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 binary-compatibility-validator-gradle-plugin = { module = "org.jetbrains.kotlinx:binary-compatibility-validator", version.ref = "binary-compatibility-validator" }
 animalsniffer-gradle-plugin = { module = "ru.vyarus:gradle-animalsniffer-plugin", version.ref = "animalsniffer" }

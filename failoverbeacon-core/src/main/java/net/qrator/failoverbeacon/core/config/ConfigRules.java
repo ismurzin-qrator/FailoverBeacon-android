@@ -13,6 +13,11 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public final class ConfigRules {
+    public static final int DEFAULT_PORT = 443;
+    public static final boolean DEFAULT_TCP_PROBE = true;
+    public static final String DEFAULT_BODY_PROBE_PATH = "/";
+    public static final int DEFAULT_BODY_PROBE_MAX_BYTES = 16 * 1024;
+
     private static final String FORBIDDEN_DOMAIN_CHARS = "#%/:<>?@[\\]^|";
     private static final int MAX_DOMAIN_LENGTH = 253;
     private static final int MAX_LABEL_LENGTH = 63;
