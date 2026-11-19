@@ -41,6 +41,8 @@ mavenPublishing {
 
 dependencies {
     constraints {
-        rootProject.subprojects.filter { it != project }.forEach { add("api", it) }
+        rootProject.subprojects.filter { it != project }.forEach { library ->
+            library.pluginManager.withPlugin("com.android.library") { add("api", library) }
+        }
     }
 }

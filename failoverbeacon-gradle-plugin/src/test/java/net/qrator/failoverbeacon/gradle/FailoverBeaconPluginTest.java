@@ -53,6 +53,35 @@ public final class FailoverBeaconPluginTest {
     }
 
     @Test
+    public void olderSdkInTheAppResolvesToThePluginVersion() throws IOException {
+        String sdkModule = System.getProperty("failoverbeacon.sdkModule");
+        String module = sdkModule.substring(0, sdkModule.lastIndexOf(':'));
+        String version = sdkModule.substring(sdkModule.lastIndexOf(':') + 1);
+        project.publishPom(module, "0.1.0");
+        project.publishPom(module, version);
+        project.addToBuild(
+                "repositories { maven { url = 'repo' } }",
+                "dependencies { implementation '" + module + ":0.1.0' }");
+
+        // Gradle 7.4 cannot store dependencyInsight in the configuration cache.
+        BuildResult result =
+                project.runnerWithoutConfigurationCache(
+                                "dependencyInsight",
+                                "--configuration",
+                                "releaseRuntimeClasspath",
+                                "--dependency",
+                                module)
+                        .build();
+
+        assertTrue(
+                result.getOutput(), result.getOutput().contains(module + ":0.1.0 -> " + version));
+        assertTrue(
+                result.getOutput(),
+                result.getOutput()
+                        .contains("The FailoverBeacon plugin generates code for this SDK version"));
+    }
+
+    @Test
     public void pluginWithoutAndroidApplicationFailsTheBuild() throws IOException {
         project.write(
                 "build.gradle",

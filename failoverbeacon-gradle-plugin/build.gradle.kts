@@ -32,6 +32,14 @@ tasks.pluginUnderTestMetadata {
     pluginClasspath.from(testAndroidGradlePlugin)
 }
 
+val sdkModule = "$group:failoverbeacon:$version"
+
+tasks.processResources {
+    val module = sdkModule
+    inputs.property("sdkModule", module)
+    filesMatching("**/sdk-module.txt") { expand("sdkModule" to module) }
+}
+
 val sdkAar = rootDir.resolve("failoverbeacon/build/outputs/aar/failoverbeacon-release.aar")
 val androidSdkDir: Provider<String> = providers.environmentVariable("ANDROID_HOME").orElse(
     providers.fileContents(rootProject.layout.projectDirectory.file("local.properties"))
@@ -46,6 +54,7 @@ tasks.withType<Test>().configureEach {
     systemProperty("failoverbeacon.sdkAar", sdkAar.absolutePath)
     systemProperty("failoverbeacon.androidSdk", androidSdkDir.get())
     systemProperty("failoverbeacon.testKitDir", testKitDir.absolutePath)
+    systemProperty("failoverbeacon.sdkModule", sdkModule)
 }
 
 tasks.test {

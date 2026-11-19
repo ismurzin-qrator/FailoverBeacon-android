@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -67,13 +68,50 @@ public final class AndroidAppProject {
                 file, (text.endsWith("\n") ? text : text + "\n").getBytes(StandardCharsets.UTF_8));
     }
 
+    public void addToBuild(String... lines) throws IOException {
+        Files.write(
+                root.resolve("build.gradle"),
+                Arrays.asList(lines),
+                StandardCharsets.UTF_8,
+                StandardOpenOption.APPEND);
+    }
+
+    public void publishPom(String module, String version) throws IOException {
+        String[] coordinates = module.split(":");
+        write(
+                "repo/"
+                        + coordinates[0].replace('.', '/')
+                        + "/"
+                        + coordinates[1]
+                        + "/"
+                        + version
+                        + "/"
+                        + coordinates[1]
+                        + "-"
+                        + version
+                        + ".pom",
+                "<project>",
+                "  <modelVersion>4.0.0</modelVersion>",
+                "  <groupId>" + coordinates[0] + "</groupId>",
+                "  <artifactId>" + coordinates[1] + "</artifactId>",
+                "  <version>" + version + "</version>",
+                "  <packaging>pom</packaging>",
+                "</project>");
+    }
+
     public void writeConfig(String sourceSet, String json) throws IOException {
         write("src/" + sourceSet + "/" + CONFIG_FILE, json);
     }
 
     public GradleRunner runner(String... tasks) {
-        List<String> arguments = new ArrayList<>(Arrays.asList(tasks));
+        GradleRunner runner = runnerWithoutConfigurationCache(tasks);
+        List<String> arguments = new ArrayList<>(runner.getArguments());
         arguments.add("--configuration-cache");
+        return runner.withArguments(arguments);
+    }
+
+    public GradleRunner runnerWithoutConfigurationCache(String... tasks) {
+        List<String> arguments = new ArrayList<>(Arrays.asList(tasks));
         arguments.add("--stacktrace");
         GradleRunner runner =
                 GradleRunner.create()

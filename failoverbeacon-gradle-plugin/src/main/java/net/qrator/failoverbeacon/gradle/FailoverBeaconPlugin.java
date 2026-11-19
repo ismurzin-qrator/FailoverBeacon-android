@@ -2,6 +2,10 @@ package net.qrator.failoverbeacon.gradle;
 
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension;
 import com.android.build.api.variant.ApplicationVariant;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import kotlin.Pair;
@@ -14,11 +18,19 @@ import org.gradle.api.tasks.TaskProvider;
 public final class FailoverBeaconPlugin implements Plugin<Project> {
     private static final String ANDROID_APPLICATION_PLUGIN = "com.android.application";
     private static final String CONFIG_FILE = "failoverbeacon.json";
+    private static final String SDK_MODULE = "sdk-module.txt";
+    private static final String SDK_VERSION_REASON =
+            "The FailoverBeacon plugin generates code for this SDK version";
 
     @Override
     public void apply(Project project) {
         project.getPluginManager()
-                .withPlugin(ANDROID_APPLICATION_PLUGIN, applied -> registerVariants(project));
+                .withPlugin(
+                        ANDROID_APPLICATION_PLUGIN,
+                        applied -> {
+                            requireSdkVersion(project);
+                            registerVariants(project);
+                        });
         project.afterEvaluate(FailoverBeaconPlugin::requireAndroidApplication);
     }
 
@@ -29,6 +41,23 @@ public final class FailoverBeaconPlugin implements Plugin<Project> {
                             + ANDROID_APPLICATION_PLUGIN
                             + " in "
                             + project.getPath());
+        }
+    }
+
+    private static void requireSdkVersion(Project project) {
+        project.getDependencies()
+                .getConstraints()
+                .add(
+                        "implementation",
+                        sdkModule(),
+                        constraint -> constraint.because(SDK_VERSION_REASON));
+    }
+
+    private static String sdkModule() {
+        try (InputStream in = FailoverBeaconPlugin.class.getResourceAsStream(SDK_MODULE)) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8).trim();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 
