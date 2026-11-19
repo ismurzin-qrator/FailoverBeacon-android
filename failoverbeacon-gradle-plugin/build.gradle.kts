@@ -3,6 +3,7 @@ import org.gradle.plugin.devel.tasks.PluginUnderTestMetadata
 
 plugins {
     id("failoverbeacon.gradle-plugin")
+    id("failoverbeacon.publish")
 }
 
 sourceSets.main {
@@ -17,6 +18,14 @@ dependencies {
 
     testImplementation(libs.junit)
     testAndroidGradlePlugin(libs.android.gradle.plugin)
+}
+
+mavenPublishing {
+    pom {
+        description.set(
+            "Turns a FailoverBeacon config file into a configuration builder at build time."
+        )
+    }
 }
 
 gradlePlugin {

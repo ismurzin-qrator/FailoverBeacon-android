@@ -1,4 +1,5 @@
 import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
+import com.vanniktech.maven.publish.GradlePlugin
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.SourcesJar
 
@@ -10,7 +11,6 @@ val repository = "github.com/ismurzin-qrator/FailoverBeacon-android"
 
 mavenPublishing {
     coordinates(project.group.toString(), project.name, project.version.toString())
-    configure(AndroidSingleVariantLibrary(JavadocJar.Empty(), SourcesJar.Sources(), "release"))
     publishToMavenCentral(automaticRelease = false)
     if (providers.gradleProperty("signingInMemoryKey").isPresent) {
         signAllPublications()
@@ -39,10 +39,21 @@ mavenPublishing {
     }
 }
 
-dependencies {
-    constraints {
-        rootProject.subprojects.filter { it != project }.forEach { library ->
-            library.pluginManager.withPlugin("com.android.library") { add("api", library) }
+pluginManager.withPlugin("com.android.library") {
+    mavenPublishing {
+        configure(AndroidSingleVariantLibrary(JavadocJar.Empty(), SourcesJar.Sources(), "release"))
+    }
+    dependencies {
+        constraints {
+            rootProject.subprojects.filter { it != project }.forEach { library ->
+                library.pluginManager.withPlugin("com.android.library") { add("api", library) }
+            }
         }
+    }
+}
+
+pluginManager.withPlugin("java-gradle-plugin") {
+    mavenPublishing {
+        configure(GradlePlugin(JavadocJar.Empty(), SourcesJar.Sources()))
     }
 }
