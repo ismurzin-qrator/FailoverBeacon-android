@@ -2,6 +2,7 @@ package net.qrator.failoverbeacon.gradle.fakes;
 
 import static org.junit.Assert.assertEquals;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -36,7 +37,7 @@ public final class AndroidAppProject {
         build.add("repositories { google(); mavenCentral() }");
         build.add("android {");
         build.add("    namespace = 'com.example.app'");
-        build.add("    compileSdk = 36");
+        build.add("    compileSdk = " + System.getProperty("failoverbeacon.compileSdk"));
         build.add("    defaultConfig { minSdk = 24 }");
         build.addAll(Arrays.asList(androidBlock));
         build.add("}");
@@ -74,14 +75,18 @@ public final class AndroidAppProject {
         List<String> arguments = new ArrayList<>(Arrays.asList(tasks));
         arguments.add("--configuration-cache");
         arguments.add("--stacktrace");
-        return GradleRunner.create()
-                .withProjectDir(root.toFile())
-                .withPluginClasspath()
-                .withArguments(arguments);
+        GradleRunner runner =
+                GradleRunner.create()
+                        .withProjectDir(root.toFile())
+                        .withTestKitDir(new File(System.getProperty("failoverbeacon.testKitDir")))
+                        .withPluginClasspath()
+                        .withArguments(arguments);
+        String gradleVersion = System.getProperty("failoverbeacon.gradleVersion");
+        return gradleVersion == null ? runner : runner.withGradleVersion(gradleVersion);
     }
 
     public String generatedSource(String task) throws IOException {
-        try (Stream<Path> files = Files.walk(root.resolve("build/generated"))) {
+        try (Stream<Path> files = Files.walk(root.resolve("build"))) {
             List<Path> found =
                     files.filter(path -> path.toString().contains(task))
                             .filter(path -> path.endsWith("FailoverBeaconFileConfig.java"))
