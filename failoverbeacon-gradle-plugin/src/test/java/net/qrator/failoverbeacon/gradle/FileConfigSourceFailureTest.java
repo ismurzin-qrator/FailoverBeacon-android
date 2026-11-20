@@ -35,6 +35,10 @@ public final class FileConfigSourceFailureTest {
                         "{'beacons': ['http://beacon.example']}",
                         "beacons[0]: Beacon URL must use https: http://beacon.example"
                     },
+                    {
+                        "{'beacons': ['https://beacon.example:0/']}",
+                        "beacons[0]: Beacon URL port must be in 1..65535: https://beacon.example:0/"
+                    },
                     {"{" + BEACONS + ", 'beacon': []}", "beacon: unknown key"},
                     {
                         "{" + BEACONS + ", 'blockedHosts': ['a.example:443']}",

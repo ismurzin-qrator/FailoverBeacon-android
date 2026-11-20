@@ -66,6 +66,11 @@ public final class ConfigRules {
         if (host == null || host.isEmpty()) {
             throw new IllegalArgumentException("Beacon URL must have a host: " + url);
         }
+        int port = uri.getPort();
+        if (port != -1 && (port < 1 || port > MAX_PORT)) {
+            throw new IllegalArgumentException(
+                    "Beacon URL port must be in 1.." + MAX_PORT + ": " + url);
+        }
     }
 
     public static String checkBlockedHost(String host) {

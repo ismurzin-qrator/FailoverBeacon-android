@@ -133,7 +133,7 @@ Only `beacons` is required, and `host` in each failover host. A key you leave ou
 
 | Key | Value | Default | Meaning and bounds |
 | --- | --- | --- | --- |
-| `beacons` | Array of strings | Required | Beacon URLs, at least one. Each must use `https://`, have a host and carry no user info |
+| `beacons` | Array of strings | Required | Beacon URLs, at least one. Each must use `https://`, have a host, a port from 1 to 65535 if set, and no user info |
 | `blockedHosts` | Array of strings | `[]` | Hosts that are never reported, without port. Exact match in any case. IPv4 literals allowed |
 | `failureSampleRate` | Number | `1.0` | Share of failed requests reported, 0.0 to 1.0 |
 | `successSampleRate` | Number | `0.1` | Share of successful requests reported, 0.0 to 1.0 |

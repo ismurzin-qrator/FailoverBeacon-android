@@ -225,6 +225,8 @@ final class FileConfigSource {
                 out.append('\\').append(c);
             } else if (c >= ' ' && c <= '~') {
                 out.append(c);
+            } else if (c < ' ' || c == '\u007f') {
+                out.append(String.format(Locale.ROOT, "\\%03o", (int) c));
             } else {
                 out.append(String.format(Locale.ROOT, "\\u%04x", (int) c));
             }

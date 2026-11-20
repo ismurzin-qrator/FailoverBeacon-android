@@ -3,7 +3,10 @@ package net.qrator.failoverbeacon.gradle;
 import groovy.json.JsonException;
 import groovy.json.JsonSlurper;
 import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -12,6 +15,8 @@ import java.util.function.Supplier;
 import org.gradle.api.InvalidUserDataException;
 
 final class JsonValue {
+    private static final String BYTE_ORDER_MARK = "\uFEFF";
+
     private final String file;
     private final String path;
     private final boolean present;
@@ -25,10 +30,18 @@ final class JsonValue {
     }
 
     static JsonValue parse(File json, String file) {
+        String text;
         try {
-            Object value = new JsonSlurper().parse(json, StandardCharsets.UTF_8.name());
-            return new JsonValue(file, "", true, value);
-        } catch (JsonException e) {
+            text = new String(Files.readAllBytes(json.toPath()), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        if (text.startsWith(BYTE_ORDER_MARK)) {
+            text = text.substring(1);
+        }
+        try {
+            return new JsonValue(file, "", true, new JsonSlurper().parseText(text));
+        } catch (JsonException | IllegalArgumentException e) {
             throw new InvalidUserDataException(file + ": " + e.getMessage(), e);
         }
     }
@@ -65,14 +78,6 @@ final class JsonValue {
             items.add(new JsonValue(file, path + "[" + i + "]", true, array.get(i)));
         }
         return items;
-    }
-
-    List<String> strings() {
-        List<String> strings = new ArrayList<>();
-        for (JsonValue item : items()) {
-            strings.add(item.string());
-        }
-        return strings;
     }
 
     String string() {

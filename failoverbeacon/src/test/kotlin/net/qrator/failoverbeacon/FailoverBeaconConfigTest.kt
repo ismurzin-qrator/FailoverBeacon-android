@@ -27,8 +27,15 @@ class FailoverBeaconConfigTest {
     }
 
     @Test
-    fun `beacons rejects urls that are not https, have no host or do not parse`() {
-        val urls = listOf("http://beacon.example", "beacon.example", "https:///path", "https://a b")
+    fun `beacons rejects urls that are not https, have no host, a bad port or do not parse`() {
+        val urls = listOf(
+            "http://beacon.example",
+            "beacon.example",
+            "https:///path",
+            "https://a b",
+            "https://beacon.example:0/",
+            "https://beacon.example:65536/"
+        )
         for (url in urls) {
             assertFailsWith<IllegalArgumentException>(url) {
                 FailoverBeaconConfig.Builder().beacons(listOf(url))

@@ -68,6 +68,21 @@ public final class AndroidAppProject {
                 file, (text.endsWith("\n") ? text : text + "\n").getBytes(StandardCharsets.UTF_8));
     }
 
+    public void swapPluginOrder() throws IOException {
+        Path build = root.resolve("build.gradle");
+        String text = new String(Files.readAllBytes(build), StandardCharsets.UTF_8);
+        String applicationFirst =
+                "    id 'com.android.application'\n    id 'net.qrator.failoverbeacon'\n";
+        String pluginFirst =
+                "    id 'net.qrator.failoverbeacon'\n    id 'com.android.application'\n";
+        if (!text.contains(applicationFirst)) {
+            throw new IllegalStateException(text);
+        }
+        Files.write(
+                build,
+                text.replace(applicationFirst, pluginFirst).getBytes(StandardCharsets.UTF_8));
+    }
+
     public void addToBuild(String... lines) throws IOException {
         Files.write(
                 root.resolve("build.gradle"),
@@ -113,6 +128,8 @@ public final class AndroidAppProject {
     public GradleRunner runnerWithoutConfigurationCache(String... tasks) {
         List<String> arguments = new ArrayList<>(Arrays.asList(tasks));
         arguments.add("--stacktrace");
+        // File system events can reach a reused daemon after the next build has started.
+        arguments.add("--no-watch-fs");
         GradleRunner runner =
                 GradleRunner.create()
                         .withProjectDir(root.toFile())

@@ -89,11 +89,11 @@ public final class FailoverBeaconPlugin implements Plugin<Project> {
     private static Set<String> sourceDirectories(ApplicationVariant variant) {
         Set<String> directories = new LinkedHashSet<>();
         directories.add(variant.getName());
+        addIfSet(directories, variant.getBuildType());
         addIfSet(directories, variant.getFlavorName());
         for (Pair<String, String> flavor : variant.getProductFlavors()) {
             directories.add(flavor.getSecond());
         }
-        addIfSet(directories, variant.getBuildType());
         directories.add("main");
         return directories;
     }

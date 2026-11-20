@@ -20,7 +20,7 @@ public final class ConfigFileLookupTest {
     @Rule public final TemporaryFolder folder = new TemporaryFolder();
 
     @Test
-    public void eachVariantTakesTheFirstFileInLookupOrder() throws IOException {
+    public void eachVariantTakesTheFirstFileInSourceSetPriority() throws IOException {
         AndroidAppProject project =
                 AndroidAppProject.create(
                         root(),
@@ -32,23 +32,23 @@ public final class ConfigFileLookupTest {
                         "        web { dimension = 'store' }",
                         "    }");
         for (String sourceSet :
-                new String[] {"freePlayDebug", "freePlay", "play", "release", "main"}) {
+                new String[] {"paidWebDebug", "release", "freeWeb", "free", "play", "main"}) {
             project.writeConfig(sourceSet, CONFIG);
         }
 
         project.runner(
+                        generate("PaidWebDebug"),
+                        generate("FreeWebRelease"),
+                        generate("FreeWebDebug"),
                         generate("FreePlayDebug"),
-                        generate("FreePlayRelease"),
-                        generate("PaidPlayRelease"),
-                        generate("PaidWebRelease"),
-                        generate("PaidWebDebug"))
+                        generate("PaidPlayDebug"))
                 .build();
 
-        assertGeneratedFrom(project, "FreePlayDebug", "freePlayDebug");
-        assertGeneratedFrom(project, "FreePlayRelease", "freePlay");
-        assertGeneratedFrom(project, "PaidPlayRelease", "play");
-        assertGeneratedFrom(project, "PaidWebRelease", "release");
-        assertGeneratedFrom(project, "PaidWebDebug", "main");
+        assertGeneratedFrom(project, "PaidWebDebug", "paidWebDebug");
+        assertGeneratedFrom(project, "FreeWebRelease", "release");
+        assertGeneratedFrom(project, "FreeWebDebug", "freeWeb");
+        assertGeneratedFrom(project, "FreePlayDebug", "free");
+        assertGeneratedFrom(project, "PaidPlayDebug", "play");
     }
 
     @Test

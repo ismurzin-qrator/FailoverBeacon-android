@@ -8,6 +8,7 @@ plugins {
 
 sourceSets.main {
     java.srcDir(rootDir.resolve("failoverbeacon-core/src/main/java"))
+    java.include("net/qrator/failoverbeacon/gradle/**", "net/qrator/failoverbeacon/core/config/**")
 }
 
 val testAndroidGradlePlugin: Configuration by configurations.creating

@@ -2,6 +2,7 @@ package net.qrator.failoverbeacon.gradle;
 
 import static net.qrator.failoverbeacon.gradle.fakes.AndroidAppProject.resource;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -79,6 +80,41 @@ public final class FailoverBeaconPluginTest {
                 result.getOutput(),
                 result.getOutput()
                         .contains("The FailoverBeacon plugin generates code for this SDK version"));
+    }
+
+    @Test
+    public void newerSdkInTheAppKeepsItsVersion() throws IOException {
+        String sdkModule = System.getProperty("failoverbeacon.sdkModule");
+        String module = sdkModule.substring(0, sdkModule.lastIndexOf(':'));
+        String version = sdkModule.substring(sdkModule.lastIndexOf(':') + 1);
+        project.publishPom(module, version);
+        project.publishPom(module, "99.0.0");
+        project.addToBuild(
+                "repositories { maven { url = 'repo' } }",
+                "dependencies { implementation '" + module + ":99.0.0' }");
+
+        // Gradle 7.4 cannot store dependencyInsight in the configuration cache.
+        BuildResult result =
+                project.runnerWithoutConfigurationCache(
+                                "dependencyInsight",
+                                "--configuration",
+                                "releaseRuntimeClasspath",
+                                "--dependency",
+                                module)
+                        .build();
+
+        assertTrue(result.getOutput(), result.getOutput().contains(module + ":99.0.0\n"));
+        assertFalse(result.getOutput(), result.getOutput().contains(module + ":99.0.0 -> "));
+    }
+
+    @Test
+    public void pluginAppliedBeforeAndroidApplicationStillGenerates() throws IOException {
+        project.swapPluginOrder();
+        project.writeConfig("main", resource("failoverbeacon.json"));
+
+        BuildResult result = project.runner(GENERATE).build();
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":" + GENERATE).getOutcome());
     }
 
     @Test
