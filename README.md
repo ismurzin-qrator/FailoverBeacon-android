@@ -91,6 +91,73 @@ OkHttpClient client = FailoverBeaconOkHttp.withFailoverBeacon(
 
 Use the wrapped client everywhere, Retrofit included, and call `withFailoverBeacon()` after your own interceptors and `dns()`.
 
+### Configuration file
+
+The configuration can live in `app/src/main/failoverbeacon.json` instead, with the builder's option names as keys. A file in `src/<build type>/`, `src/<flavor>/` or `src/<variant>/` replaces it for that variant. The Gradle plugin checks the file at build time and generates `FailoverBeaconFileConfig` in your app's namespace. It needs AGP 7.3 and Gradle 7.4 or newer.
+
+```kotlin
+plugins {
+    id("com.android.application")
+    id("net.qrator.failoverbeacon") version "1.0.0"
+}
+```
+
+A file with every key:
+
+```json
+{
+  "beacons": ["https://beacon.example.com/reports"],
+  "blockedHosts": ["analytics.example.com"],
+  "failureSampleRate": 1.0,
+  "successSampleRate": 0.1,
+  "failoverHosts": [
+    {
+      "host": "pay.example.com",
+      "port": 443,
+      "additionalAddresses": ["192.0.2.10", "192.0.2.11"],
+      "tcpProbe": true,
+      "bodyProbe": { "path": "/health", "maxBytes": 16384 }
+    }
+  ],
+  "options": {
+    "uploadPeriodSeconds": 60,
+    "diskQueueBytes": 5242880,
+    "memoryQueueSize": 1000,
+    "refreshIntervalSeconds": 600,
+    "fallbackWithoutEch": true
+  }
+}
+```
+
+Only `beacons` is required, and `host` in each failover host. A key you leave out keeps its default:
+
+| Key | Value | Default | Meaning and bounds |
+| --- | --- | --- | --- |
+| `beacons` | Array of strings | Required | Beacon URLs, at least one. Each must use `https://`, have a host and carry no user info |
+| `blockedHosts` | Array of strings | `[]` | Hosts that are never reported, without port. Exact match in any case. IPv4 literals allowed |
+| `failureSampleRate` | Number | `1.0` | Share of failed requests reported, 0.0 to 1.0 |
+| `successSampleRate` | Number | `0.1` | Share of successful requests reported, 0.0 to 1.0 |
+| `failoverHosts` | Array of objects | `[]` | Hosts to protect. A name may appear once |
+| `failoverHosts[].host` | String | Required | A host name in Unicode or Punycode, without scheme, port, path or IP address |
+| `failoverHosts[].port` | Integer | `443` | 1 to 65535 |
+| `failoverHosts[].additionalAddresses` | Array of strings | `[]` | IPv4 literals such as `192.0.2.10` |
+| `failoverHosts[].tcpProbe` | `true` or `false` | `true` | Background TCP connections that rank the addresses by connect time |
+| `failoverHosts[].bodyProbe` | Object | None | A background HTTPS request that checks the leading address delivers data. Needs `tcpProbe` to be `true` |
+| `failoverHosts[].bodyProbe.path` | String | `/` | A static file of at least `maxBytes` bytes that supports `Range`. Starts with `/`, visible ASCII, no `#`. A query is allowed |
+| `failoverHosts[].bodyProbe.maxBytes` | Integer | `16384` | 1024 to 1048576 |
+| `options` | Object | Defaults below | Fine tuning |
+| `options.uploadPeriodSeconds` | Integer | `60` | How often stored events are uploaded, 1 to 28800 (8 hours) |
+| `options.diskQueueBytes` | Integer | `5242880` (5 MB) | Disk space for events, above 0 |
+| `options.memoryQueueSize` | Integer | `1000` | Events waiting in memory for the disk, above 0 |
+| `options.refreshIntervalSeconds` | Integer | `600` | How often failover hosts are resolved and probed again, 60 to 3600 |
+| `options.fallbackWithoutEch` | `true` or `false` | `true` | Android 17 and newer: whether to use SDK addresses without an ECH key while your DNS has not answered yet |
+
+An unknown key, a wrong type or `null` fails the build with the file, the JSON path and the rule. Initialize with the generated builder, and set `dnsResolver` or any other option in code. A value set in code replaces the file's:
+
+```kotlin
+FailoverBeacon.initialize(this, FailoverBeaconFileConfig.builder().build())
+```
+
 ## Before you ship
 
 - Hosts. List every host your key user flows depend on, with the exact names from your URLs. Ship their IPv4 addresses in `additionalAddresses`: they are the only way through a DNS outage on first launch.
